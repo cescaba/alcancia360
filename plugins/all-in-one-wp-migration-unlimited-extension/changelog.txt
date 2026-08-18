@@ -1,0 +1,15 @@
+= 2.86 =
+* Added `--exclude-files` option to the WP-CLI backup command
+
+= 2.85 =
+* Fixed stored XSS vulnerability in the backups path setting
+* Fixed Restore button failing on the backups page
+
+= 2.84 =
+* Added permission check for the settings admin action to improve security
+
+= 2.83 =
+* Dependency updates
+
+= 2.82 =
+* Added option to compress the archive on export

@@ -1,0 +1,13 @@
+# Ignorar todo por defecto
+/*
+
+# Excepto plugins y themes
+!.gitignore
+!plugins/
+!themes/
+
+# Ignorar carpetas de caché/sistema
+uploads/
+ai1wm-backups/
+upgrade/
+upgrade-temp-backup/

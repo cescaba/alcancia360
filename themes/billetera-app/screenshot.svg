@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="660" viewBox="0 0 880 660">
+  <!-- Background -->
+  <rect width="880" height="660" fill="#ffffff"/>
+
+  <!-- Header -->
+  <rect width="880" height="60" fill="#2563eb"/>
+  <text x="20" y="40" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="white">Billetera App</text>
+
+  <!-- Main content area -->
+  <rect x="20" y="80" width="840" height="520" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+
+  <!-- Welcome text -->
+  <text x="40" y="120" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#1f2937">Bienvenido, Asesor Demo</text>
+  <text x="40" y="145" font-family="Arial, sans-serif" font-size="14" fill="#6b7280">asesor@billetera.local</text>
+
+  <!-- Stats Cards -->
+  <!-- Card 1: Saldo Total -->
+  <rect x="40" y="170" width="230" height="100" fill="white" stroke="#e5e7eb" stroke-width="1" rx="6"/>
+  <rect x="40" y="170" width="4" height="100" fill="#2563eb" rx="2"/>
+  <text x="55" y="195" font-family="Arial, sans-serif" font-size="12" font-weight="600" fill="#6b7280" text-transform="uppercase">Saldo Total</text>
+  <text x="55" y="225" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#1f2937">$5,250.00</text>
+
+  <!-- Card 2: Número de Ventas -->
+  <rect x="325" y="170" width="230" height="100" fill="white" stroke="#e5e7eb" stroke-width="1" rx="6"/>
+  <rect x="325" y="170" width="4" height="100" fill="#2563eb" rx="2"/>
+  <text x="340" y="195" font-family="Arial, sans-serif" font-size="12" font-weight="600" fill="#6b7280" text-transform="uppercase">Número de Ventas</text>
+  <text x="340" y="225" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#1f2937">18</text>
+
+  <!-- Card 3: Promedio -->
+  <rect x="610" y="170" width="230" height="100" fill="white" stroke="#e5e7eb" stroke-width="1" rx="6"/>
+  <rect x="610" y="170" width="4" height="100" fill="#2563eb" rx="2"/>
+  <text x="625" y="195" font-family="Arial, sans-serif" font-size="12" font-weight="600" fill="#6b7280" text-transform="uppercase">Promedio de Venta</text>
+  <text x="625" y="225" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#1f2937">$291.67</text>
+
+  <!-- Recent Sales Table -->
+  <text x="40" y="310" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#1f2937">Mis Ventas Recientes</text>
+
+  <!-- Table Header -->
+  <rect x="40" y="325" width="800" height="35" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="55" y="350" font-family="Arial, sans-serif" font-size="12" font-weight="600" fill="#4b5563">Monto</text>
+  <text x="200" y="350" font-family="Arial, sans-serif" font-size="12" font-weight="600" fill="#4b5563">Descripción</text>
+  <text x="550" y="350" font-family="Arial, sans-serif" font-size="12" font-weight="600" fill="#4b5563">Fecha</text>
+  <text x="750" y="350" font-family="Arial, sans-serif" font-size="12" font-weight="600" fill="#4b5563">Acciones</text>
+
+  <!-- Table Rows -->
+  <!-- Row 1 -->
+  <rect x="40" y="360" width="800" height="35" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="55" y="385" font-family="Arial, sans-serif" font-size="12" font-weight="600" fill="#1f2937">$500.00</text>
+  <text x="200" y="385" font-family="Arial, sans-serif" font-size="12" fill="#6b7280">Venta a cliente ABC</text>
+  <text x="550" y="385" font-family="Arial, sans-serif" font-size="12" fill="#6b7280">05/08/2026 14:30</text>
+  <rect x="750" y="368" width="70" height="20" fill="#ef4444" rx="3"/>
+  <text x="762" y="381" font-family="Arial, sans-serif" font-size="11" font-weight="600" fill="white">Eliminar</text>
+
+  <!-- Row 2 -->
+  <rect x="40" y="395" width="800" height="35" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="55" y="420" font-family="Arial, sans-serif" font-size="12" font-weight="600" fill="#1f2937">$450.50</text>
+  <text x="200" y="420" font-family="Arial, sans-serif" font-size="12" fill="#6b7280">Venta a cliente XYZ</text>
+  <text x="550" y="420" font-family="Arial, sans-serif" font-size="12" fill="#6b7280">04/08/2026 11:15</text>
+  <rect x="750" y="403" width="70" height="20" fill="#ef4444" rx="3"/>
+  <text x="762" y="416" font-family="Arial, sans-serif" font-size="11" font-weight="600" fill="white">Eliminar</text>
+
+  <!-- Row 3 -->
+  <rect x="40" y="430" width="800" height="35" fill="white" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="55" y="455" font-family="Arial, sans-serif" font-size="12" font-weight="600" fill="#1f2937">$300.00</text>
+  <text x="200" y="455" font-family="Arial, sans-serif" font-size="12" fill="#6b7280">Venta cliente DEF</text>
+  <text x="550" y="455" font-family="Arial, sans-serif" font-size="12" fill="#6b7280">03/08/2026 09:45</text>
+  <rect x="750" y="438" width="70" height="20" fill="#ef4444" rx="3"/>
+  <text x="762" y="451" font-family="Arial, sans-serif" font-size="11" font-weight="600" fill="white">Eliminar</text>
+
+  <!-- Footer -->
+  <rect x="0" y="630" width="880" height="30" fill="#111827"/>
+  <text x="20" y="650" font-family="Arial, sans-serif" font-size="12" fill="white">© 2026 Billetera App. Todos los derechos reservados.</text>
+</svg>

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; }
+    a { color: oklch(0.55 0.18 250); }
+    a:hover { color: oklch(0.45 0.18 250); }
+    @keyframes coinburst {
+      0% { transform: translate(-50%,-50%) scale(.3) rotate(0deg); opacity: 0; }
+      15% { opacity: 1; }
+      100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 160px)) scale(1) rotate(var(--rot)); opacity: 0; }
+    }
+    @keyframes pop {
+      0% { transform: scale(.5); opacity: 0; }
+      60% { transform: scale(1.12); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes fadein2 { to { opacity: 1; } }
+  </style>
+</helmet>
+
+<div style="min-height:100vh; display:flex; justify-content:center; padding:32px 12px; background:oklch(0.93 0.015 250); font-family:Inter, sans-serif;">
+  <div style="width:390px; max-width:100%; background:white; border-radius:34px; border:1px solid oklch(0.90 0.02 250); overflow:hidden; position:relative; box-shadow:0 24px 50px oklch(0.28 0.09 250 / 0.14);">
+
+    <div style="height:28px; display:flex; align-items:center; justify-content:center;">
+      <div style="width:90px; height:6px; border-radius:4px; background:oklch(0.90 0.02 250);"></div>
+    </div>
+
+    <sc-if value="{{ isRegistro }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; flex-direction:column; min-height:660px; padding:8px 20px 90px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 2px 18px;">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <div style="font-family:Poppins,sans-serif; font-weight:700; font-size:12px; letter-spacing:.06em; color:oklch(0.28 0.09 250); text-transform:uppercase;">Gildemeister</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="width:20px; height:20px; border-radius:6px; background:linear-gradient(135deg, oklch(0.28 0.09 250), oklch(0.36 0.10 250)); display:flex; align-items:center; justify-content:center; font-family:Poppins,sans-serif; font-weight:700; font-size:10px; color:white;">B</div>
+              <div style="font-family:Inter,sans-serif; font-size:12px; letter-spacing:.03em; color:oklch(0.50 0.015 250); text-transform:uppercase;">Billetera 360</div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="display:flex; align-items:center; gap:5px; background:oklch(0.94 0.03 250); color:oklch(0.28 0.09 250); font-family:Inter,sans-serif; font-size:11px; font-weight:600; padding:5px 10px; border-radius:20px;">5 días seguidos</div>
+            <div style="position:relative;">
+              <button onClick="{{ onToggleUserMenu }}" style="width:32px; height:32px; border-radius:50%; background:oklch(0.94 0.03 250); border:1px solid oklch(0.90 0.02 250); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="oklch(0.28 0.09 250)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 4-6 8-6s8 2 8 6"></path></svg>
+              </button>
+              <div style="{{ userMenuStyle }}">
+                <button onClick="{{ onChangePassword }}" style="width:100%; text-align:left; background:none; border:none; padding:10px 14px; font-family:Inter,sans-serif; font-size:13px; font-weight:500; color:oklch(0.22 0.03 250); cursor:pointer;">Cambiar contraseña</button>
+                <div style="height:1px; background:oklch(0.90 0.02 250);"></div>
+                <button onClick="{{ onLogout }}" style="width:100%; text-align:left; background:none; border:none; padding:10px 14px; font-family:Inter,sans-serif; font-size:13px; font-weight:500; color:oklch(0.55 0.14 25); cursor:pointer;">Cerrar sesión</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h1 style="font-family:Poppins,sans-serif; font-size:22px; font-weight:700; color:oklch(0.22 0.03 250); margin:2px 0 20px; letter-spacing:-.01em;">Registrar venta</h1>
+
+        <p style="font-family:Inter,sans-serif; font-size:12px; color:oklch(0.50 0.015 250); text-transform:uppercase; letter-spacing:.06em; margin:0 0 8px;">Identificar con</p>
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:18px;">
+          <sc-for list="{{ idTypes }}" as="t" hint-placeholder-count="4">
+            <button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+          </sc-for>
+        </div>
+
+        <div style="margin-bottom:18px;">
+          <input type="text" value="{{ idValue }}" onChange="{{ onIdValueChange }}" placeholder="{{ idPlaceholder }}" style="width:100%; box-sizing:border-box; background:oklch(0.965 0.006 250); border:1px solid oklch(0.90 0.02 250); border-radius:12px; padding:14px; color:oklch(0.22 0.03 250); font-family:ui-monospace,'SF Mono','Roboto Mono',Consolas,monospace; font-size:15px; letter-spacing:.02em; outline:none;" />
+        </div>
+
+        <p style="font-family:Inter,sans-serif; font-size:12px; color:oklch(0.50 0.015 250); text-transform:uppercase; letter-spacing:.06em; margin:0 0 8px;">Categoría</p>
+        <div style="margin-bottom:18px;">
+          <select value="{{ category }}" onChange="{{ onCategoryChange }}" style="width:100%; box-sizing:border-box; background:oklch(0.965 0.006 250); border:1px solid oklch(0.90 0.02 250); border-radius:12px; padding:14px; color:oklch(0.22 0.03 250); font-family:Inter,sans-serif; font-size:15px; outline:none; appearance:none;">
+            <option value="">Selecciona una categoría</option>
+            <sc-for list="{{ categories }}" as="c" hint-placeholder-count="10">
+              <option value="{{ c }}">{{ c }}</option>
+            </sc-for>
+          </select>
+        </div>
+
+        <p style="font-family:Inter,sans-serif; font-size:12px; color:oklch(0.50 0.015 250); text-transform:uppercase; letter-spacing:.06em; margin:0 0 8px;">Subcategoría</p>
+        <div style="margin-bottom:18px;">
+          <select value="{{ subcategory }}" onChange="{{ onSubcategoryChange }}" disabled="{{ subDisabled }}" style="{{ subSelectStyle }}">
+            <option value="">{{ subPlaceholderText }}</option>
+            <sc-for list="{{ subcategories }}" as="s" hint-placeholder-count="4">
+              <option value="{{ s }}">{{ s }}</option>
+            </sc-for>
+          </select>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; background:oklch(0.97 0.006 250); border:1px dashed oklch(0.90 0.02 250); border-radius:12px; padding:12px 14px; margin-bottom:22px;">
+          <span style="font-family:Inter,sans-serif; font-size:12px; color:oklch(0.50 0.015 250);">Comisión estimada</span>
+          <span style="font-family:ui-monospace,'SF Mono','Roboto Mono',Consolas,monospace; font-size:16px; font-weight:700; color:{{ previewColor }};">{{ previewText }}</span>
+        </div>
+
+        <button onClick="{{ onSubmit }}" style="{{ submitStyle }}">Registrar venta</button>
+        <p style="font-family:Inter,sans-serif; font-size:11.5px; color:oklch(0.68 0.01 250); text-align:center; margin-top:14px; line-height:1.5;">La venta se suma a tu billetera al instante y queda visible en tus movimientos.</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isWallet }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; flex-direction:column; min-height:660px; padding:8px 20px 90px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 2px 18px;">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <div style="font-family:Poppins,sans-serif; font-weight:700; font-size:12px; letter-spacing:.06em; color:oklch(0.28 0.09 250); text-transform:uppercase;">Gildemeister</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="width:20px; height:20px; border-radius:6px; background:linear-gradient(135deg, oklch(0.28 0.09 250), oklch(0.36 0.10 250)); display:flex; align-items:center; justify-content:center; font-family:Poppins,sans-serif; font-weight:700; font-size:10px; color:white;">B</div>
+              <div style="font-family:Inter,sans-serif; font-size:12px; letter-spacing:.03em; color:oklch(0.50 0.015 250); text-transform:uppercase;">Billetera 360</div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="display:flex; align-items:center; gap:5px; background:oklch(0.94 0.03 250); color:oklch(0.28 0.09 250); font-family:Inter,sans-serif; font-size:11px; font-weight:600; padding:5px 10px; border-radius:20px;">5 días seguidos</div>
+            <div style="position:relative;">
+              <button onClick="{{ onToggleUserMenu }}" style="width:32px; height:32px; border-radius:50%; background:oklch(0.94 0.03 250); border:1px solid oklch(0.90 0.02 250); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="oklch(0.28 0.09 250)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 4-6 8-6s8 2 8 6"></path></svg>
+              </button>
+              <div style="{{ userMenuStyle }}">
+                <button onClick="{{ onChangePassword }}" style="width:100%; text-align:left; background:none; border:none; padding:10px 14px; font-family:Inter,sans-serif; font-size:13px; font-weight:500; color:oklch(0.22 0.03 250); cursor:pointer;">Cambiar contraseña</button>
+                <div style="height:1px; background:oklch(0.90 0.02 250);"></div>
+                <button onClick="{{ onLogout }}" style="width:100%; text-align:left; background:none; border:none; padding:10px 14px; font-family:Inter,sans-serif; font-size:13px; font-weight:500; color:oklch(0.55 0.14 25); cursor:pointer;">Cerrar sesión</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:linear-gradient(160deg, oklch(0.93 0.02 250), oklch(0.97 0.006 250)); border:1px solid oklch(0.90 0.02 250); border-radius:20px; padding:22px 20px; margin-bottom:20px;">
+          <div style="font-family:Inter,sans-serif; font-size:12px; color:oklch(0.50 0.015 250); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Saldo del mes</div>
+          <div style="font-family:ui-monospace,'SF Mono','Roboto Mono',Consolas,monospace; font-size:34px; font-weight:700; color:oklch(0.22 0.03 250); letter-spacing:-.01em;">{{ balanceText }}</div>
+          <div style="display:flex; gap:16px; margin-top:14px; padding-top:14px; border-top:1px solid oklch(0.90 0.02 250);">
+            <div style="flex:1;">
+              <div style="font-family:Inter,sans-serif; font-size:11px; color:oklch(0.50 0.015 250); margin-bottom:3px;">Acumulado</div>
+              <div style="font-family:ui-monospace,'SF Mono','Roboto Mono',Consolas,monospace; font-size:14px; font-weight:600; color:oklch(0.22 0.03 250);">{{ accumulatedText }}</div>
+            </div>
+            <div style="flex:1;">
+              <div style="font-family:Inter,sans-serif; font-size:11px; color:oklch(0.50 0.015 250); margin-bottom:3px;">Ranking dealer</div>
+              <div style="font-family:ui-monospace,'SF Mono','Roboto Mono',Consolas,monospace; font-size:14px; font-weight:600; color:oklch(0.55 0.18 250);">#3 de 14</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="font-family:Inter,sans-serif; font-size:13px; color:oklch(0.50 0.015 250); text-transform:uppercase; letter-spacing:.06em; margin:6px 0 10px;">Movimientos recientes</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <sc-for list="{{ movements }}" as="m" hint-placeholder-count="4">
+            <div style="display:flex; align-items:center; gap:12px; background:oklch(0.97 0.006 250); border:1px solid oklch(0.90 0.02 250); border-radius:14px; padding:12px 14px;">
+              <div style="{{ m.badgeStyle }}">{{ m.icon }}</div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-family:Inter,sans-serif; font-size:13.5px; font-weight:600; color:oklch(0.22 0.03 250); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ m.name }}</div>
+                <div style="font-family:Inter,sans-serif; font-size:11.5px; color:oklch(0.50 0.015 250); margin-top:2px;">{{ m.meta }}</div>
+              </div>
+              <div style="font-family:ui-monospace,'SF Mono','Roboto Mono',Consolas,monospace; font-size:14px; font-weight:700; color:oklch(0.48 0.11 150); white-space:nowrap;">{{ m.amtText }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <div style="position:absolute; inset:0; background:oklch(0.20 0.05 250 / 0.94); display:{{ overlayDisplay }}; align-items:center; justify-content:center; flex-direction:column; z-index:50; border-radius:34px;">
+      <div style="position:relative; width:100%; height:220px; display:flex; align-items:center; justify-content:center;">
+        <sc-for list="{{ coins }}" as="co" hint-placeholder-count="0">
+          <div style="{{ co.style }}"></div>
+        </sc-for>
+        <div style="text-align:center;">
+          <div key="{{ burstId }}" style="font-family:ui-monospace,'SF Mono','Roboto Mono',Consolas,monospace; font-size:44px; font-weight:800; color:white; animation:pop .5s cubic-bezier(.2,1.4,.4,1) forwards;">{{ gainAmountText }}</div>
+          <div style="font-family:Inter,sans-serif; font-size:13px; color:oklch(0.80 0.03 250); margin-top:6px; text-transform:uppercase; letter-spacing:.08em; opacity:0; animation:fadein2 .4s ease .3s forwards;">Comisión acreditada</div>
+        </div>
+      </div>
+      <button onClick="{{ onContinue }}" style="margin-top:26px; background:white; color:oklch(0.28 0.09 250); border:none; border-radius:14px; padding:13px 26px; font-family:Poppins,sans-serif; font-size:14px; font-weight:700; cursor:pointer; opacity:0; animation:fadein2 .4s ease .7s forwards;">Ver mis movimientos</button>
+    </div>
+
+    <div style="position:absolute; left:0; right:0; bottom:0; display:flex; background:oklch(0.97 0.006 250); border-top:1px solid oklch(0.90 0.02 250); padding:10px 20px 18px;">
+      <button onClick="{{ onTabRegistro }}" style="{{ tabRegistroStyle }}">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+        Registrar
+      </button>
+      <button onClick="{{ onTabWallet }}" style="{{ tabWalletStyle }}">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M3 10h18M16 14h2"></path></svg>
+        Movimientos
+      </button>
+    </div>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 454, &quot;height&quot;: 800}}">
+class Component extends DCLogic {
+  CATALOG = {
+    "Kit360": { icon: "K3", color: "#0C2D52", subs: { "Gold": 35, "Bronze": 35 } },
+    "Llantas": { icon: "LL", color: "#A8730F", subs: { "Gripit XT 265/70R17": 46, "Gripit XT 275/70R18": 49, "Mud Kicker MT 265/70R17": 42, "Gitixross HT71 265/65R17": 20 } },
+    "Kit de Seguridad": { icon: "KS", color: "#4C3F99", subs: { "Pick Up": 10, "Camión": 10 } },
+    "Prepagados (MPPS)": { icon: "PP", color: "#B04A24", subs: { "2-3 mantenimientos": 10, "4-5 mantenimientos": 20, "6-7 mantenimientos": 30, "8-9 mantenimientos": 40, "10 mant. / 50,000km": 50 } },
+    "Baterías": { icon: "BA", color: "#1B5FA8", subs: { "D33 112AH (Powermeister)": 30, "LN4 90AH (Powermeister)": 25, "D31 90AH (Powermeister)": 25, "LB2 60AH (Powermeister)": 20 } },
+    "i3000+": { icon: "i3", color: "#3D7A22", subs: { "Gasolina": 7, "Diesel": 7 } },
+    "Aditivos Liqui Moly": { icon: "LM", color: "#A73F63", subs: { "Pack Inyección + Obturador": 11, "Pack Mantenimiento de Frenos": 9, "Pack DPF Preventivo": 11, "Klima Refresh": 7 } },
+    "GlassCoat": { icon: "GC", color: "#0F7A6A", subs: { "Bronze Pack": 70, "Gold Pack": 120 } },
+    "Airlife": { icon: "AL", color: "#0E6FA0", subs: { "Venta Servicio Airlife": 7 } },
+    "Ecoevol": { icon: "EC", color: "#B5670F", subs: { "Purificador Diesel F+": 40, "Catalizador de Combustible C": 7 } }
+  };
+  ID_PLACEHOLDERS = { placa: "ABC-123", vin: "KMHXX00XXXX000000", ot: "OT-004521", factura: "F001-000123" };
+  ID_LABELS = { placa: "Placa", vin: "VIN", ot: "OT", factura: "N° Factura" };
+
+  state = {
+    screen: 'registro',
+    idType: 'placa',
+    idValue: '',
+    category: '',
+    subcategory: '',
+    balance: 268,
+    accumulated: 1450,
+    movements: [
+      { name: "Llantas · Gripit XT 275/70R18", meta: "Placa BQY-902 · ayer", amt: 49, color: "#F5B942", icon: "LL" },
+      { name: "Kit360 Gold", meta: "Placa AGT-341 · ayer", amt: 35, color: "#2FE6B8", icon: "K3" },
+      { name: "Prepagados MPPS · 4-5 mant.", meta: "OT-004498 · hace 2 días", amt: 20, color: "#D85A30", icon: "PP" },
+      { name: "Aditivos · Pack Inyección", meta: "F001-000098 · hace 2 días", amt: 11, color: "#D4537E", icon: "LM" }
+    ],
+    overlayShow: false,
+    gainAmount: 0,
+    coins: [],
+    burstId: 0,
+    userMenuOpen: false
+  };
+
+  currentAmount() {
+    const { category, subcategory } = this.state;
+    if (category && subcategory && this.CATALOG[category]) return this.CATALOG[category].subs[subcategory] || 0;
+    return 0;
+  }
+
+  onIdValueChange = (e) => this.setState({ idValue: e.target.value });
+  onCategoryChange = (e) => this.setState({ category: e.target.value, subcategory: '' });
+  onSubcategoryChange = (e) => this.setState({ subcategory: e.target.value });
+  onTabRegistro = () => this.setState({ screen: 'registro' });
+  onTabWallet = () => this.setState({ screen: 'wallet' });
+  onToggleUserMenu = () => this.setState(s => ({ userMenuOpen: !s.userMenuOpen }));
+  onChangePassword = () => { this.setState({ userMenuOpen: false }); alert('Cambiar contraseña — próximamente'); };
+  onLogout = () => { this.setState({ userMenuOpen: false }); alert('Sesión cerrada'); };
+
+  playCoinSound() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [660, 880, 1320].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.09);
+        gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + i * 0.09 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.09 + 0.3);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.09);
+        osc.stop(ctx.currentTime + i * 0.09 + 0.32);
+      });
+    } catch (e) {}
+  }
+
+  onSubmit = () => {
+    const amt = this.currentAmount();
+    const idOk = this.state.idValue.trim().length > 2;
+    if (amt <= 0 || !idOk) return;
+    const { category, subcategory, idType, idValue } = this.state;
+    const catInfo = this.CATALOG[category];
+    const newMov = { name: category + ' · ' + subcategory, meta: this.ID_LABELS[idType] + ' ' + idValue + ' · hoy', amt, color: catInfo.color, icon: catInfo.icon };
+    const coins = [];
+    for (let i = 0; i < 18; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 60 + Math.random() * 90;
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist - 40;
+      const rot = (Math.random() * 720 - 360).toFixed(0);
+      const delay = Math.random() * 0.15;
+      coins.push({
+        id: i,
+        style: {
+          position: 'absolute', top: '50%', left: '50%', width: '22px', height: '22px',
+          borderRadius: '50%', background: 'oklch(0.78 0.14 85)', border: '2px solid oklch(0.90 0.09 90)',
+          opacity: 0, animation: `coinburst .9s cubic-bezier(.15,.7,.3,1) ${delay}s forwards`,
+          '--dx': dx + 'px', '--dy': dy + 'px', '--rot': rot + 'deg'
+        }
+      });
+    }
+    this.setState(s => ({
+      movements: [newMov, ...s.movements],
+      balance: s.balance + amt,
+      accumulated: s.accumulated + amt,
+      overlayShow: true,
+      gainAmount: amt,
+      coins,
+      burstId: s.burstId + 1
+    }));
+    this.playCoinSound();
+    if (this._coinTimeout) clearTimeout(this._coinTimeout);
+    this._coinTimeout = setTimeout(() => this.setState({ coins: [] }), 1300);
+  };
+
+  onContinue = () => {
+    this.setState({ overlayShow: false, screen: 'wallet', idValue: '', category: '', subcategory: '' });
+  };
+
+  fmt(n) {
+    return 'S/ ' + n.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const amount = this.currentAmount();
+    const idReady = s.idValue.trim().length > 2;
+    const submitReady = amount > 0 && idReady;
+
+    const idTypeDefs = [
+      { key: 'placa', label: 'Placa' },
+      { key: 'vin', label: 'VIN' },
+      { key: 'ot', label: 'OT' },
+      { key: 'factura', label: 'N° Factura' }
+    ];
+    const idTypes = idTypeDefs.map(t => {
+      const active = t.key === s.idType;
+      return {
+        key: t.key, label: t.label,
+        onClick: () => this.setState({ idType: t.key, idValue: '' }),
+        style: {
+          fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 600,
+          color: active ? 'oklch(0.55 0.18 250)' : 'oklch(0.50 0.015 250)',
+          background: active ? 'oklch(0.94 0.03 250)' : 'oklch(0.97 0.006 250)',
+          border: active ? '1px solid oklch(0.55 0.18 250)' : '1px solid oklch(0.90 0.02 250)',
+          borderRadius: '10px', padding: '9px 4px', cursor: 'pointer'
+        }
+      };
+    });
+
+    const categories = Object.keys(this.CATALOG);
+    const subcategories = s.category ? Object.keys(this.CATALOG[s.category].subs) : [];
+
+    return {
+      isRegistro: s.screen === 'registro',
+      isWallet: s.screen === 'wallet',
+      idTypes,
+      idValue: s.idValue,
+      idPlaceholder: this.ID_PLACEHOLDERS[s.idType],
+      onIdValueChange: this.onIdValueChange,
+      categories,
+      category: s.category,
+      onCategoryChange: this.onCategoryChange,
+      subcategories,
+      subcategory: s.subcategory,
+      onSubcategoryChange: this.onSubcategoryChange,
+      subDisabled: !s.category,
+      subPlaceholderText: s.category ? 'Selecciona una subcategoría' : 'Primero elige una categoría',
+      subSelectStyle: {
+        width: '100%', boxSizing: 'border-box',
+        background: s.category ? 'oklch(0.965 0.006 250)' : 'oklch(0.965 0.006 250)',
+        border: '1px solid oklch(0.90 0.02 250)', borderRadius: '12px', padding: '14px',
+        color: s.category ? 'oklch(0.22 0.03 250)' : 'oklch(0.68 0.01 250)',
+        fontFamily: 'Inter, sans-serif', fontSize: '15px', outline: 'none', appearance: 'none',
+        opacity: s.category ? 1 : 0.55
+      },
+      previewText: amount > 0 ? this.fmt(amount) : 'S/ 0.00',
+      previewColor: amount > 0 ? 'oklch(0.48 0.11 150)' : 'oklch(0.68 0.01 250)',
+      onSubmit: this.onSubmit,
+      submitStyle: {
+        width: '100%', background: 'oklch(0.28 0.09 250)', color: 'white', border: 'none',
+        borderRadius: '14px', padding: '16px', fontFamily: 'Poppins, sans-serif', fontSize: '15px',
+        fontWeight: 700, cursor: submitReady ? 'pointer' : 'default',
+        opacity: submitReady ? 1 : 0.4, pointerEvents: submitReady ? 'auto' : 'none'
+      },
+      balanceText: this.fmt(s.balance),
+      accumulatedText: this.fmt(s.accumulated),
+      movements: s.movements.map(m => ({
+        ...m,
+        amtText: '+' + this.fmt(m.amt),
+        badgeStyle: {
+          width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', fontFamily: "ui-monospace, monospace", fontSize: '12px', fontWeight: 700,
+          flexShrink: 0, background: m.color + '22', color: m.color
+        }
+      })),
+      overlayDisplay: s.overlayShow ? 'flex' : 'none',
+      coins: s.coins,
+      gainAmountText: '+' + this.fmt(s.gainAmount),
+      burstId: s.burstId,
+      onContinue: this.onContinue,
+      onTabRegistro: this.onTabRegistro,
+      onTabWallet: this.onTabWallet,
+      onToggleUserMenu: this.onToggleUserMenu,
+      onChangePassword: this.onChangePassword,
+      onLogout: this.onLogout,
+      userMenuStyle: {
+        display: s.userMenuOpen ? 'block' : 'none', position: 'absolute', top: '40px', right: 0,
+        width: '180px', background: 'white', border: '1px solid oklch(0.90 0.02 250)', borderRadius: '12px',
+        boxShadow: '0 8px 24px oklch(0.28 0.09 250 / 0.18)', zIndex: 60, overflow: 'hidden'
+      },
+      tabRegistroStyle: {
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: s.screen === 'registro' ? 'oklch(0.55 0.18 250)' : 'oklch(0.68 0.01 250)',
+        fontFamily: 'Inter, sans-serif', fontSize: '10.5px', fontWeight: 600, letterSpacing: '.02em'
+      },
+      tabWalletStyle: {
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: s.screen === 'wallet' ? 'oklch(0.55 0.18 250)' : 'oklch(0.68 0.01 250)',
+        fontFamily: 'Inter, sans-serif', fontSize: '10.5px', fontWeight: 600, letterSpacing: '.02em'
+      }
+    };
+  }
+}
+
+</script>
+</body>
+</html>

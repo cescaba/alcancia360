@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; }
+    a { color: oklch(0.55 0.18 250); }
+    a:hover { color: oklch(0.45 0.18 250); }
+    ::placeholder { color: oklch(0.68 0.01 250); }
+  </style>
+</helmet>
+
+<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(160deg, oklch(0.28 0.09 250), oklch(0.18 0.06 250)); font-family:Inter, sans-serif; padding:24px; box-sizing:border-box;">
+  <div style="width:380px; max-width:100%; background:white; border-radius:24px; padding:40px 32px 32px; box-shadow:0 30px 60px oklch(0.15 0.05 250 / 0.35);">
+
+    <div style="display:flex; justify-content:center; margin-bottom:28px;">
+      <img src="uploads/logo-gildemeister.png" alt="Gildemeister Retail" style="width:88px; height:88px; border-radius:20px;" />
+    </div>
+
+    <h1 style="font-family:Poppins,sans-serif; font-weight:700; font-size:20px; color:oklch(0.22 0.03 250); text-align:center; margin:0 0 4px; letter-spacing:-.01em;">Billetera 360</h1>
+    <p style="font-family:Inter,sans-serif; font-size:13px; color:oklch(0.50 0.015 250); text-align:center; margin:0 0 28px;">Ingresa con tu cuenta de colaborador</p>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block; font-family:Inter,sans-serif; font-size:12px; font-weight:600; color:oklch(0.50 0.015 250); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;">Usuario</label>
+      <input type="text" value="{{ username }}" onChange="{{ onUsernameChange }}" placeholder="nombre.apellido" style="width:100%; box-sizing:border-box; background:oklch(0.965 0.006 250); border:1px solid oklch(0.90 0.02 250); border-radius:12px; padding:13px 14px; color:oklch(0.22 0.03 250); font-family:Inter,sans-serif; font-size:14px; outline:none;" />
+    </div>
+
+    <div style="margin-bottom:8px;">
+      <label style="display:block; font-family:Inter,sans-serif; font-size:12px; font-weight:600; color:oklch(0.50 0.015 250); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;">Contraseña</label>
+      <div style="position:relative;">
+        <input type="{{ passwordFieldType }}" value="{{ password }}" onChange="{{ onPasswordChange }}" placeholder="••••••••" style="width:100%; box-sizing:border-box; background:oklch(0.965 0.006 250); border:1px solid oklch(0.90 0.02 250); border-radius:12px; padding:13px 44px 13px 14px; color:oklch(0.22 0.03 250); font-family:Inter,sans-serif; font-size:14px; outline:none;" />
+        <button onClick="{{ onTogglePassword }}" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; padding:6px; color:oklch(0.50 0.015 250); display:flex;">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </button>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-bottom:22px;">
+      <a href="#" onClick="{{ onForgot }}" style="font-family:Inter,sans-serif; font-size:12.5px; font-weight:500; text-decoration:none;">¿Olvidaste tu contraseña?</a>
+    </div>
+
+    <sc-if value="{{ hasError }}" hint-placeholder-val="{{ false }}">
+      <div style="background:oklch(0.95 0.03 25); border:1px solid oklch(0.85 0.08 25); border-radius:10px; padding:10px 12px; margin-bottom:16px; font-family:Inter,sans-serif; font-size:12.5px; color:oklch(0.45 0.14 25);">Usuario o contraseña incorrectos.</div>
+    </sc-if>
+
+    <button onClick="{{ onSubmit }}" style="width:100%; background:oklch(0.28 0.09 250); color:white; border:none; border-radius:14px; padding:15px; font-family:Poppins,sans-serif; font-size:14px; font-weight:700; cursor:pointer;">Ingresar</button>
+
+    <p style="font-family:Inter,sans-serif; font-size:11.5px; color:oklch(0.68 0.01 250); text-align:center; margin-top:22px; line-height:1.5;">Uso interno · Gildemeister Retail<br>Comunícate con Sistemas si tienes problemas de acceso.</p>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 480, &quot;height&quot;: 700}}">
+class Component extends DCLogic {
+  state = { username: '', password: '', showPassword: false, hasError: false };
+
+  onUsernameChange = (e) => this.setState({ username: e.target.value, hasError: false });
+  onPasswordChange = (e) => this.setState({ password: e.target.value, hasError: false });
+  onTogglePassword = () => this.setState(s => ({ showPassword: !s.showPassword }));
+  onForgot = (e) => { e.preventDefault(); alert('Recuperar contraseña — próximamente'); };
+  onSubmit = () => {
+    if (!this.state.username.trim() || !this.state.password.trim()) {
+      this.setState({ hasError: true });
+      return;
+    }
+    alert('Ingresando...');
+  };
+
+  renderVals() {
+    const s = this.state;
+    return {
+      username: s.username,
+      password: s.password,
+      onUsernameChange: this.onUsernameChange,
+      onPasswordChange: this.onPasswordChange,
+      onTogglePassword: this.onTogglePassword,
+      passwordFieldType: s.showPassword ? 'text' : 'password',
+      onForgot: this.onForgot,
+      onSubmit: this.onSubmit,
+      hasError: s.hasError
+    };
+  }
+}
+
+</script>
+</body>
+</html>

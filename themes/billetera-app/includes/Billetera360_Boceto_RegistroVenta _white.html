@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Billetera 360 — Boceto</title>
+<style>
+  :root{
+    --bg-deep:#FFFFFF;
+    --bg-card:#F6F8FB;
+    --bg-card-2:#EBF1F8;
+    --bg-input:#F3F6FA;
+    --line:#DFE6EF;
+    --navy:#0C2D52;
+    --navy-2:#123B6B;
+    --navy-tint:#E4EBF5;
+    --money:#146C43;
+    --money-dim:#E3F0E8;
+    --gold:#E0A63E;
+    --text-1:#0F1B2E;
+    --text-2:#5B6B80;
+    --text-3:#93A1B3;
+    --font-d: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-m: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:#EDF1F6;
+    font-family:var(--font-d);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px;
+    min-height:100vh;
+  }
+  .frame{
+    width:390px;
+    max-width:100%;
+    background:var(--bg-deep);
+    border-radius:34px;
+    border:1px solid #E2E8F1;
+    overflow:hidden;
+    position:relative;
+    box-shadow:0 24px 50px rgba(12,45,82,0.14);
+  }
+  .notch{
+    height:28px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .notch::before{
+    content:"";
+    width:90px;
+    height:6px;
+    border-radius:4px;
+    background:#E2E8F1;
+  }
+  .screen{
+    display:none;
+    flex-direction:column;
+    min-height:660px;
+    padding:8px 20px 90px;
+    animation:fadein .25s ease;
+  }
+  .screen.active{display:flex;}
+  @keyframes fadein{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 2px 18px;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .brand-mark{
+    width:26px;height:26px;border-radius:8px;
+    background:linear-gradient(135deg,var(--navy),var(--navy-2));
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-m);font-weight:700;font-size:12px;color:#FFFFFF;
+  }
+  .brand-name{font-size:13px;letter-spacing:.04em;color:var(--text-2);text-transform:uppercase;}
+  .streak-chip{
+    display:flex;align-items:center;gap:5px;
+    background:var(--navy-tint);
+    color:var(--navy);
+    font-size:11px;font-weight:600;
+    padding:5px 10px;border-radius:20px;
+  }
+
+  h1.page-title{
+    font-size:22px;font-weight:700;color:var(--text-1);margin:2px 0 20px;letter-spacing:-.01em;
+  }
+
+  .field-label{
+    font-size:12px;color:var(--text-2);text-transform:uppercase;letter-spacing:.06em;
+    margin:0 0 8px;
+  }
+
+  .seg{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:6px;
+    margin-bottom:18px;
+  }
+  .seg button{
+    font-family:var(--font-d);
+    font-size:12px;
+    font-weight:600;
+    color:var(--text-2);
+    background:var(--bg-card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:9px 4px;
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .seg button.on{
+    background:var(--navy-tint);
+    border-color:var(--navy);
+    color:var(--navy);
+  }
+
+  .input-wrap{margin-bottom:18px;}
+  input[type=text]{
+    width:100%;
+    background:var(--bg-input);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:14px 14px;
+    color:var(--text-1);
+    font-family:var(--font-m);
+    font-size:15px;
+    letter-spacing:.02em;
+    outline:none;
+  }
+  input[type=text]::placeholder{color:var(--text-3);font-family:var(--font-d);}
+  input[type=text]:focus{border-color:var(--navy);}
+
+  select{
+    width:100%;
+    background:var(--bg-input);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:14px 14px;
+    color:var(--text-1);
+    font-family:var(--font-d);
+    font-size:15px;
+    outline:none;
+    appearance:none;
+    -webkit-appearance:none;
+    background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="9"><path d="M1 1l6 6 6-6" stroke="%235B6B80" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+    background-repeat:no-repeat;
+    background-position:right 14px center;
+  }
+  select:disabled{color:var(--text-3);opacity:.55;}
+  .select-wrap{margin-bottom:18px;}
+
+  .amount-preview{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    background:var(--bg-card);
+    border:1px dashed var(--line);
+    border-radius:12px;
+    padding:12px 14px;
+    margin-bottom:22px;
+  }
+  .amount-preview .lbl{font-size:12px;color:var(--text-2);}
+  .amount-preview .val{font-family:var(--font-m);font-size:16px;font-weight:700;color:var(--text-3);}
+  .amount-preview .val.ready{color:var(--money);}
+
+  .submit-btn{
+    width:100%;
+    background:var(--navy);
+    color:#FFFFFF;
+    border:none;
+    border-radius:14px;
+    padding:16px;
+    font-family:var(--font-d);
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+    opacity:.4;
+    pointer-events:none;
+    transition:opacity .15s ease, transform .1s ease;
+  }
+  .submit-btn.ready{opacity:1;pointer-events:auto;}
+  .submit-btn:active{transform:scale(.98);}
+
+  /* WALLET SCREEN */
+  .balance-card{
+    background:linear-gradient(160deg,var(--bg-card-2),var(--bg-card));
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:22px 20px;
+    margin-bottom:20px;
+  }
+  .balance-label{font-size:12px;color:var(--text-2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+  .balance-value{
+    font-family:var(--font-m);
+    font-size:34px;
+    font-weight:700;
+    color:var(--text-1);
+    letter-spacing:-.01em;
+  }
+  .balance-sub{
+    display:flex;
+    gap:16px;
+    margin-top:14px;
+    padding-top:14px;
+    border-top:1px solid var(--line);
+  }
+  .balance-sub div{flex:1;}
+  .balance-sub .k{font-size:11px;color:var(--text-2);margin-bottom:3px;}
+  .balance-sub .v{font-family:var(--font-m);font-size:14px;font-weight:600;color:var(--text-1);}
+  .balance-sub .v.pos{color:var(--navy);}
+
+  .section-title{
+    font-size:13px;
+    color:var(--text-2);
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    margin:6px 0 10px;
+  }
+
+  .movs{display:flex;flex-direction:column;gap:8px;}
+  .mov{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:var(--bg-card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:12px 14px;
+    animation:slidein .35s ease;
+  }
+  @keyframes slidein{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+  .mov-badge{
+    width:38px;height:38px;border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-m);font-size:12px;font-weight:700;
+    flex-shrink:0;
+  }
+  .mov-body{flex:1;min-width:0;}
+  .mov-name{font-size:13.5px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mov-meta{font-size:11.5px;color:var(--text-2);margin-top:2px;}
+  .mov-amt{font-family:var(--font-m);font-size:14px;font-weight:700;color:var(--money);white-space:nowrap;}
+
+  /* TAB BAR */
+  .tabbar{
+    position:absolute;
+    left:0;right:0;bottom:0;
+    display:flex;
+    background:var(--bg-card);
+    border-top:1px solid var(--line);
+    padding:10px 20px 18px;
+  }
+  .tab{
+    flex:1;
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    background:none;border:none;cursor:pointer;
+    color:var(--text-3);
+    font-family:var(--font-d);
+    font-size:10.5px;
+    font-weight:600;
+    letter-spacing:.02em;
+  }
+  .tab.on{color:var(--navy);}
+  .tab svg{width:20px;height:20px;}
+
+  /* CELEBRATION OVERLAY */
+  .overlay{
+    position:absolute;
+    inset:0;
+    background:rgba(10,35,64,0.94);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    z-index:50;
+    border-radius:34px;
+  }
+  .overlay.show{display:flex;}
+  .burst-zone{
+    position:relative;
+    width:100%;
+    height:220px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .coin{
+    position:absolute;
+    top:50%;left:50%;
+    width:22px;height:22px;
+    border-radius:50%;
+    background:var(--gold);
+    border:2px solid #FFDD99;
+    opacity:0;
+  }
+  .gain-amount{
+    font-family:var(--font-m);
+    font-size:44px;
+    font-weight:800;
+    color:#FFFFFF;
+    transform:scale(.6);
+    opacity:0;
+  }
+  .gain-amount.pop{
+    animation:pop .5s cubic-bezier(.2,1.4,.4,1) forwards;
+  }
+  @keyframes pop{
+    0%{transform:scale(.5);opacity:0;}
+    60%{transform:scale(1.12);opacity:1;}
+    100%{transform:scale(1);opacity:1;}
+  }
+  .gain-label{
+    font-size:13px;color:#B9C9DF;margin-top:6px;text-transform:uppercase;letter-spacing:.08em;
+    opacity:0;
+    animation:fadein2 .4s ease .3s forwards;
+  }
+  @keyframes fadein2{to{opacity:1;}}
+  .continue-btn{
+    margin-top:26px;
+    background:#FFFFFF;
+    color:var(--navy);
+    border:none;
+    border-radius:14px;
+    padding:13px 26px;
+    font-family:var(--font-d);
+    font-size:14px;
+    font-weight:700;
+    cursor:pointer;
+    opacity:0;
+    animation:fadein2 .4s ease .7s forwards;
+  }
+
+  .hint{font-size:11.5px;color:var(--text-3);text-align:center;margin-top:14px;line-height:1.5;}
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <div class="notch"></div>
+
+  <!-- SCREEN 1: REGISTRAR VENTA -->
+  <div class="screen active" id="screen-registro">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">B</div>
+        <div class="brand-name">Billetera 360</div>
+      </div>
+      <div class="streak-chip" id="streak-chip">5 días seguidos</div>
+    </div>
+
+    <h1 class="page-title">Registrar venta</h1>
+
+    <p class="field-label">Identificar con</p>
+    <div class="seg" id="id-seg">
+      <button data-type="placa" class="on">Placa</button>
+      <button data-type="vin">VIN</button>
+      <button data-type="ot">OT</button>
+      <button data-type="factura">N&deg; Factura</button>
+    </div>
+
+    <div class="input-wrap">
+      <input type="text" id="id-input" placeholder="ABC-123">
+    </div>
+
+    <p class="field-label">Categoría</p>
+    <div class="select-wrap">
+      <select id="cat-select">
+        <option value="">Selecciona una categoría</option>
+      </select>
+    </div>
+
+    <p class="field-label">Subcategoría</p>
+    <div class="select-wrap">
+      <select id="sub-select" disabled>
+        <option value="">Primero elige una categoría</option>
+      </select>
+    </div>
+
+    <div class="amount-preview">
+      <span class="lbl">Comisión estimada</span>
+      <span class="val" id="preview-amt">S/ 0.00</span>
+    </div>
+
+    <button class="submit-btn" id="submit-btn">Registrar venta</button>
+    <p class="hint">La venta se suma a tu billetera al instante y queda visible en tus movimientos.</p>
+  </div>
+
+  <!-- SCREEN 2: MOVIMIENTOS -->
+  <div class="screen" id="screen-wallet">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">B</div>
+        <div class="brand-name">Billetera 360</div>
+      </div>
+      <div class="streak-chip" id="streak-chip-2">5 días seguidos</div>
+    </div>
+
+    <div class="balance-card">
+      <div class="balance-label">Saldo del mes</div>
+      <div class="balance-value" id="balance-value">S/ 0.00</div>
+      <div class="balance-sub">
+        <div>
+          <div class="k">Acumulado</div>
+          <div class="v" id="accum-value">S/ 0.00</div>
+        </div>
+        <div>
+          <div class="k">Ranking dealer</div>
+          <div class="v pos">#3 de 14</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Movimientos recientes</div>
+    <div class="movs" id="movs-list"></div>
+  </div>
+
+  <!-- CELEBRATION OVERLAY -->
+  <div class="overlay" id="overlay">
+    <div class="burst-zone" id="burst-zone">
+      <div style="text-align:center;">
+        <div class="gain-amount" id="gain-amount">+S/ 0.00</div>
+        <div class="gain-label">Comisión acreditada</div>
+      </div>
+    </div>
+    <button class="continue-btn" id="continue-btn">Ver mis movimientos</button>
+  </div>
+
+  <!-- TAB BAR -->
+  <div class="tabbar">
+    <button class="tab on" id="tab-registro">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      Registrar
+    </button>
+    <button class="tab" id="tab-wallet">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14h2"/></svg>
+      Movimientos
+    </button>
+  </div>
+</div>
+
+<script>
+const CATALOG = {
+  "Kit360": {
+    icon:"K3", color:"#0C2D52",
+    subs:{ "Gold":35, "Bronze":35 }
+  },
+  "Llantas": {
+    icon:"LL", color:"#A8730F",
+    subs:{ "Gripit XT 265/70R17":46, "Gripit XT 275/70R18":49, "Mud Kicker MT 265/70R17":42, "Gitixross HT71 265/65R17":20 }
+  },
+  "Kit de Seguridad": {
+    icon:"KS", color:"#4C3F99",
+    subs:{ "Pick Up":10, "Camión":10 }
+  },
+  "Prepagados (MPPS)": {
+    icon:"PP", color:"#B04A24",
+    subs:{ "2-3 mantenimientos":10, "4-5 mantenimientos":20, "6-7 mantenimientos":30, "8-9 mantenimientos":40, "10 mant. / 50,000km":50 }
+  },
+  "Baterías": {
+    icon:"BA", color:"#1B5FA8",
+    subs:{ "D33 112AH (Powermeister)":30, "LN4 90AH (Powermeister)":25, "D31 90AH (Powermeister)":25, "LB2 60AH (Powermeister)":20 }
+  },
+  "i3000+": {
+    icon:"i3", color:"#3D7A22",
+    subs:{ "Gasolina":7, "Diesel":7 }
+  },
+  "Aditivos Liqui Moly": {
+    icon:"LM", color:"#A73F63",
+    subs:{ "Pack Inyección + Obturador":11, "Pack Mantenimiento de Frenos":9, "Pack DPF Preventivo":11, "Klima Refresh":7 }
+  },
+  "GlassCoat": {
+    icon:"GC", color:"#0F7A6A",
+    subs:{ "Bronze Pack":70, "Gold Pack":120 }
+  },
+  "Airlife": {
+    icon:"AL", color:"#0E6FA0",
+    subs:{ "Venta Servicio Airlife":7 }
+  },
+  "Ecoevol": {
+    icon:"EC", color:"#B5670F",
+    subs:{ "Purificador Diesel F+":40, "Catalizador de Combustible C":7 }
+  }
+};
+
+const ID_PLACEHOLDERS = {
+  placa:"ABC-123",
+  vin:"KMHXX00XXXX000000",
+  ot:"OT-004521",
+  factura:"F001-000123"
+};
+
+const catSelect = document.getElementById('cat-select');
+const subSelect = document.getElementById('sub-select');
+const idInput = document.getElementById('id-input');
+const previewAmt = document.getElementById('preview-amt');
+const submitBtn = document.getElementById('submit-btn');
+const idSeg = document.getElementById('id-seg');
+
+Object.keys(CATALOG).forEach(cat=>{
+  const opt = document.createElement('option');
+  opt.value = cat;
+  opt.textContent = cat;
+  catSelect.appendChild(opt);
+});
+
+idSeg.querySelectorAll('button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    idSeg.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    idInput.placeholder = ID_PLACEHOLDERS[btn.dataset.type];
+    idInput.value = '';
+    validate();
+  });
+});
+
+catSelect.addEventListener('change', ()=>{
+  const cat = catSelect.value;
+  subSelect.innerHTML = '';
+  if(!cat){
+    subSelect.disabled = true;
+    const opt = document.createElement('option');
+    opt.textContent = 'Primero elige una categoría';
+    subSelect.appendChild(opt);
+    validate();
+    return;
+  }
+  subSelect.disabled = false;
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Selecciona una subcategoría';
+  subSelect.appendChild(placeholder);
+  Object.keys(CATALOG[cat].subs).forEach(sub=>{
+    const opt = document.createElement('option');
+    opt.value = sub;
+    opt.textContent = sub;
+    subSelect.appendChild(opt);
+  });
+  validate();
+});
+
+subSelect.addEventListener('change', validate);
+idInput.addEventListener('input', validate);
+
+function currentAmount(){
+  const cat = catSelect.value;
+  const sub = subSelect.value;
+  if(cat && sub && CATALOG[cat]) return CATALOG[cat].subs[sub] || 0;
+  return 0;
+}
+
+function validate(){
+  const amt = currentAmount();
+  const idOk = idInput.value.trim().length > 2;
+  if(amt > 0){
+    previewAmt.textContent = 'S/ ' + amt.toFixed(2);
+    previewAmt.classList.add('ready');
+  } else {
+    previewAmt.textContent = 'S/ 0.00';
+    previewAmt.classList.remove('ready');
+  }
+  if(amt > 0 && idOk){
+    submitBtn.classList.add('ready');
+  } else {
+    submitBtn.classList.remove('ready');
+  }
+}
+
+let balance = 268.00;
+let accumulated = 1450.00;
+const movements = [
+  {name:"Llantas · Gripit XT 275/70R18", meta:"Placa BQY-902 · ayer", amt:49, color:"#F5B942", icon:"LL"},
+  {name:"Kit360 Gold", meta:"Placa AGT-341 · ayer", amt:35, color:"#2FE6B8", icon:"K3"},
+  {name:"Prepagados MPPS · 4-5 mant.", meta:"OT-004498 · hace 2 días", amt:20, color:"#D85A30", icon:"PP"},
+  {name:"Aditivos · Pack Inyección", meta:"F001-000098 · hace 2 días", amt:11, color:"#D4537E", icon:"LM"}
+];
+
+function renderMovements(){
+  const list = document.getElementById('movs-list');
+  list.innerHTML = '';
+  movements.forEach(m=>{
+    const row = document.createElement('div');
+    row.className = 'mov';
+    row.innerHTML = `
+      <div class="mov-badge" style="background:${m.color}22;color:${m.color};">${m.icon}</div>
+      <div class="mov-body">
+        <div class="mov-name">${m.name}</div>
+        <div class="mov-meta">${m.meta}</div>
+      </div>
+      <div class="mov-amt">+S/ ${m.amt.toFixed(2)}</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function renderBalance(animate){
+  const balEl = document.getElementById('balance-value');
+  const accEl = document.getElementById('accum-value');
+  if(animate){
+    const start = parseFloat(balEl.textContent.replace('S/ ','').replace(',','')) || 0;
+    const startAcc = parseFloat(accEl.textContent.replace('S/ ','').replace(',','')) || 0;
+    const dur = 600;
+    const t0 = performance.now();
+    function step(t){
+      const p = Math.min(1, (t - t0)/dur);
+      const eased = 1 - Math.pow(1-p, 3);
+      const cur = start + (balance - start) * eased;
+      const curAcc = startAcc + (accumulated - startAcc) * eased;
+      balEl.textContent = 'S/ ' + cur.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
+      accEl.textContent = 'S/ ' + curAcc.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  } else {
+    balEl.textContent = 'S/ ' + balance.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
+    accEl.textContent = 'S/ ' + accumulated.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+}
+
+function playCoinSound(){
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [660, 880, 1320];
+    notes.forEach((freq, i)=>{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + i*0.09);
+      gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + i*0.09 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i*0.09 + 0.3);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + i*0.09);
+      osc.stop(ctx.currentTime + i*0.09 + 0.32);
+    });
+  }catch(e){}
+}
+
+function spawnCoins(zone){
+  for(let i=0;i<18;i++){
+    const coin = document.createElement('div');
+    coin.className = 'coin';
+    const angle = (Math.random() * Math.PI * 2);
+    const dist = 60 + Math.random()*90;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist - 40;
+    const rot = (Math.random()*720 - 360).toFixed(0);
+    const delay = Math.random()*0.15;
+    coin.style.animation = `coinburst .9s cubic-bezier(.15,.7,.3,1) ${delay}s forwards`;
+    coin.style.setProperty('--dx', dx+'px');
+    coin.style.setProperty('--dy', dy+'px');
+    coin.style.setProperty('--rot', rot+'deg');
+    zone.appendChild(coin);
+    setTimeout(()=>coin.remove(), 1300);
+  }
+}
+
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+@keyframes coinburst{
+  0%{ transform:translate(-50%,-50%) scale(.3) rotate(0deg); opacity:0; }
+  15%{ opacity:1; }
+  100%{ transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 160px)) scale(1) rotate(var(--rot)); opacity:0; }
+}`;
+document.head.appendChild(styleSheet);
+
+document.getElementById('submit-btn').addEventListener('click', ()=>{
+  if(!submitBtn.classList.contains('ready')) return;
+  const amt = currentAmount();
+  const cat = catSelect.value;
+  const sub = subSelect.value;
+  const idType = idSeg.querySelector('.on').dataset.type;
+  const idLabelMap = {placa:"Placa", vin:"VIN", ot:"OT", factura:"Factura"};
+  const idVal = idInput.value.trim();
+
+  movements.unshift({
+    name: cat + ' · ' + sub,
+    meta: idLabelMap[idType] + ' ' + idVal + ' · hoy',
+    amt: amt,
+    color: CATALOG[cat].color,
+    icon: CATALOG[cat].icon
+  });
+  balance += amt;
+  accumulated += amt;
+
+  const overlay = document.getElementById('overlay');
+  const gainAmount = document.getElementById('gain-amount');
+  const burstZone = document.getElementById('burst-zone');
+  gainAmount.textContent = '+S/ ' + amt.toFixed(2);
+  gainAmount.classList.remove('pop');
+  void gainAmount.offsetWidth;
+  gainAmount.classList.add('pop');
+
+  overlay.classList.add('show');
+  playCoinSound();
+  spawnCoins(burstZone);
+
+  document.getElementById('continue-btn').onclick = ()=>{
+    overlay.classList.remove('show');
+    goToScreen('wallet');
+    renderMovements();
+    renderBalance(true);
+    resetForm();
+  };
+});
+
+function resetForm(){
+  idInput.value = '';
+  catSelect.value = '';
+  subSelect.innerHTML = '<option>Primero elige una categoría</option>';
+  subSelect.disabled = true;
+  validate();
+}
+
+function goToScreen(name){
+  document.getElementById('screen-registro').classList.toggle('active', name==='registro');
+  document.getElementById('screen-wallet').classList.toggle('active', name==='wallet');
+  document.getElementById('tab-registro').classList.toggle('on', name==='registro');
+  document.getElementById('tab-wallet').classList.toggle('on', name==='wallet');
+}
+
+document.getElementById('tab-registro').addEventListener('click', ()=>goToScreen('registro'));
+document.getElementById('tab-wallet').addEventListener('click', ()=>{
+  goToScreen('wallet');
+  renderMovements();
+  renderBalance(false);
+});
+
+renderMovements();
+renderBalance(false);
+</script>
+
+</body>
+</html>
