@@ -40,10 +40,12 @@ $current_user = wp_get_current_user();
     </div>
 
     <div class="nav-buttons">
+        <?php if (!in_array('jefe_venta', (array) $current_user->roles)): ?>
         <a href="<?php echo esc_url($registro_url); ?>" class="nav-button" id="nav-registro">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
             Registrar venta
         </a>
+        <?php endif; ?>
         <a href="<?php echo esc_url($movimientos_url); ?>" class="nav-button" id="nav-wallet">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M3 10h18M16 14h2"></path></svg>
             Movimientos
@@ -57,7 +59,7 @@ $current_user = wp_get_current_user();
             </div>
             <div class="user-info">
                 <p><?php echo esc_html($current_user->display_name); ?></p>
-                <p class="sub">Asesor</p>
+                <p class="sub"><?php echo in_array('jefe_venta', (array) $current_user->roles) ? 'Jefe de Venta' : 'Asesor'; ?></p>
             </div>
         </button>
         <div class="user-menu-dropdown" id="user-dropdown">

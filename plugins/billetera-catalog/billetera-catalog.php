@@ -282,49 +282,14 @@ function billetera_ajax_register_sale_v2() {
     }
 
     // Obtener comisión: primero específica del distribuidor, luego la genérica (NULL)
-    $comisiones_table = $wpdb->prefix . 'billetera_comisiones';
-
-    $comision = null;
-
-    // Si tiene distribuidor_id, buscar comisión específica
-    if ($distribuidor_id) {
-        $comision = $wpdb->get_row($wpdb->prepare("
-            SELECT c.monto, c.moneda
-            FROM $comisiones_table c
-            WHERE c.subcategoria_id = %d
-            AND c.distribuidor_id = %d
-            AND c.rol = %s
-            AND c.activo = 1
-            LIMIT 1
-        ", $subcategoria_id, $distribuidor_id, $user_role));
-    }
-
-    // Si no existe, buscar la comisión genérica (TODOS = NULL)
-    if (!$comision) {
-        $comision = $wpdb->get_row($wpdb->prepare("
-            SELECT c.monto, c.moneda
-            FROM $comisiones_table c
-            WHERE c.subcategoria_id = %d
-            AND c.distribuidor_id IS NULL
-            AND c.rol = %s
-            AND c.activo = 1
-            LIMIT 1
-        ", $subcategoria_id, $user_role));
-    }
+    $comision = billetera_find_comision($subcategoria_id, $distribuidor_id, $user_role);
 
     if (!$comision) {
         wp_send_json_error(['message' => 'Comisión no encontrada']);
     }
 
-    // Convertir a SOL si es necesario
-    $monto_sol = floatval($comision->monto);
-    if ($comision->moneda === 'USD') {
-        $tipo_cambio = billetera_get_tipo_cambio();
-        $monto_sol = $monto_sol * $tipo_cambio;
-    }
-
-    // Multiplicar por cantidad
-    $monto_total_sol = $monto_sol * $cantidad;
+    // Convertir a SOL y multiplicar por cantidad
+    $monto_total_sol = billetera_convert_to_sol($comision) * $cantidad;
 
     // Verificar si es venta de Prepagados y aplicar bonus si es necesario
     $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
@@ -384,6 +349,9 @@ function billetera_ajax_register_sale_v2() {
     ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f']);
 
     if ($result) {
+        // Registrar la comisión del jefe de venta de la sucursal (sin bonus 2x)
+        billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value);
+
         $monto_mostrado = $monto_total_sol * $bonus_multiplier;
         wp_send_json_success([
             'message' => 'Venta registrada',
@@ -408,28 +376,80 @@ function billetera_get_tipo_cambio() {
     return floatval($tipo_cambio ?? 3.5);
 }
 
-function billetera_apply_prepagados_bonus($monto, $user_id) {
+function billetera_find_comision($subcategoria_id, $distribuidor_id, $rol) {
     global $wpdb;
-    $ventas_table = $wpdb->prefix . 'billetera_ventas';
-    $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
-    $categorias_table = $wpdb->prefix . 'billetera_categorias';
+    $comisiones_table = $wpdb->prefix . 'billetera_comisiones';
 
-    $current_month = date('Y-m-01');
+    if ($distribuidor_id) {
+        $comision = $wpdb->get_row($wpdb->prepare("
+            SELECT c.monto, c.moneda
+            FROM $comisiones_table c
+            WHERE c.subcategoria_id = %d
+            AND c.distribuidor_id = %d
+            AND c.rol = %s
+            AND c.activo = 1
+            LIMIT 1
+        ", $subcategoria_id, $distribuidor_id, $rol));
 
-    $prepagados_count = intval($wpdb->get_var($wpdb->prepare("
-        SELECT COUNT(v.id) FROM $ventas_table v
-        INNER JOIN $subcategorias_table s ON v.subcategoria_id = s.id
-        INNER JOIN $categorias_table c ON s.categoria_id = c.id
-        WHERE v.usuario_id = %d
-        AND c.nombre = 'Prepagados'
-        AND v.creado_en >= %s
-    ", $user_id, $current_month)));
-
-    if ($prepagados_count > 5) {
-        return $monto * 2;
+        if ($comision) {
+            return $comision;
+        }
     }
 
-    return $monto;
+    return $wpdb->get_row($wpdb->prepare("
+        SELECT c.monto, c.moneda
+        FROM $comisiones_table c
+        WHERE c.subcategoria_id = %d
+        AND c.distribuidor_id IS NULL
+        AND c.rol = %s
+        AND c.activo = 1
+        LIMIT 1
+    ", $subcategoria_id, $rol));
+}
+
+function billetera_convert_to_sol($comision) {
+    $monto_sol = floatval($comision->monto);
+    if ($comision->moneda === 'USD') {
+        $monto_sol = $monto_sol * billetera_get_tipo_cambio();
+    }
+    return $monto_sol;
+}
+
+function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value) {
+    if (!$tienda_id) {
+        return;
+    }
+
+    $jefes = get_post_meta($tienda_id, '_jefes_venta_asociados', true);
+    if (!is_array($jefes)) {
+        $jefes = $jefes ? [$jefes] : [];
+    }
+
+    foreach ($jefes as $jefe_id) {
+        $jefe_id = intval($jefe_id);
+        if (!$jefe_id) {
+            continue;
+        }
+
+        $comision = billetera_find_comision($subcategoria_id, $distribuidor_id, 'jefe_venta');
+        if (!$comision) {
+            continue;
+        }
+
+        $monto_jefe = billetera_convert_to_sol($comision) * $cantidad;
+
+        global $wpdb;
+        $ventas_table = $wpdb->prefix . 'billetera_ventas';
+        $wpdb->insert($ventas_table, [
+            'usuario_id' => $jefe_id,
+            'subcategoria_id' => $subcategoria_id,
+            'cantidad' => $cantidad,
+            'monto_comision_sol' => $monto_jefe,
+            'id_type' => $id_type,
+            'id_value' => $id_value,
+            'bonus_multiplier' => 1.0,
+        ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f']);
+    }
 }
 
 // AJAX: Calcular comisión por subcategoría
@@ -468,49 +488,14 @@ function billetera_ajax_get_comision() {
     }
 
     // Obtener comisión: primero específica del distribuidor, luego la genérica (NULL)
-    $comisiones_table = $wpdb->prefix . 'billetera_comisiones';
-
-    $comision = null;
-
-    // Si tiene distribuidor_id, buscar comisión específica
-    if ($distribuidor_id) {
-        $comision = $wpdb->get_row($wpdb->prepare("
-            SELECT c.monto, c.moneda
-            FROM $comisiones_table c
-            WHERE c.subcategoria_id = %d
-            AND c.distribuidor_id = %d
-            AND c.rol = %s
-            AND c.activo = 1
-            LIMIT 1
-        ", $subcategoria_id, $distribuidor_id, $user_role));
-    }
-
-    // Si no existe, buscar la comisión genérica (TODOS = NULL)
-    if (!$comision) {
-        $comision = $wpdb->get_row($wpdb->prepare("
-            SELECT c.monto, c.moneda
-            FROM $comisiones_table c
-            WHERE c.subcategoria_id = %d
-            AND c.distribuidor_id IS NULL
-            AND c.rol = %s
-            AND c.activo = 1
-            LIMIT 1
-        ", $subcategoria_id, $user_role));
-    }
+    $comision = billetera_find_comision($subcategoria_id, $distribuidor_id, $user_role);
 
     if (!$comision) {
         wp_send_json_error(['message' => 'Comisión no encontrada']);
     }
 
-    // Convertir a SOL si es necesario
-    $monto_sol = floatval($comision->monto);
-    if ($comision->moneda === 'USD') {
-        $tipo_cambio = billetera_get_tipo_cambio();
-        $monto_sol = $monto_sol * $tipo_cambio;
-    }
-
-    // Multiplicar por cantidad
-    $monto_total_sol = $monto_sol * $cantidad;
+    // Convertir a SOL y multiplicar por cantidad
+    $monto_total_sol = billetera_convert_to_sol($comision) * $cantidad;
 
     // Verificar si es Prepagados y aplicar bonus si corresponde
     $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';

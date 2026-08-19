@@ -14,7 +14,7 @@ function billetera_scripts() {
 }
 add_action('wp_enqueue_scripts', 'billetera_scripts');
 
-// Las tablas ahora se crean en el plugin billetera-catalog
+// Las tablas ahora se crean en el plugin billetera-catal
 // No es necesario crear tablas aquí
 
 // El rol "asesor" se gestiona con otro plugin
@@ -32,12 +32,6 @@ function billetera_redirect_unauthenticated() {
 }
 add_action('template_redirect', 'billetera_redirect_unauthenticated');
 
-
-// Registrar shortcodes
-require get_template_directory() . '/includes/shortcodes.php';
-
-// Registrar funciones AJAX
-require get_template_directory() . '/includes/ajax-handlers.php';
 
 // Registrar meta boxes
 require get_template_directory() . '/includes/metaboxes.php';
@@ -364,25 +358,32 @@ function billetera_translate_login_text($translated, $original, $domain) {
 // Redirigir al login a la página de Billetera 360
 add_action('wp_login', 'billetera_redirect_after_login', 10, 2);
 function billetera_redirect_after_login($_, $user) {
-    $allowed_roles = array('asesor', 'administrator');
-    if (array_intersect($allowed_roles, $user->roles)) {
-        // Encontrar la página con el template page-billetera-360-responsive.php
-        global $wpdb;
-        $page = $wpdb->get_row($wpdb->prepare(
-            "SELECT ID FROM {$wpdb->posts}
-             INNER JOIN {$wpdb->postmeta} ON {$wpdb->posts}.ID = {$wpdb->postmeta}.post_id
-             WHERE {$wpdb->posts}.post_type = 'page'
-             AND {$wpdb->posts}.post_status = 'publish'
-             AND {$wpdb->postmeta}.meta_key = '_wp_page_template'
-             AND {$wpdb->postmeta}.meta_value = %s
-             LIMIT 1",
-            'page-billetera-360-responsive.php'
-        ));
+    $user_roles = (array) $user->roles;
 
-        if ($page) {
-            wp_redirect(get_permalink($page->ID));
-            exit;
-        }
+    // Jefe de venta → Movimientos; asesor/administrador → Registrar venta
+    if (in_array('jefe_venta', $user_roles, true)) {
+        $template = 'page-billetera-360-movimientos.php';
+    } elseif (array_intersect(array('asesor', 'administrator'), $user_roles)) {
+        $template = 'page-billetera-360-responsive.php';
+    } else {
+        return;
+    }
+
+    global $wpdb;
+    $page = $wpdb->get_row($wpdb->prepare(
+        "SELECT ID FROM {$wpdb->posts}
+         INNER JOIN {$wpdb->postmeta} ON {$wpdb->posts}.ID = {$wpdb->postmeta}.post_id
+         WHERE {$wpdb->posts}.post_type = 'page'
+         AND {$wpdb->posts}.post_status = 'publish'
+         AND {$wpdb->postmeta}.meta_key = '_wp_page_template'
+         AND {$wpdb->postmeta}.meta_value = %s
+         LIMIT 1",
+        $template
+    ));
+
+    if ($page) {
+        wp_redirect(get_permalink($page->ID));
+        exit;
     }
 }
 

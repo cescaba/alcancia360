@@ -10,9 +10,9 @@ if (!is_user_logged_in()) {
 }
 
 $current_user = wp_get_current_user();
-$allowed_roles = array('asesor', 'administrator');
+$allowed_roles = array('asesor', 'administrator', 'jefe_venta');
 if (!array_intersect($allowed_roles, $current_user->roles)) {
-    wp_die('Acceso restringido. Solo administradores y asesores pueden acceder.');
+    wp_die('Acceso restringido. Solo administradores, asesores y jefes de venta pueden acceder.');
 }
 
 // Detectar URL de página con template Billetera 360 Responsive
@@ -78,10 +78,12 @@ $registro_url = get_page_by_template('page-billetera-360-responsive.php');
 
         <!-- MOBILE TABBAR -->
         <div class="mobile-tabbar">
+            <?php if (!in_array('jefe_venta', (array) $current_user->roles)): ?>
             <a href="<?php echo esc_url($registro_url); ?>" class="mobile-tab" id="mobile-tab-registro">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                 Registrar
             </a>
+            <?php endif; ?>
             <button class="mobile-tab active" id="mobile-tab-wallet">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14h2"/></svg>
                 Movimientos
