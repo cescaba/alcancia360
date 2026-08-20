@@ -1,4 +1,4 @@
-// Billetera 360 - Lógica completa con AJAX
+// Billetera 360 - Lógica del formulario "Registrar venta"
 
 const ID_PLACEHOLDERS = {
     placa: "ABC-123",
@@ -7,17 +7,22 @@ const ID_PLACEHOLDERS = {
     factura: "F001-000123"
 };
 
-// State
+const ID_LABELS = {
+    placa: "Placa",
+    vin: "VIN",
+    ot: "OT",
+    factura: "N° Factura"
+};
+
 let state = {
-    screen: 'registro',
-    idType: 'placa',
-    idValue: '',
+    idType: 'factura',
     marca: '',
     category: '',
     subcategory: '',
     balance: 0,
     accumulated: 0,
-    movements: []
+    meta: 0,
+    fillPercent: 0
 };
 
 let marcasData = {};
@@ -26,6 +31,7 @@ let subcategoriesData = {};
 
 // Elements
 const idSegButtons = document.querySelectorAll('#id-seg button');
+const idLabel = document.getElementById('id-label');
 const idInput = document.getElementById('id-input');
 const marcaSelect = document.getElementById('marca-select');
 const catSelect = document.getElementById('cat-select');
@@ -33,29 +39,22 @@ const subSelect = document.getElementById('sub-select');
 const cantidadWrap = document.getElementById('cantidad-wrap');
 const cantidadInput = document.getElementById('cantidad-input');
 const previewAmt = document.getElementById('preview-amt');
+const regComision = document.getElementById('reg-comision');
 const submitBtn = document.getElementById('submit-btn');
-const navRegistro = document.getElementById('nav-registro');
-const navWallet = document.getElementById('nav-wallet');
-const screenRegistro = document.getElementById('screen-registro');
-const screenWallet = document.getElementById('screen-wallet');
 const overlay = document.getElementById('overlay');
 const gainAmount = document.getElementById('gain-amount');
 const continueBtn = document.getElementById('continue-btn');
-const balancePreview = document.getElementById('balance-preview');
-const balanceValue = document.getElementById('balance-value');
-const accumValue = document.getElementById('accum-value');
-const movsListEl = document.getElementById('movs-list');
+const alcanciaBalance = document.getElementById('alcancia-balance');
+const alcanciaBarFill = document.getElementById('alcancia-bar-fill');
+const alcanciaMissing = document.getElementById('alcancia-missing');
+const alcanciaPigFill = document.getElementById('alcancia-pig-fill');
+const celebratePigFill = document.getElementById('celebrate-pig-fill');
 
-// Initialize
 function init() {
-    // Mark first ID button as active
-    idSegButtons[0].classList.add('active');
     idInput.placeholder = ID_PLACEHOLDERS[state.idType];
+    if (idLabel) idLabel.textContent = ID_LABELS[state.idType];
 
-    // Event listeners
-    idSegButtons.forEach(btn => {
-        btn.addEventListener('click', handleIdTypeChange);
-    });
+    idSegButtons.forEach(btn => btn.addEventListener('click', handleIdTypeChange));
 
     idInput.addEventListener('input', validate);
     marcaSelect.addEventListener('change', handleMarcaChange);
@@ -63,29 +62,10 @@ function init() {
     subSelect.addEventListener('change', handleSubcategoryChange);
     cantidadInput.addEventListener('input', handleCantidadChange);
     submitBtn.addEventListener('click', handleSubmit);
-    navRegistro.addEventListener('click', () => switchScreen('registro'));
-    continueBtn.addEventListener('click', goToMovimientos);
+    if (continueBtn) continueBtn.addEventListener('click', goToMovimientos);
 
-    // Mobile tabs
-    const mobileTabRegistro = document.getElementById('mobile-tab-registro');
-    if (mobileTabRegistro) mobileTabRegistro.addEventListener('click', () => switchScreen('registro'));
-
-    // Load marcas
     loadMarcas();
-
-    // Load user data
     loadUserData();
-
-    // User menu
-    document.getElementById('user-toggle').addEventListener('click', () => {
-        document.getElementById('user-dropdown').classList.toggle('active');
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.user-menu')) {
-            document.getElementById('user-dropdown').classList.remove('active');
-        }
-    });
 }
 
 function loadMarcas() {
@@ -105,10 +85,12 @@ function loadMarcas() {
 }
 
 function handleIdTypeChange(e) {
-    idSegButtons.forEach(btn => btn.classList.remove('active'));
-    e.target.closest('button').classList.add('active');
-    state.idType = e.target.closest('button').dataset.type;
+    idSegButtons.forEach(btn => btn.classList.remove('is-active'));
+    const btn = e.target.closest('button');
+    btn.classList.add('is-active');
+    state.idType = btn.dataset.type;
     idInput.placeholder = ID_PLACEHOLDERS[state.idType];
+    if (idLabel) idLabel.textContent = ID_LABELS[state.idType];
     idInput.value = '';
     validate();
 }
@@ -225,7 +207,7 @@ function loadComision() {
     const subId = subSelect.value;
     if (!subId) {
         previewAmt.textContent = 'S/ 0.00';
-        previewAmt.classList.remove('ready');
+        if (regComision) regComision.classList.remove('is-ready');
         return;
     }
 
@@ -235,103 +217,77 @@ function loadComision() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'action=billetera_get_comision&subcategoria_id=' + subId + '&cantidad=' + cantidad
     })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            previewAmt.textContent = res.data.amount_formatted;
-            previewAmt.classList.add('ready');
-        } else {
-            previewAmt.textContent = 'S/ 0.00';
-            previewAmt.classList.remove('ready');
-        }
-    });
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                previewAmt.textContent = res.data.amount_formatted;
+                if (regComision) regComision.classList.add('is-ready');
+            } else {
+                previewAmt.textContent = 'S/ 0.00';
+                if (regComision) regComision.classList.remove('is-ready');
+            }
+        });
 }
 
 function validate() {
     const sub = subSelect.value;
     const idOk = idInput.value.trim().length > 2;
 
-    let isValid = sub && idOk;
-
-    // Solo resetear la comisión si NO hay subcategoría
-    if (!sub) {
-        previewAmt.textContent = 'S/ 0.00';
-        previewAmt.classList.remove('ready');
-    }
+    const isValid = sub && idOk;
 
     if (isValid) {
-        submitBtn.classList.add('ready');
+        submitBtn.classList.add('is-ready');
+        submitBtn.disabled = false;
     } else {
-        submitBtn.classList.remove('ready');
+        submitBtn.classList.remove('is-ready');
+        submitBtn.disabled = true;
     }
 }
 
 function handleSubmit() {
-    if (!submitBtn.classList.contains('ready')) return;
+    if (!submitBtn.classList.contains('is-ready')) return;
 
     const subId = subSelect.value;
     const cantidad = parseInt(cantidadInput.value) || 1;
     const idType = state.idType;
     const idVal = idInput.value.trim();
 
-    // Register via AJAX
     fetch(billetera.ajax_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'action=billetera_register_sale_v2&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal)
     })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            const amount = data.data.amount || 0;
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const amount = data.data.amount || 0;
 
-            // Show celebration
-            gainAmount.textContent = '+S/ ' + amount.toFixed(2);
-            overlay.classList.add('show');
-            spawnCoins(document.getElementById('burst-zone'));
+                gainAmount.textContent = '+S/ ' + amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                overlay.classList.add('show');
 
-            // Reset form
-            resetForm();
+                resetForm();
 
-            // Reload data after celebration
-            setTimeout(() => {
-                loadUserData();
-            }, 1500);
+                setTimeout(() => {
+                    loadUserData();
+                }, 1500);
 
-            // Auto-close overlay after 4 seconds
-            setTimeout(() => {
-                closeOverlay();
-            }, 4000);
-        }
-    });
-}
-
-function spawnCoins(zone) {
-    for (let i = 0; i < 18; i++) {
-        const coin = document.createElement('div');
-        coin.className = 'coin';
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 60 + Math.random() * 90;
-        const dx = Math.cos(angle) * dist;
-        const dy = Math.sin(angle) * dist - 40;
-        const rot = (Math.random() * 720 - 360).toFixed(0);
-        const delay = Math.random() * 0.15;
-        coin.style.animation = `coinburst 0.9s cubic-bezier(0.15, 0.7, 0.3, 1) ${delay}s forwards`;
-        coin.style.setProperty('--dx', dx + 'px');
-        coin.style.setProperty('--dy', dy + 'px');
-        coin.style.setProperty('--rot', rot + 'deg');
-        zone.appendChild(coin);
-        setTimeout(() => coin.remove(), 1300);
-    }
+                setTimeout(() => {
+                    closeOverlay();
+                }, 4000);
+            }
+        });
 }
 
 function closeOverlay() {
     overlay.classList.remove('show');
-    switchScreen('registro');
 }
 
 function goToMovimientos() {
-    overlay.classList.remove('show');
+    if (overlay) overlay.classList.remove('show');
+    if (window.billetera && window.billetera.movimientos_url) {
+        window.location.href = window.billetera.movimientos_url;
+        return;
+    }
     const movLink = document.querySelector('a[href*="movimientos"]');
     if (movLink) {
         window.location.href = movLink.href;
@@ -347,27 +303,9 @@ function resetForm() {
     subSelect.disabled = true;
     cantidadWrap.style.display = 'none';
     cantidadInput.value = 1;
+    previewAmt.textContent = 'S/ 0.00';
+    if (regComision) regComision.classList.remove('is-ready');
     validate();
-}
-
-function switchScreen(name) {
-    state.screen = name;
-    screenRegistro.classList.toggle('active', name === 'registro');
-    screenWallet.classList.toggle('active', name === 'wallet');
-    navRegistro.classList.toggle('active', name === 'registro');
-    navWallet.classList.toggle('active', name === 'wallet');
-
-    // Update mobile tabs
-    const mobileTabRegistro = document.getElementById('mobile-tab-registro');
-    const mobileTabWallet = document.getElementById('mobile-tab-wallet');
-    if (mobileTabRegistro) mobileTabRegistro.classList.toggle('active', name === 'registro');
-    if (mobileTabWallet) mobileTabWallet.classList.toggle('active', name === 'wallet');
-
-    overlay.classList.remove('show');
-
-    if (name === 'wallet') {
-        loadUserData();
-    }
 }
 
 function loadUserData() {
@@ -377,57 +315,29 @@ function loadUserData() {
             if (res.success) {
                 state.balance = res.data.balance;
                 state.accumulated = res.data.accumulated;
-                state.movements = res.data.movements.map(m => ({
-                    name: (m.id_type ? m.id_type.toUpperCase() + ' ' : '') + (m.id_value || ''),
-                    meta: getTimeLabel(new Date(m.created_at)),
-                    amount: m.amount,
-                    icon: 'V',
-                    color: '#146C43'
-                }));
-                updateBalance();
-                renderMovements();
+                state.meta = res.data.meta || 0;
+                state.fillPercent = res.data.fill_percent || 0;
+                updateAlcancia();
             }
         });
 }
 
-function updateBalance() {
-    balancePreview.textContent = 'S/ ' + state.balance.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
-    balanceValue.textContent = 'S/ ' + state.balance.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
-    accumValue.textContent = 'S/ ' + state.accumulated.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
-}
+function updateAlcancia() {
+    const meta = state.meta || 0;
+    const balance = state.balance || 0;
+    const fill = state.fillPercent || 0;
 
-function renderMovements() {
-    movsListEl.innerHTML = '';
-    state.movements.forEach(m => {
-        const row = document.createElement('div');
-        row.className = 'movement-row';
-        row.innerHTML = `
-            <div class="movement-badge" style="background: ${m.color}22; color: ${m.color};">${m.icon}</div>
-            <div class="movement-info">
-                <div class="movement-name">${escapeHtml(m.name)}</div>
-                <div class="movement-meta">${escapeHtml(m.meta)}</div>
-            </div>
-            <div class="movement-amount">+S/ ${m.amount.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-        `;
-        movsListEl.appendChild(row);
-    });
-}
+    const bal = 'S/ ' + balance.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const faltante = Math.max(0, meta - balance);
+    const fal = 'S/ ' + faltante.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function getTimeLabel(date) {
-    const now = new Date();
-    const diffMs = now - date;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (alcanciaBalance) alcanciaBalance.textContent = bal;
+    if (alcanciaMissing) alcanciaMissing.textContent = fal;
+    if (alcanciaBarFill) alcanciaBarFill.style.width = fill + '%';
 
-    if (diffDays === 0) return 'hoy';
-    if (diffDays === 1) return 'ayer';
-    if (diffDays < 7) return 'hace ' + diffDays + ' días';
-    return date.toLocaleDateString('es-PE');
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    const clip = 'inset(' + (100 - fill) + '% 0 0 0)';
+    if (alcanciaPigFill) alcanciaPigFill.style.clipPath = clip;
+    if (celebratePigFill) celebratePigFill.style.clipPath = clip;
 }
 
 // Initialize when DOM is ready

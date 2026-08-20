@@ -36,6 +36,9 @@ add_action('template_redirect', 'billetera_redirect_unauthenticated');
 // Registrar meta boxes
 require get_template_directory() . '/includes/metaboxes.php';
 
+// Helpers del header (racha, notificaciones, iniciales)
+require get_template_directory() . '/includes/header-helpers.php';
+
 // ===== LOGIN PERSONALIZADO BILLETERA 360 =====
 add_action('login_head', 'billetera_login_styles');
 function billetera_login_styles() {

@@ -1,0 +1,416 @@
+/* ============================================================================
+   Billetera 360 - Pantalla "Mi alcancía" + lista de movimientos
+   ========================================================================== */
+
+.alc-wrap {
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+/* ---------- Header ---------- */
+.alc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid #e4eaf1;
+}
+
+.alc-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0e2438;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0;
+}
+
+.alc-month {
+    font-family: Barlow, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: #5b6b80;
+    border: 1px solid #dce3eb;
+    padding: 4px 9px;
+    letter-spacing: 0.04em;
+    border-radius: 2px;
+}
+
+.alc-back {
+    font-family: Barlow, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: #0a6cb4;
+    letter-spacing: 0.03em;
+    text-decoration: none;
+}
+
+/* ---------- Chancho ---------- */
+.alc-pig-zone {
+    padding: 6px 18px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.alc-pig-bob {
+    width: 186px;
+    max-width: 62%;
+    margin-top: 8px;
+    animation: alcIdleBob 5s ease-in-out infinite;
+}
+
+.alc-pig {
+    position: relative;
+}
+
+.alc-pig__btn {
+    display: block;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    position: relative;
+    transform-origin: 50% 92%;
+    animation: alcPop 0.62s cubic-bezier(0.3, 1.7, 0.4, 1);
+}
+
+.alc-pig__coin {
+    position: absolute;
+    left: 60%;
+    top: 6%;
+    width: 15%;
+    padding-bottom: 15%;
+    border-radius: 50%;
+    z-index: 1;
+    pointer-events: none;
+    background: radial-gradient(circle at 34% 30%, #f8dc9c, #c98a1e);
+    box-shadow: inset 0 -2px 4px rgba(120, 80, 10, 0.5);
+    opacity: 0;
+    transform: translate(-50%, -320%);
+    animation: alcCoinIn 0.72s cubic-bezier(0.45, 0, 0.7, 0.2) 0.2s forwards;
+}
+
+.alc-pig__base {
+    width: 100%;
+    display: block;
+    position: relative;
+    z-index: 2;
+}
+
+.alc-pig__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    display: block;
+    z-index: 3;
+    pointer-events: none;
+    filter: sepia(1) saturate(2.4) hue-rotate(-14deg) brightness(0.97);
+    clip-path: inset(100% 0 0 0);
+    transition: clip-path 0.9s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.alc-pig-hint {
+    font-family: Barlow, sans-serif;
+    font-size: 11px;
+    color: #8494a6;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 2px 0 12px;
+}
+
+/* ---------- Contenido ---------- */
+.alc-content {
+    padding: 0 18px;
+}
+
+/* Saldo / Avance */
+.alc-stats {
+    border: 1px solid #dce3eb;
+    display: flex;
+}
+
+.alc-stats__saldo {
+    flex: 1.25;
+    padding: 13px 15px;
+    border-right: 1px solid #dce3eb;
+}
+
+.alc-stats__avance {
+    flex: 0.85;
+    padding: 13px 15px;
+    background: #f5f8fb;
+}
+
+.alc-stats__label {
+    font-family: Barlow, sans-serif;
+    font-size: 9.5px;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+.alc-stats__value {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-top: 2px;
+    letter-spacing: 0.01em;
+}
+
+.alc-stats__value--blue {
+    color: #0a6cb4;
+}
+
+.alc-stats__value--gold {
+    color: #8a5f0f;
+}
+
+/* Barra de progreso */
+.alc-progress {
+    border-left: 1px solid #dce3eb;
+    border-right: 1px solid #dce3eb;
+    border-bottom: 1px solid #dce3eb;
+    padding: 13px 15px 14px;
+}
+
+.alc-progress__bar {
+    height: 10px;
+    background: repeating-linear-gradient(115deg, #e4eaf1 0px, #e4eaf1 8px, #dbe3ec 8px, #dbe3ec 14px);
+    background-size: 28px 100%;
+    overflow: hidden;
+    margin-top: 8px;
+    position: relative;
+}
+
+.alc-progress__fill {
+    height: 100%;
+    width: 0%;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(90deg, #c98a1e, #f5c563);
+    transition: width 0.9s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.alc-progress__fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 38%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0));
+    animation: alcShimmer 2.6s ease-in-out infinite;
+}
+
+.alc-progress__meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: Barlow, sans-serif;
+    font-size: 11px;
+    color: #5b6b80;
+    margin-top: 9px;
+}
+
+.alc-progress__meta b {
+    color: #8a5f0f;
+    font-weight: 700;
+}
+
+/* Grid 3 columnas */
+.alc-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-left: 1px solid #dce3eb;
+    border-right: 1px solid #dce3eb;
+    border-bottom: 1px solid #dce3eb;
+    margin-bottom: 18px;
+}
+
+.alc-grid__item {
+    padding: 11px 12px;
+    border-right: 1px solid #dce3eb;
+    background: #fff;
+}
+
+.alc-grid__item:last-child {
+    border-right: none;
+}
+
+.alc-grid__item--alt {
+    background: #f5f8fb;
+}
+
+.alc-grid__value {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    color: #0e2438;
+}
+
+.alc-grid__value--gold {
+    color: #8a5f0f;
+}
+
+.alc-grid__label {
+    font-family: Barlow, sans-serif;
+    font-size: 9px;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+}
+
+/* ---------- Movimientos ---------- */
+.alc-mov-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0 9px;
+}
+
+.alc-mov-title {
+    font-family: Barlow, sans-serif;
+    font-size: 10px;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+.alc-mov-all {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: Barlow, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: #0a6cb4;
+    letter-spacing: 0.03em;
+    text-decoration: none;
+}
+
+.alc-mov-list {
+    border: 1px solid #dce3eb;
+}
+
+.alc-mov {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    background: #fff;
+    border-bottom: 1px solid #e4eaf1;
+    border-left: 3px solid transparent;
+    padding: 11px 13px;
+    animation: alcRiseIn 0.45s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+
+.alc-mov:nth-child(even) {
+    background: #f5f8fb;
+}
+
+.alc-mov:last-child {
+    border-bottom: none;
+}
+
+.alc-mov--latest {
+    background: #fbf6ea !important;
+    border-left-color: #c98a1e;
+}
+
+.alc-mov__badge {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    color: #0e2438;
+    border: 1px solid rgba(91, 95, 168, 0.333);
+    border-radius: 2px;
+}
+
+.alc-mov__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.alc-mov__name {
+    font-family: Barlow, sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #0e2438;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.alc-mov__meta {
+    font-family: Barlow, sans-serif;
+    font-size: 10.5px;
+    color: #8494a6;
+    margin-top: 1px;
+}
+
+.alc-mov__amt {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: #1b6e46;
+    white-space: nowrap;
+}
+
+.alc-mov__bonus {
+    display: inline-block;
+    background: #f5c563;
+    color: #7a5410;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+.alc-empty {
+    font-family: Barlow, sans-serif;
+    font-size: 12.5px;
+    color: #8494a6;
+    text-align: center;
+    padding: 24px 16px;
+}
+
+/* ---------- Animaciones ---------- */
+@keyframes alcIdleBob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+}
+
+@keyframes alcPop {
+    0%   { transform: scale(0.5); }
+    100% { transform: scale(1); }
+}
+
+@keyframes alcCoinIn {
+    0%   { opacity: 0; transform: translate(-50%, -320%); }
+    55%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, 0); }
+}
+
+@keyframes alcShimmer {
+    0%   { left: -40%; }
+    100% { left: 110%; }
+}
+
+@keyframes alcRiseIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}

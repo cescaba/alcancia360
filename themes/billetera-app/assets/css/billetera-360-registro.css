@@ -1,0 +1,443 @@
+/* ============================================================================
+   Billetera 360 - Pantalla "Registrar venta" (rediseño) + overlay de celebración
+   ========================================================================== */
+
+.reg-wrap {
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+/* ---------- Header de la pantalla ---------- */
+.reg-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid #e4eaf1;
+}
+
+.reg-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0e2438;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0;
+}
+
+.reg-step {
+    font-family: Barlow, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: #5b6b80;
+    border: 1px solid #dce3eb;
+    padding: 4px 9px;
+    border-radius: 2px;
+}
+
+.reg-body {
+    padding: 14px 18px 0;
+}
+
+/* ---------- Tarjeta alcancía ---------- */
+.alcancia {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid #dce3eb;
+    background: #f5f8fb;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+}
+
+.alcancia__pig {
+    width: 82px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.alcancia__pig-base {
+    width: 100%;
+    display: block;
+    position: relative;
+    z-index: 2;
+}
+
+.alcancia__pig-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    display: block;
+    z-index: 3;
+    pointer-events: none;
+    filter: sepia(1) saturate(2.4) hue-rotate(-14deg) brightness(0.97);
+    clip-path: inset(100% 0 0 0);
+    transition: clip-path 0.9s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.alcancia__coin {
+    position: absolute;
+    left: 60%;
+    top: 6%;
+    width: 15%;
+    padding-bottom: 15%;
+    border-radius: 50%;
+    z-index: 1;
+    pointer-events: none;
+    background: radial-gradient(circle at 34% 30%, #f8dc9c, #c98a1e);
+    box-shadow: inset 0 -2px 4px rgba(120, 80, 10, 0.5);
+    opacity: 0;
+    transform: translate(-50%, -320%);
+    animation: coinIn 0.72s cubic-bezier(0.45, 0, 0.7, 0.2) 0.2s forwards;
+}
+
+.alcancia__info {
+    min-width: 0;
+    flex: 1;
+}
+
+.alcancia__label {
+    font-family: Barlow, sans-serif;
+    font-size: 9.5px;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+.alcancia__balance {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 27px;
+    font-weight: 700;
+    color: #0a6cb4;
+    line-height: 1.1;
+}
+
+.alcancia__bar {
+    height: 10px;
+    background: repeating-linear-gradient(115deg, #e4eaf1 0px, #e4eaf1 8px, #dbe3ec 8px, #dbe3ec 14px);
+    background-size: 28px 100%;
+    overflow: hidden;
+    margin-top: 8px;
+    position: relative;
+}
+
+.alcancia__bar-fill {
+    height: 100%;
+    width: 0%;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(90deg, #c98a1e, #f5c563);
+    transition: width 0.9s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.alcancia__bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 38%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0));
+    animation: shimmer 2.6s ease-in-out infinite;
+}
+
+.alcancia__missing {
+    font-family: Barlow, sans-serif;
+    font-size: 10.5px;
+    color: #5b6b80;
+    margin-top: 6px;
+}
+
+.alcancia__missing b {
+    color: #8a5f0f;
+    font-weight: 700;
+}
+
+/* ---------- Labels y campos ---------- */
+.reg-label {
+    font-family: Barlow, sans-serif;
+    font-size: 10px;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin: 0 0 7px;
+}
+
+.reg-field {
+    margin-bottom: 14px;
+}
+
+.reg-field input[type="text"],
+.reg-field input[type="number"],
+.reg-field select {
+    width: 100%;
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid #c9d4e0;
+    border-radius: 2px;
+    padding: 13px 14px;
+    color: #0e2438;
+    font-family: Barlow, sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.reg-field input[type="text"] {
+    font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+    font-size: 14.5px;
+    letter-spacing: 0.04em;
+}
+
+.reg-field select {
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.reg-field select:disabled {
+    background: #f2f5f9;
+    color: #8494a6;
+}
+
+.reg-field input:focus,
+.reg-field select:focus {
+    border-color: #0a6cb4;
+    box-shadow: 0 0 0 2px rgba(10, 108, 180, 0.15);
+}
+
+/* ---------- Segmento "Identificar con" ---------- */
+.reg-seg {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin-bottom: 14px;
+    border: 1px solid #dce3eb;
+}
+
+.reg-seg button {
+    font-family: Barlow, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #5b6b80;
+    background: #fff;
+    border: none;
+    border-right: 1px solid #dce3eb;
+    padding: 11px 2px;
+    cursor: pointer;
+    transition: background 0.18s, color 0.18s;
+}
+
+.reg-seg button:last-child {
+    border-right: none;
+}
+
+.reg-seg button.is-active {
+    background: #0a6cb4;
+    color: #fff;
+}
+
+/* ---------- Comisión ---------- */
+.reg-comision {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f5f8fb;
+    border: 1px solid #dce3eb;
+    border-left-width: 3px;
+    padding: 13px 15px;
+    margin-bottom: 16px;
+    transition: background 0.3s, border-color 0.3s;
+}
+
+.reg-comision__label {
+    font-family: Barlow, sans-serif;
+    font-size: 10px;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+.reg-comision__value {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 25px;
+    font-weight: 700;
+    color: #8494a6;
+}
+
+.reg-comision.is-ready {
+    background: #f0f7fd;
+    border-color: #0a6cb4;
+}
+
+.reg-comision.is-ready .reg-comision__value {
+    color: #0a6cb4;
+}
+
+/* ---------- Botón submit ---------- */
+.reg-submit {
+    width: 100%;
+    background: #e4eaf1;
+    color: #8494a6;
+    border: none;
+    border-radius: 2px;
+    padding: 15px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: default;
+    transition: transform 0.12s, background 0.3s, color 0.3s;
+    pointer-events: none;
+}
+
+.reg-submit.is-ready {
+    background: #0a6cb4;
+    color: #fff;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.reg-submit.is-ready:active {
+    transform: scale(0.98);
+}
+
+.reg-note {
+    font-family: Barlow, sans-serif;
+    font-size: 10.5px;
+    color: #8494a6;
+    text-align: center;
+    margin-top: 11px;
+    line-height: 1.5;
+}
+
+/* ---------- Overlay de celebración ---------- */
+.overlay {
+    background: rgba(255, 255, 255, 0.97);
+}
+
+.celebrate {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    height: 290px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.celebrate__rings span {
+    position: absolute;
+    top: 38%;
+    width: 170px;
+    height: 170px;
+    border-radius: 50%;
+    border: 1.5px solid #c98a1e;
+    animation: ringPulse 1.1s ease-out forwards;
+}
+
+.celebrate__rings span:nth-child(2) {
+    animation-delay: 0.15s;
+}
+
+.celebrate__pig {
+    width: 168px;
+    position: relative;
+}
+
+.celebrate__pig-base {
+    width: 100%;
+    display: block;
+    position: relative;
+    z-index: 2;
+    animation: alcPop 0.7s cubic-bezier(0.3, 1.7, 0.4, 1);
+    transform-origin: 50% 92%;
+}
+
+.celebrate__pig-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    display: block;
+    z-index: 3;
+    pointer-events: none;
+    filter: sepia(1) saturate(2.4) hue-rotate(-14deg) brightness(0.97);
+    clip-path: inset(100% 0 0 0);
+    transition: clip-path 0.9s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+#gain-amount {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 46px;
+    font-weight: 700;
+    color: #8a5f0f;
+    letter-spacing: 0.01em;
+    margin-top: 8px;
+    animation: amountPop 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) forwards;
+}
+
+.celebrate__label {
+    font-family: Barlow, sans-serif;
+    font-size: 12.5px;
+    color: #5b6b80;
+    margin-top: 2px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.overlay.show #continue-btn {
+    display: block;
+    margin: 6px auto 0;
+    background: #0a6cb4;
+    color: #fff;
+    border: none;
+    border-radius: 2px;
+    padding: 14px 30px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    width: auto;
+    max-width: 90%;
+    white-space: nowrap;
+}
+
+/* ---------- Animaciones ---------- */
+@keyframes riseIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes alcPop {
+    0%   { transform: scale(0.5); }
+    100% { transform: scale(1); }
+}
+
+@keyframes ringPulse {
+    0%   { transform: scale(0.6); opacity: 0.8; }
+    100% { transform: scale(1.35); opacity: 0; }
+}
+
+@keyframes amountPop {
+    0%   { transform: scale(0.3); opacity: 0; }
+    60%  { transform: scale(1.12); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes coinIn {
+    0%   { opacity: 0; transform: translate(-50%, -320%); }
+    55%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, 0); }
+}
+
+@keyframes shimmer {
+    0%   { left: -40%; }
+    100% { left: 110%; }
+}

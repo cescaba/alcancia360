@@ -1,7 +1,7 @@
 <?php
 /**
  * Template Name: Billetera 360 Movimientos
- * Description: Billetera 360 - Pantalla de Movimientos
+ * Description: Billetera 360 - Pantalla "Mi alcancía"
  */
 
 if (!is_user_logged_in()) {
@@ -15,7 +15,7 @@ if (!array_intersect($allowed_roles, $current_user->roles)) {
     wp_die('Acceso restringido. Solo administradores, asesores y jefes de venta pueden acceder.');
 }
 
-// Detectar URL de página con template Billetera 360 Responsive
+// Detectar URL de páginas por template
 function get_page_by_template($template_name) {
     global $wpdb;
     $page = $wpdb->get_row($wpdb->prepare(
@@ -31,7 +31,11 @@ function get_page_by_template($template_name) {
     return $page ? get_permalink($page->ID) : '#';
 }
 
-$registro_url = get_page_by_template('page-billetera-360-responsive.php');
+$todos_url  = get_page_by_template('page-billetera-360-movimientos-todos.php');
+$alcancia_img = get_template_directory_uri() . '/assets/img/alcancia.svg';
+
+$meses = array('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre');
+$mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
 ?>
 
 <!DOCTYPE html>
@@ -39,56 +43,96 @@ $registro_url = get_page_by_template('page-billetera-360-responsive.php');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Billetera 360 - Movimientos</title>
+    <title>Mi alcancía</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-responsive.css">
+    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-header.css">
+    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-alcancia.css">
 </head>
 <body>
 
-<div class="site-wrapper">
-    <?php get_template_part('template-parts/header-sidebar'); ?>
+<?php get_template_part('template-parts/header-app'); ?>
 
+<div class="site-wrapper">
     <!-- MAIN CONTENT -->
     <div class="main-content">
-        <?php get_template_part('template-parts/header-topbar'); ?>
 
-        <!-- SCREEN: MOVIMIENTOS -->
+        <!-- SCREEN: MI ALCANCÍA -->
         <div class="screen active" id="screen-wallet">
-            <div class="balance-card">
-                <div class="balance-label">Saldo del mes</div>
-                <div class="balance-value" id="balance-value">S/ 0.00</div>
-                <div class="balance-sub">
-                    <div>
-                        <div class="balance-sub-label">Acumulado</div>
-                        <div class="balance-sub-value" id="accum-value">S/ 0.00</div>
-                    </div>
-                    <div>
-                        <div class="balance-sub-label">Ranking dealer</div>
-                        <div class="balance-sub-value">#3 de 14</div>
-                    </div>
+            <div class="alc-wrap">
+
+                <div class="alc-head">
+                    <h1 class="alc-title">Mi alcancía</h1>
+                    <span class="alc-month"><?php echo esc_html($mes_label); ?></span>
                 </div>
-            </div>
 
-            <div class="section-title">Movimientos recientes</div>
+                <!-- Chancho -->
+                <div class="alc-pig-zone">
+                    <div class="alc-pig-bob" id="alc-pig-bob">
+                        <div class="alc-pig">
+                            <button type="button" class="alc-pig__btn" id="alc-pig-btn" aria-label="Toca la alcancía">
+                                <span class="alc-pig__coin"></span>
+                                <img class="alc-pig__base" src="<?php echo esc_url($alcancia_img); ?>" alt="Alcancía">
+                                <img class="alc-pig__fill" id="alc-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
+                            </button>
+                        </div>
+                    </div>
+                    <div class="alc-pig-hint">Toca la alcancía</div>
+                </div>
 
-            <div class="movements-container">
-                <div class="movs" id="movs-list"></div>
+                <div class="alc-content">
+                    <!-- Saldo / Avance -->
+                    <div class="alc-stats">
+                        <div class="alc-stats__saldo">
+                            <div class="alc-stats__label">Saldo del mes</div>
+                            <div class="alc-stats__value alc-stats__value--blue" id="saldo-mes">S/ 0.00</div>
+                        </div>
+                        <div class="alc-stats__avance">
+                            <div class="alc-stats__label">Avance meta</div>
+                            <div class="alc-stats__value alc-stats__value--gold" id="avance-meta">0%</div>
+                        </div>
+                    </div>
+
+                    <!-- Barra de progreso -->
+                    <div class="alc-progress">
+                        <div class="alc-progress__bar">
+                            <div class="alc-progress__fill" id="bar-fill"></div>
+                        </div>
+                        <div class="alc-progress__meta">
+                            <span>Te faltan <b id="faltan">S/ 0.00</b></span>
+                            <span id="meta-label">Meta S/ 0.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Stats 3 columnas -->
+                    <div class="alc-grid">
+                        <div class="alc-grid__item">
+                            <div class="alc-grid__value" id="acumulado-ano">S/ 0.00</div>
+                            <div class="alc-grid__label">Acumulado año</div>
+                        </div>
+                        <div class="alc-grid__item alc-grid__item--alt">
+                            <div class="alc-grid__value" id="ventas-mes">0</div>
+                            <div class="alc-grid__label">Ventas del mes</div>
+                        </div>
+                        <div class="alc-grid__item">
+                            <div class="alc-grid__value alc-grid__value--gold" id="ranking">#0 / 0</div>
+                            <div class="alc-grid__label">Ranking taller</div>
+                        </div>
+                    </div>
+
+                    <!-- Movimientos -->
+                    <div class="alc-mov-head">
+                        <div class="alc-mov-title">Movimientos recientes</div>
+                        <a class="alc-mov-all" href="<?php echo esc_url($todos_url); ?>">Ver todo</a>
+                    </div>
+                    <div class="alc-mov-list" id="movs-list"></div>
+                </div>
+
             </div>
         </div>
 
-        <!-- MOBILE TABBAR -->
-        <div class="mobile-tabbar">
-            <?php if (!in_array('jefe_venta', (array) $current_user->roles)): ?>
-            <a href="<?php echo esc_url($registro_url); ?>" class="mobile-tab" id="mobile-tab-registro">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                Registrar
-            </a>
-            <?php endif; ?>
-            <button class="mobile-tab active" id="mobile-tab-wallet">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14h2"/></svg>
-                Movimientos
-            </button>
-        </div>
+        <!-- BOTTOM TABBAR -->
+        <?php get_template_part('template-parts/bottom-tabbar'); ?>
     </div>
 </div>
 
@@ -96,50 +140,6 @@ $registro_url = get_page_by_template('page-billetera-360-responsive.php');
 window.billetera = {
     ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>'
 };
-
-// User menu toggle
-document.addEventListener('DOMContentLoaded', function() {
-    // Desktop sidebar
-    const desktopUserMenu = document.querySelector('.sidebar .user-menu');
-    const desktopDropdown = document.querySelector('.sidebar .user-menu-dropdown');
-    if (desktopUserMenu && desktopDropdown) {
-        const desktopToggle = desktopUserMenu.querySelector('.user-button');
-        if (desktopToggle) {
-            desktopToggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                desktopDropdown.classList.toggle('active');
-            });
-        }
-    }
-
-    // Mobile topbar
-    const mobileTopbar = document.querySelector('.mobile-topbar');
-    const mobileDropdown = document.querySelector('.mobile-topbar .user-menu-dropdown');
-    if (mobileTopbar && mobileDropdown) {
-        const mobileToggle = mobileTopbar.querySelector('.user-button');
-        if (mobileToggle) {
-            mobileToggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                mobileDropdown.classList.toggle('active');
-            });
-        }
-    }
-
-    // Close menu when clicking outside
-    document.addEventListener('click', (e) => {
-        // Si el click es dentro de .user-menu (desktop), no cerrar
-        if (e.target.closest('.sidebar .user-menu')) {
-            return;
-        }
-        // Si el click es dentro del .mobile-topbar, no cerrar
-        if (e.target.closest('.mobile-topbar')) {
-            return;
-        }
-        // Cerrar todos los menús
-        if (desktopDropdown) desktopDropdown.classList.remove('active');
-        if (mobileDropdown) mobileDropdown.classList.remove('active');
-    });
-});
 </script>
 <script src="<?php echo get_template_directory_uri(); ?>/assets/js/billetera-360-movimientos.js"></script>
 

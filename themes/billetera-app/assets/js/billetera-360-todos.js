@@ -1,18 +1,7 @@
-// Billetera 360 - "Mi alcancía" (movimientos)
+// Billetera 360 - Todos los movimientos
 
-const el = {
-    pigFill: document.getElementById('alc-pig-fill'),
-    pigBtn: document.getElementById('alc-pig-btn'),
-    saldoMes: document.getElementById('saldo-mes'),
-    avanceMeta: document.getElementById('avance-meta'),
-    barFill: document.getElementById('bar-fill'),
-    faltan: document.getElementById('faltan'),
-    metaLabel: document.getElementById('meta-label'),
-    acumuladoAno: document.getElementById('acumulado-ano'),
-    ventasMes: document.getElementById('ventas-mes'),
-    ranking: document.getElementById('ranking'),
-    movsList: document.getElementById('movs-list')
-};
+const listEl = document.getElementById('todos-list');
+const emptyEl = document.getElementById('todos-empty');
 
 const ID_LABELS = {
     placa: 'Placa',
@@ -25,65 +14,26 @@ const CAT_COLORS = ['#5B5FA8', '#C98A1E', '#0A6CB4', '#B05C34', '#B04E7C', '#1B6
 const STOP_WORDS = ['de', 'del', 'y', 'la', 'el', 'los', 'las', 'liqui', 'moly'];
 
 function init() {
-    if (el.pigBtn) {
-        el.pigBtn.addEventListener('click', function () {
-            this.style.animation = 'none';
-            void this.offsetWidth;
-            this.style.animation = '';
-            const coin = this.querySelector('.alc-pig__coin');
-            if (coin) {
-                coin.style.animation = 'none';
-                void coin.offsetWidth;
-                coin.style.animation = '';
-            }
-        });
-    }
-    loadUserData();
-}
-
-function loadUserData() {
-    fetch(billetera.ajax_url + '?action=billetera_get_balance')
+    fetch(billetera.ajax_url + '?action=billetera_get_all_movements')
         .then(r => r.json())
         .then(res => {
             if (!res.success) return;
-            updateStats(res.data);
-            renderMovements(res.data.movements || []);
+            render(res.data.movements || []);
         });
 }
 
-function updateStats(d) {
-    const balance = d.balance || 0;
-    const meta = d.meta || 0;
-    const fill = d.fill_percent || 0;
-
-    setText(el.saldoMes, fmt(balance));
-    setText(el.avanceMeta, Math.round(fill) + '%');
-    if (el.barFill) el.barFill.style.width = fill + '%';
-    setText(el.faltan, fmt(Math.max(0, meta - balance)));
-    setText(el.metaLabel, 'Meta ' + fmt(meta));
-    setText(el.acumuladoAno, fmt(d.acumulado_ano || 0));
-    setText(el.ventasMes, String(d.ventas_mes || 0));
-
-    const rank = (d.ranking && d.ranking.rank) ? d.ranking.rank : 0;
-    const total = (d.ranking && d.ranking.total) ? d.ranking.total : 0;
-    setText(el.ranking, rank > 0 ? '#' + rank + ' / ' + total : '—');
-
-    const clip = 'inset(' + (100 - fill) + '% 0 0 0)';
-    if (el.pigFill) el.pigFill.style.clipPath = clip;
-}
-
-function renderMovements(movements) {
-    if (!el.movsList) return;
-
-    el.movsList.innerHTML = '';
+function render(movements) {
+    if (!listEl) return;
 
     if (!movements.length) {
-        el.movsList.innerHTML = '<p class="alc-empty">No hay movimientos registrados aún.</p>';
+        listEl.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = 'block';
         return;
     }
 
+    listEl.innerHTML = '';
     movements.forEach(function (m, i) {
-        el.movsList.appendChild(buildRow(m, i === 0));
+        listEl.appendChild(buildRow(m, i === 0));
     });
 }
 
@@ -167,10 +117,6 @@ function timeAgo(date) {
     if (diffDays === 1) return 'ayer';
     if (diffDays < 7) return 'hace ' + diffDays + ' días';
     return date.toLocaleDateString('es-PE');
-}
-
-function setText(node, text) {
-    if (node) node.textContent = text;
 }
 
 if (document.readyState === 'loading') {

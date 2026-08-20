@@ -16,7 +16,6 @@
 
 body {
     margin: 0;
-    background: var(--gray-bg);
     font-family: Inter, sans-serif;
     color: var(--text-primary);
 }
@@ -343,7 +342,7 @@ body {
 
     .screen {
         min-height: auto !important;
-        padding: 20px 16px 120px !important;
+        padding: 20px 0px 120px !important;
     }
 
     .form-row {

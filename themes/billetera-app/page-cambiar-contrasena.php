@@ -20,15 +20,15 @@ $current_user = wp_get_current_user();
     <title>Cambiar Contraseña</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-responsive.css">
+    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-header.css">
 </head>
 <body>
 
-<div class="site-wrapper">
-    <?php get_template_part('template-parts/header-sidebar'); ?>
+<?php get_template_part('template-parts/header-app'); ?>
 
+<div class="site-wrapper">
     <!-- MAIN CONTENT -->
     <div class="main-content">
-        <?php get_template_part('template-parts/header-topbar'); ?>
 
         <!-- SCREEN: CAMBIAR CONTRASEÑA -->
         <div class="screen active" id="screen-password">
@@ -59,17 +59,8 @@ $current_user = wp_get_current_user();
             </div>
         </div>
 
-        <!-- MOBILE TABBAR -->
-        <div class="mobile-tabbar">
-            <a href="<?php echo home_url('/registrar-venta'); ?>" class="mobile-tab" id="mobile-tab-registro">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                Registrar
-            </a>
-            <a href="<?php echo home_url('/movimientos'); ?>" class="mobile-tab" id="mobile-tab-wallet">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14h2"/></svg>
-                Movimientos
-            </a>
-        </div>
+        <!-- BOTTOM TABBAR -->
+        <?php get_template_part('template-parts/bottom-tabbar'); ?>
     </div>
 </div>
 

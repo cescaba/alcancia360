@@ -1,0 +1,450 @@
+/* ============================================================================
+   Billetera 360 - Header topbar (responsive: móvil / tablet / desktop)
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@700&display=swap');
+
+:root {
+    --bh-blue: #0a6cb4;
+    --bh-navy: #0a2c4e;
+    --bh-ink: #0e2438;
+    --bh-gray: #5b6b80;
+    --bh-muted: #8494a6;
+    --bh-border: #c9d4e0;
+    --bh-bg-soft: #f3f6fa;
+    --bh-border-soft: #dce3eb;
+    --bh-gold: #f5c563;
+    --bh-red: #b3352a;
+    --bh-header-h: 56px;
+}
+
+/* ---------- Header base (móvil primero) ---------- */
+.app-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--bh-header-h);
+    background: var(--bh-blue);
+    z-index: 50;
+    font-family: Barlow, sans-serif;
+}
+
+.app-header__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 0 18px;
+    box-sizing: border-box;
+}
+
+/* Brand */
+.app-header__brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-width: 0;
+    text-decoration: none;
+    color: inherit;
+}
+
+.app-header__logo {
+    width: 44px;
+    height: 26px;
+    flex-shrink: 0;
+    object-fit: contain;
+    object-position: left center;
+}
+
+.app-header__brand-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+}
+
+.app-header__wordmark {
+    height: 13px;
+    width: auto;
+    flex-shrink: 0;
+}
+
+.app-header__brand-sub {
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: #b7d8f2;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* Acciones (derecha) */
+.app-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+/* Racha */
+.app-header__racha {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    color: #fff;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 5px 9px;
+    border-radius: 4px;
+}
+
+.app-header__flame {
+    transform-origin: center center;
+    animation: bhFlameFlick 1.6s ease-in-out infinite;
+}
+
+.app-header__racha-num {
+    line-height: 1;
+}
+
+@keyframes bhFlameFlick {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    30%      { transform: scale(1.12) rotate(-4deg); }
+    60%      { transform: scale(0.94) rotate(3deg); }
+    85%      { transform: scale(1.06) rotate(-2deg); }
+}
+
+/* Usuario */
+.app-header__user {
+    position: relative;
+}
+
+.app-header__avatar-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.app-header__avatar-btn:hover,
+.app-header__avatar-btn:focus-visible {
+    border-color: #fff;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
+    outline: none;
+}
+
+.app-header__avatar-initials {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #fff;
+}
+
+/* Backdrop (solo móvil/tablet) */
+.app-header__backdrop {
+    display: none;
+}
+
+/* Menú desplegable */
+.app-header__menu {
+    display: none;
+    position: absolute;
+    top: 42px;
+    right: 0;
+    width: 248px;
+    background: #fff;
+    border: 1px solid var(--bh-border);
+    box-shadow: 0 18px 40px rgba(10, 44, 78, 0.22);
+    z-index: 60;
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.app-header__menu.is-open {
+    display: block;
+}
+
+.app-header__menu-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    background: var(--bh-bg-soft);
+    border-bottom: 1px solid var(--bh-border-soft);
+}
+
+.app-header__menu-avatar {
+    width: 46px;
+    height: 46px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 1px solid var(--bh-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--bh-blue);
+}
+
+.app-header__menu-user {
+    min-width: 0;
+}
+
+.app-header__menu-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: var(--bh-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.app-header__menu-role {
+    font-size: 11px;
+    color: var(--bh-gray);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.app-header__menu-level {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 5px;
+    background: #fbf1dc;
+    border: 1px solid #e7ce97;
+    padding: 1px 7px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #7a5410;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 3px;
+}
+
+.app-header__menu-list {
+    padding: 5px;
+}
+
+.app-header__menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 9px 10px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--bh-ink);
+    cursor: pointer;
+    transition: background 0.15s;
+    text-decoration: none;
+    box-sizing: border-box;
+}
+
+.app-header__menu-item:hover {
+    background: var(--bh-bg-soft);
+}
+
+.app-header__menu-item svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--bh-gray);
+}
+
+.app-header__menu-item > span:not(.app-header__menu-badge) {
+    flex: 1;
+    text-align: left;
+}
+
+.app-header__menu-badge {
+    background: var(--bh-red);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 10px;
+    line-height: 1.5;
+}
+
+.app-header__menu-divider {
+    height: 1px;
+    background: var(--bh-border-soft);
+}
+
+.app-header__menu-item--danger,
+.app-header__menu-item--danger svg {
+    color: var(--bh-red);
+}
+
+.app-header__menu-foot {
+    padding: 0 14px 11px;
+    font-size: 10px;
+    color: var(--bh-muted);
+}
+
+/* ---------- Tablet / Desktop ---------- */
+@media (min-width: 768px) {
+    :root {
+        --bh-header-h: 60px;
+    }
+
+    .app-header__inner {
+        padding: 0 24px;
+    }
+
+    .app-header__logo {
+        width: 50px;
+        height: 30px;
+    }
+
+    .app-header__wordmark {
+        height: 14px;
+    }
+
+    .app-header__brand-sub {
+        font-size: 11px;
+    }
+
+    .app-header__avatar-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    .app-header__avatar-initials {
+        font-size: 15px;
+    }
+
+    .app-header__racha {
+        font-size: 12px;
+        padding: 6px 11px;
+    }
+
+    .app-header__menu {
+        width: 272px;
+    }
+}
+
+/* Ajustes de layout al usar el topbar (sobreescribe el layout de sidebar) */
+body {
+    padding-top: var(--bh-header-h);
+}
+
+.site-wrapper {
+    display: block !important;
+}
+
+.main-content {
+    margin-left: 0 !important;
+    max-width: 100% !important;
+}
+
+@media (min-width: 1025px) {
+    .main-content {
+        padding-top: 40px !important;
+    }
+}
+
+@media (max-width: 1024px) {
+    .main-content {
+        padding-top: 24px !important;
+    }
+
+    /* En móvil/tablet el menú se muestra como panel pegado al borde */
+    .app-header__backdrop.is-open {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 59;
+    }
+
+    .app-header__menu {
+        position: fixed;
+        top: calc(var(--bh-header-h) + 8px);
+        right: 12px;
+        left: auto;
+    }
+}
+
+/* ---------- Bottom tabbar (móvil / tablet) ---------- */
+.bottom-tabbar {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 0;
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    background: #fff;
+    border-top: 1px solid #dce3eb;
+    border-left: 1px solid #dce3eb;
+    border-right: 1px solid #dce3eb;
+    padding: 0;
+    z-index: 999;
+    font-family: Barlow, sans-serif;
+    box-sizing: border-box;
+}
+
+.bottom-tabbar__tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    background: #fff;
+    border: none;
+    border-top: 3px solid transparent;
+    padding: 10px 0 calc(16px + env(safe-area-inset-bottom));
+    cursor: pointer;
+    color: #8494a6;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    transition: color 0.2s, border-color 0.2s;
+    text-decoration: none;
+}
+
+.bottom-tabbar__tab + .bottom-tabbar__tab {
+    border-left: 1px solid #e4eaf1;
+}
+
+.bottom-tabbar__tab.is-active {
+    color: #0a6cb4;
+    border-top-color: #0a6cb4;
+}
+
+.bottom-tabbar__tab svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Desktop: la barra inferior se oculta (la navegación va en el header/menú) */
+@media (min-width: 1025px) {
+    .bottom-tabbar {
+        display: none;
+    }
+}

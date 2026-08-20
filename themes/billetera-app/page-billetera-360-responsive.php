@@ -10,9 +10,9 @@ if (!is_user_logged_in()) {
 }
 
 $current_user = wp_get_current_user();
-$allowed_roles = array('asesor', 'administrator');
+$allowed_roles = array('asesor', 'administrator', 'jefe_venta');
 if (!array_intersect($allowed_roles, $current_user->roles)) {
-    wp_die('Acceso restringido. Solo administradores y asesores pueden acceder.');
+    wp_die('Acceso restringido. Solo administradores, asesores y jefes de venta pueden acceder.');
 }
 
 // Detectar URL de página con template Billetera 360 Movimientos
@@ -32,6 +32,7 @@ function get_page_by_template($template_name) {
 }
 
 $movimientos_url = get_page_by_template('page-billetera-360-movimientos.php');
+$alcancia_img   = get_template_directory_uri() . '/assets/img/alcancia.svg';
 ?>
 
 <!DOCTYPE html>
@@ -42,155 +43,129 @@ $movimientos_url = get_page_by_template('page-billetera-360-movimientos.php');
     <title>Billetera 360</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-responsive.css">
+    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-header.css">
+    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-registro.css">
 </head>
 <body>
 
-<div class="site-wrapper">
-    <?php get_template_part('template-parts/header-sidebar'); ?>
+<?php get_template_part('template-parts/header-app'); ?>
 
+<div class="site-wrapper">
     <!-- MAIN CONTENT -->
     <div class="main-content">
-        <?php get_template_part('template-parts/header-topbar'); ?>
 
         <!-- SCREEN: REGISTRO VENTA -->
         <div class="screen active" id="screen-registro">
-            <h1>Registrar venta</h1>
+            <div class="reg-wrap">
 
-            <div class="registro-container">
-                <div class="form-card">
-                    <p class="field-label">Identificar con</p>
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 22px;" id="id-seg">
-                        <button style="padding: 9px 4px; background: #f9fafb; border: 1px solid var(--gray-border); border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 600; color: #7f8ca0;" data-type="placa">Placa</button>
-                        <button style="padding: 9px 4px; background: #f9fafb; border: 1px solid var(--gray-border); border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 600; color: #7f8ca0;" data-type="vin">VIN</button>
-                        <button style="padding: 9px 4px; background: #f9fafb; border: 1px solid var(--gray-border); border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 600; color: #7f8ca0;" data-type="ot">OT</button>
-                        <button style="padding: 9px 4px; background: #f9fafb; border: 1px solid var(--gray-border); border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 600; color: #7f8ca0;" data-type="factura">N° Factura</button>
-                    </div>
-
-                    <div class="form-row">
-                        <div>
-                            <p class="field-label">Identificador</p>
-                            <input type="text" id="id-input" placeholder="ABC-123">
-                        </div>
-                        <div>
-                            <p class="field-label">Marca</p>
-                            <select id="marca-select">
-                                <option value="">Selecciona una marca</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div>
-                            <p class="field-label">Categoría</p>
-                            <select id="cat-select" disabled>
-                                <option value="">Primero elige una marca</option>
-                            </select>
-                        </div>
-                        <div>
-                            <p class="field-label">Subcategoría</p>
-                            <select id="sub-select" disabled>
-                                <option value="">Primero elige una categoría</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="cantidad-wrap" style="margin-bottom: 22px; display:none;">
-                        <div>
-                            <p class="field-label">Cantidad</p>
-                            <input type="number" id="cantidad-input" min="1" value="1" placeholder="1">
-                        </div>
-                    </div>
+                <div class="reg-head">
+                    <h1 class="reg-title">Registrar venta</h1>
+                    <span class="reg-step">Paso 1 de 1</span>
                 </div>
 
-                <div class="preview-sidebar">
-                    <div class="amount-preview">
-                        <span class="label">Comisión estimada</span>
-                        <span class="value" id="preview-amt">S/ 0.00</span>
-                    </div>
-                    <button class="btn btn-primary" id="submit-btn">Registrar venta</button>
-                    <p class="hint">La venta se suma a tu billetera al instante y queda visible en tus movimientos.</p>
+                <div class="reg-body">
 
-                    <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--gray-border);">
-                        <div class="stat-label">Saldo del mes</div>
-                        <div class="stat-value" id="balance-preview">S/ 0.00</div>
+                    <!-- Alcancía -->
+                    <div class="alcancia">
+                        <div class="alcancia__pig">
+                            <img class="alcancia__pig-base" src="<?php echo esc_url($alcancia_img); ?>" alt="Alcancía">
+                            <img class="alcancia__pig-fill" id="alcancia-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
+                        </div>
+                        <div class="alcancia__info">
+                            <div class="alcancia__label">En tu alcancía</div>
+                            <div class="alcancia__balance" id="alcancia-balance">S/ 0.00</div>
+                            <div class="alcancia__bar"><div class="alcancia__bar-fill" id="alcancia-bar-fill"></div></div>
+                            <div class="alcancia__missing">Te faltan <b id="alcancia-missing">S/ 0.00</b></div>
+                        </div>
                     </div>
+
+                    <!-- Identificar con -->
+                    <p class="reg-label">Identificar con</p>
+                    <div class="reg-seg" id="id-seg">
+                        <button type="button" data-type="placa">Placa</button>
+                        <button type="button" data-type="vin">VIN</button>
+                        <button type="button" data-type="ot">OT</button>
+                        <button type="button" data-type="factura" class="is-active">Factura</button>
+                    </div>
+
+                    <!-- Identificador -->
+                    <p class="reg-label" id="id-label">N° Factura</p>
+                    <div class="reg-field">
+                        <input type="text" id="id-input" placeholder="F001-000123">
+                    </div>
+
+                    <!-- Marca -->
+                    <p class="reg-label">Marca</p>
+                    <div class="reg-field">
+                        <select id="marca-select">
+                            <option value="">Selecciona una marca</option>
+                        </select>
+                    </div>
+
+                    <!-- Categoría -->
+                    <p class="reg-label">Categoría</p>
+                    <div class="reg-field">
+                        <select id="cat-select" disabled>
+                            <option value="">Primero elige una marca</option>
+                        </select>
+                    </div>
+
+                    <!-- Subcategoría -->
+                    <p class="reg-label">Subcategoría</p>
+                    <div class="reg-field">
+                        <select id="sub-select" disabled>
+                            <option value="">Primero elige una categoría</option>
+                        </select>
+                    </div>
+
+                    <!-- Cantidad -->
+                    <div id="cantidad-wrap" style="display: none;">
+                        <p class="reg-label">Cantidad</p>
+                        <div class="reg-field">
+                            <input type="number" id="cantidad-input" min="1" value="1">
+                        </div>
+                    </div>
+
+                    <!-- Comisión -->
+                    <div class="reg-comision" id="reg-comision">
+                        <span class="reg-comision__label">Comisión a registrar</span>
+                        <span class="reg-comision__value" id="preview-amt">S/ 0.00</span>
+                    </div>
+
+                    <!-- Submit -->
+                    <button class="reg-submit" id="submit-btn" disabled>Registrar venta</button>
+                    <p class="reg-note">La comisión se acredita al cierre del mes previa validación del jefe de taller.</p>
+
                 </div>
             </div>
         </div>
 
-        <!-- MOBILE TABBAR -->
-        <div class="mobile-tabbar">
-            <button class="mobile-tab active" id="mobile-tab-registro">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                Registrar
-            </button>
-            <a href="<?php echo esc_url($movimientos_url); ?>" class="mobile-tab" id="mobile-tab-wallet">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14h2"/></svg>
-                Movimientos
-            </a>
-        </div>
+        <!-- BOTTOM TABBAR -->
+        <?php get_template_part('template-parts/bottom-tabbar'); ?>
     </div>
 </div>
 
 <!-- OVERLAY DE CELEBRACIÓN -->
 <div class="overlay" id="overlay">
-    <div class="burst-zone" id="burst-zone">
-        <div style="text-align: center;">
-            <div class="gain-amount" id="gain-amount">+S/ 0.00</div>
-            <div class="gain-label">Comisión acreditada</div>
-            <button class="btn btn-white" id="continue-btn">Ver mis movimientos</button>
+    <div class="celebrate">
+        <div class="celebrate__rings">
+            <span></span><span></span>
         </div>
+        <div class="celebrate__pig">
+            <img class="celebrate__pig-base" src="<?php echo esc_url($alcancia_img); ?>" alt="Alcancía">
+            <img class="celebrate__pig-fill" id="celebrate-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
+        </div>
+        <div class="celebrate__amount" id="gain-amount">+S/ 0.00</div>
+        <div class="celebrate__label">Comisión acreditada</div>
+        <button class="celebrate__btn" id="continue-btn">Ver mi alcancía</button>
     </div>
 </div>
 
 <script>
 window.billetera = {
-    ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>'
+    ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
+    movimientos_url: '<?php echo esc_url($movimientos_url); ?>'
 };
-
-// User menu toggle
-document.addEventListener('DOMContentLoaded', function() {
-    // Desktop sidebar
-    const desktopUserMenu = document.querySelector('.sidebar .user-menu');
-    const desktopDropdown = document.querySelector('.sidebar .user-menu-dropdown');
-    if (desktopUserMenu && desktopDropdown) {
-        const desktopToggle = desktopUserMenu.querySelector('.user-button');
-        if (desktopToggle) {
-            desktopToggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                desktopDropdown.classList.toggle('active');
-            });
-        }
-    }
-
-    // Mobile topbar
-    const mobileTopbar = document.querySelector('.mobile-topbar');
-    const mobileDropdown = document.querySelector('.mobile-topbar .user-menu-dropdown');
-    if (mobileTopbar && mobileDropdown) {
-        const mobileToggle = mobileTopbar.querySelector('.user-button');
-        if (mobileToggle) {
-            mobileToggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                mobileDropdown.classList.toggle('active');
-            });
-        }
-    }
-
-    // Close menu when clicking outside
-    document.addEventListener('click', (e) => {
-        // Si el click es dentro de .user-menu (desktop), no cerrar
-        if (e.target.closest('.sidebar .user-menu')) {
-            return;
-        }
-        // Si el click es dentro del .mobile-topbar, no cerrar
-        if (e.target.closest('.mobile-topbar')) {
-            return;
-        }
-        // Cerrar todos los menús
-        if (desktopDropdown) desktopDropdown.classList.remove('active');
-        if (mobileDropdown) mobileDropdown.classList.remove('active');
-    });
-});
 </script>
 <script src="<?php echo get_template_directory_uri(); ?>/assets/js/billetera-360-logic.js"></script>
 

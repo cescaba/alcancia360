@@ -164,11 +164,24 @@ function billetera_insert_default_config() {
     global $wpdb;
     $configuracion_table = $wpdb->prefix . 'billetera_configuracion';
 
-    // Tipo de cambio USD → SOL por defecto (3.5)
-    $wpdb->insert($configuracion_table, [
-        'clave' => 'tipo_cambio_usd_sol',
-        'valor' => '3.5'
-    ], ['%s', '%s']);
+    $defaults = [
+        'tipo_cambio_usd_sol' => '3.5',
+        'meta_asesor' => '1200',
+    ];
+
+    foreach ($defaults as $clave => $valor) {
+        $existe = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $configuracion_table WHERE clave = %s",
+            $clave
+        ));
+
+        if (!$existe) {
+            $wpdb->insert($configuracion_table, [
+                'clave' => $clave,
+                'valor' => $valor,
+            ], ['%s', '%s']);
+        }
+    }
 }
 
 // AJAX: Obtener marcas
@@ -252,7 +265,7 @@ function billetera_ajax_register_sale_v2() {
 
     $user_id = get_current_user_id();
     $current_user = wp_get_current_user();
-    $allowed_roles = ['asesor', 'administrator'];
+    $allowed_roles = ['asesor', 'administrator', 'jefe_venta'];
 
     if (!array_intersect($allowed_roles, $current_user->roles)) {
         wp_send_json_error(['message' => 'No tienes permiso']);
@@ -350,7 +363,7 @@ function billetera_ajax_register_sale_v2() {
 
     if ($result) {
         // Registrar la comisión del jefe de venta de la sucursal (sin bonus 2x)
-        billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value);
+        billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $user_id);
 
         $monto_mostrado = $monto_total_sol * $bonus_multiplier;
         wp_send_json_success([
@@ -374,6 +387,18 @@ function billetera_get_tipo_cambio() {
     ));
 
     return floatval($tipo_cambio ?? 3.5);
+}
+
+function billetera_get_meta_asesor() {
+    global $wpdb;
+    $configuracion_table = $wpdb->prefix . 'billetera_configuracion';
+
+    $meta = $wpdb->get_var($wpdb->prepare(
+        "SELECT valor FROM $configuracion_table WHERE clave = %s",
+        'meta_asesor'
+    ));
+
+    return floatval($meta ?? 1200);
 }
 
 function billetera_find_comision($subcategoria_id, $distribuidor_id, $rol) {
@@ -415,7 +440,7 @@ function billetera_convert_to_sol($comision) {
     return $monto_sol;
 }
 
-function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value) {
+function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $registrante_id = 0) {
     if (!$tienda_id) {
         return;
     }
@@ -428,6 +453,11 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
     foreach ($jefes as $jefe_id) {
         $jefe_id = intval($jefe_id);
         if (!$jefe_id) {
+            continue;
+        }
+
+        // Si quien registra es el propio jefe, no duplicar su comisión
+        if ($jefe_id === intval($registrante_id)) {
             continue;
         }
 
@@ -462,7 +492,7 @@ function billetera_ajax_get_comision() {
 
     $user_id = get_current_user_id();
     $current_user = wp_get_current_user();
-    $allowed_roles = ['asesor', 'administrator'];
+    $allowed_roles = ['asesor', 'administrator', 'jefe_venta'];
 
     if (!array_intersect($allowed_roles, $current_user->roles)) {
         wp_send_json_error(['message' => 'No tienes permiso']);
@@ -559,6 +589,50 @@ function billetera_ajax_get_balance() {
         $user_id
     )) ?? 0);
 
+    // Acumulado del año
+    $year_start = date('Y-01-01');
+    $acumulado_ano = floatval($wpdb->get_var($wpdb->prepare(
+        "SELECT SUM(monto_comision_sol * bonus_multiplier) FROM $ventas_table WHERE usuario_id = %d AND creado_en >= %s",
+        $user_id,
+        $year_start
+    )) ?? 0);
+
+    // Ventas del mes
+    $ventas_mes = intval($wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $ventas_table WHERE usuario_id = %d AND creado_en >= %s",
+        $user_id,
+        $current_month
+    )));
+
+    // Ranking dentro del taller (asesores de la misma tienda, por saldo del mes)
+    $rank = 0;
+    $rank_total = 0;
+    $tienda_id = get_user_meta($user_id, '_tienda_asociada', true);
+    if ($tienda_id) {
+        $asesores = get_users([
+            'meta_key' => '_tienda_asociada',
+            'meta_value' => $tienda_id,
+            'fields' => 'ID',
+        ]);
+        $rank_total = count($asesores);
+
+        if ($rank_total > 0) {
+            $balances = [];
+            foreach ($asesores as $aid) {
+                $balances[$aid] = floatval($wpdb->get_var($wpdb->prepare(
+                    "SELECT SUM(monto_comision_sol * bonus_multiplier) FROM $ventas_table WHERE usuario_id = %d AND creado_en >= %s",
+                    $aid,
+                    $current_month
+                )) ?? 0);
+            }
+            arsort($balances, SORT_NUMERIC);
+            $pos = array_search($user_id, array_keys($balances), true);
+            if ($pos !== false) {
+                $rank = $pos + 1;
+            }
+        }
+    }
+
     // Últimos movimientos
     $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
@@ -572,11 +646,48 @@ function billetera_ajax_get_balance() {
         LIMIT 10
     ", $user_id));
 
+    $meta = billetera_get_meta_asesor();
+    $fill_percent = $meta > 0 ? round(($balance / $meta) * 100, 1) : 0;
+    if ($fill_percent > 100) {
+        $fill_percent = 100;
+    }
+
     wp_send_json_success([
         'balance' => $balance,
         'accumulated' => $accumulated,
+        'acumulado_ano' => $acumulado_ano,
+        'ventas_mes' => $ventas_mes,
+        'ranking' => ['rank' => $rank, 'total' => $rank_total],
+        'meta' => $meta,
+        'fill_percent' => $fill_percent,
         'movements' => $movements,
     ]);
+}
+
+// AJAX: Obtener todos los movimientos del usuario
+add_action('wp_ajax_billetera_get_all_movements', 'billetera_ajax_get_all_movements');
+
+function billetera_ajax_get_all_movements() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    $user_id = get_current_user_id();
+    global $wpdb;
+    $ventas_table = $wpdb->prefix . 'billetera_ventas';
+    $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
+    $categorias_table = $wpdb->prefix . 'billetera_categorias';
+
+    $movements = $wpdb->get_results($wpdb->prepare("
+        SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, c.nombre as categoria
+        FROM $ventas_table v
+        LEFT JOIN $subcategorias_table s ON v.subcategoria_id = s.id
+        LEFT JOIN $categorias_table c ON s.categoria_id = c.id
+        WHERE v.usuario_id = %d
+        ORDER BY v.creado_en DESC
+    ", $user_id));
+
+    wp_send_json_success(['movements' => $movements]);
 }
 
 // AJAX: Cambiar contraseña
