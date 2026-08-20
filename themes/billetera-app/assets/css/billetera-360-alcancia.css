@@ -3,8 +3,11 @@
    ========================================================================== */
 
 .alc-wrap {
+    width: 100%;
     max-width: 520px;
     margin: 0 auto;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 /* ---------- Header ---------- */
@@ -136,12 +139,14 @@
 
 .alc-stats__saldo {
     flex: 1.25;
+    min-width: 0;
     padding: 13px 15px;
     border-right: 1px solid #dce3eb;
 }
 
 .alc-stats__avance {
     flex: 0.85;
+    min-width: 0;
     padding: 13px 15px;
     background: #f5f8fb;
 }
@@ -236,6 +241,8 @@
     padding: 11px 12px;
     border-right: 1px solid #dce3eb;
     background: #fff;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .alc-grid__item:last-child {

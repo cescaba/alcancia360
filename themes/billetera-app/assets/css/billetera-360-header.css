@@ -2,8 +2,6 @@
    Billetera 360 - Header topbar (responsive: móvil / tablet / desktop)
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@700&display=swap');
-
 :root {
     --bh-blue: #0a6cb4;
     --bh-navy: #0a2c4e;
@@ -360,11 +358,12 @@ body {
 .main-content {
     margin-left: 0 !important;
     max-width: 100% !important;
+    overflow-x: hidden;
 }
 
 @media (min-width: 1025px) {
     .main-content {
-        padding-top: 40px !important;
+        padding: 40px 0 !important;
     }
 }
 
