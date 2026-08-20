@@ -447,3 +447,207 @@ body {
         display: none;
     }
 }
+
+/* ============================================================================
+   Sidebar (desktop)
+   ========================================================================== */
+.app-sidebar {
+    display: none;
+}
+
+@media (min-width: 1025px) {
+    .app-header {
+        display: none;
+    }
+
+    body {
+        padding-top: 0;
+    }
+
+    .app-sidebar {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 240px;
+        background: #0a6cb4;
+        padding: 24px 16px;
+        z-index: 50;
+        box-sizing: border-box;
+    }
+
+    .main-content {
+        margin-left: 240px !important;
+        max-width: none !important;
+    }
+}
+
+/* Brand del sidebar */
+.app-sidebar__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 8px 28px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    text-decoration: none;
+    color: inherit;
+}
+
+.app-sidebar__logo {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    object-fit: contain;
+}
+
+.app-sidebar__brand-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+}
+
+.app-sidebar__wordmark {
+    height: 13px;
+    width: auto;
+    flex-shrink: 0;
+}
+
+.app-sidebar__sub {
+    font-family: Barlow, sans-serif;
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: #b7d8f2;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* Nav del sidebar */
+.app-sidebar__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 20px;
+}
+
+.app-sidebar__link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 12px;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.75);
+    font-family: Barlow, sans-serif;
+    font-size: 13.5px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s;
+}
+
+.app-sidebar__link:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.app-sidebar__link.is-active {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+}
+
+.app-sidebar__link svg {
+    flex-shrink: 0;
+}
+
+/* Footer del sidebar (racha + usuario) */
+.app-sidebar__footer {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.app-sidebar__racha {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    color: #fff;
+    font-family: Barlow, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+}
+
+.app-sidebar__user {
+    position: relative;
+}
+
+.app-sidebar__user-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 8px;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.app-sidebar__user-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.app-sidebar__avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.app-sidebar__user-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.app-sidebar__user-name {
+    font-family: Barlow, sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.app-sidebar__user-role {
+    font-family: Barlow, sans-serif;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* Menú desplegable dentro del sidebar (se abre hacia arriba) */
+.app-sidebar__user .app-header__menu {
+    position: absolute;
+    bottom: 54px;
+    top: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+}
