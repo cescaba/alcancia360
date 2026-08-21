@@ -1,0 +1,234 @@
+/* ============================================================================
+   Billetera 360 - Historial de movimientos (agrupado por mes)
+   ========================================================================== */
+
+/* ---------- Móvil ---------- */
+.hist-month {
+    margin-bottom: 20px;
+}
+
+.hist-month__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 2px 8px;
+}
+
+.hist-month__name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: #0e2438;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.hist-month__total {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: #1b6e46;
+}
+
+/* ---------- Desktop ---------- */
+.hist-desk {
+    display: none;
+}
+
+.hist-desk__empty {
+    display: none;
+    font-size: 12.5px;
+    color: #8494a6;
+    text-align: center;
+    padding: 32px 16px;
+}
+
+@media (min-width: 1025px) {
+    body.page-template-page-billetera-360-movimientos-todos {
+        background: #f5f7fb;
+    }
+
+    body.page-template-page-billetera-360-movimientos-todos .main-content {
+        padding: 24px 26px 34px !important;
+    }
+
+    #screen-todos {
+        display: block !important;
+        height: auto !important;
+        padding: 0 !important;
+    }
+
+    body.page-template-page-billetera-360-movimientos-todos .alc-wrap {
+        display: none;
+    }
+
+    .hist-desk {
+        display: block;
+    }
+
+    /* Encabezado */
+    .hist-desk__head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        margin-bottom: 18px;
+    }
+
+    .hist-desk__title {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 30px;
+        font-weight: 700;
+        color: #0e2438;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        line-height: 1;
+    }
+
+    .hist-desk__sub {
+        font-size: 13px;
+        color: #5b6b80;
+        margin-top: 5px;
+    }
+
+    .hist-desk__reg {
+        background: #0a6cb4;
+        color: #fff;
+        border: none;
+        border-radius: 2px;
+        padding: 11px 20px;
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .hist-desk__reg:hover {
+        background: #095a96;
+    }
+
+    /* Bloque por mes */
+    .hist-desk__month {
+        border: 1px solid #dce3eb;
+        background: #fff;
+        margin-bottom: 22px;
+    }
+
+    .hist-desk__month-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 13px 18px;
+        border-bottom: 1px solid #dce3eb;
+    }
+
+    .hist-desk__month-name {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+        color: #0e2438;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .hist-desk__month-total {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 16px;
+        font-weight: 700;
+        color: #1b6e46;
+    }
+
+    /* Tabla */
+    .hist-desk__tr {
+        display: grid;
+        grid-template-columns: 88px 1fr 150px 130px 120px;
+        align-items: center;
+        border-bottom: 1px solid #e4eaf1;
+        background: #fff;
+    }
+
+    .hist-desk__tr:nth-child(even) {
+        background: #f5f8fb;
+    }
+
+    .hist-desk__tr:last-child {
+        border-bottom: none;
+    }
+
+    .hist-desk__tr--head {
+        background: #f3f6fa !important;
+        border-bottom: 1px solid #dce3eb !important;
+    }
+
+    .hist-desk__td {
+        padding: 11px 14px;
+        min-width: 0;
+    }
+
+    .hist-desk__tr--head .hist-desk__td {
+        padding: 9px 14px;
+        font-size: 9.5px;
+        font-weight: 600;
+        color: #5b6b80;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+    }
+
+    .hist-desk__td--right {
+        text-align: right;
+    }
+
+    .hist-desk__badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        font-family: ui-monospace, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        color: #0e2438;
+        border: 1px solid;
+    }
+
+    .hist-desk__td--prod {
+        font-size: 13px;
+        font-weight: 600;
+        color: #0e2438;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .hist-desk__td--id {
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        color: #5b6b80;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .hist-desk__td--asesor {
+        font-family: Barlow, sans-serif;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: #0e2438;
+    }
+
+    .hist-desk__td--fecha {
+        font-size: 12.5px;
+        color: #5b6b80;
+    }
+
+    .hist-desk__td--amt {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+        color: #1b6e46;
+        text-align: right;
+        white-space: nowrap;
+    }
+}

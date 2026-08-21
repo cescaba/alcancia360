@@ -40,238 +40,10 @@ require get_template_directory() . '/includes/metaboxes.php';
 require get_template_directory() . '/includes/header-helpers.php';
 
 // ===== LOGIN PERSONALIZADO BILLETERA 360 =====
-add_action('login_head', 'billetera_login_styles');
-function billetera_login_styles() {
-    ?>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-        body { margin: 0; }
-        a { color: #0c5c9f; }
-        a:hover { color: #1a3d6f; }
-        ::placeholder { color: #a8b2bf; }
-
-        body.login {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(160deg, #2d4563, #1a2841);
-            font-family: Inter, sans-serif;
-            padding: 24px;
-            box-sizing: border-box;
-        }
-
-        #login {
-            width: 380px;
-            max-width: 100%;
-            background: white;
-            border-radius: 24px;
-            padding: 40px 32px 32px;
-            box-shadow: 0 30px 60px rgba(12, 45, 82, 0.35);
-            margin: 0 !important;
-            border: none !important;
-        }
-
-
-        .login-header {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 28px;
-        }
-
-        .login-header img {
-            width: 88px;
-            height: 88px;
-            border-radius: 20px;
-        }
-
-        .login-title {
-            font-family: Poppins, sans-serif;
-            font-weight: 700;
-            font-size: 20px;
-            color: #1a2841;
-            text-align: center;
-            margin: 0 0 4px !important;
-            letter-spacing: -0.01em;
-            display: block !important;
-        }
-
-        .login-subtitle {
-            font-family: Inter, sans-serif;
-            font-size: 13px;
-            color: #7f8ca0;
-            text-align: center;
-            margin: 0 0 28px !important;
-        }
-
-        .login-header {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 28px;
-        }
-
-        .login-header img {
-            width: 88px;
-            height: 88px;
-            border-radius: 20px;
-        }
-
-        .login h1.login-title {
-            font-family: Poppins, sans-serif;
-            font-weight: 700;
-            font-size: 20px;
-            color: #1a2841;
-            text-align: center;
-            margin: 0 0 4px;
-            letter-spacing: -0.01em;
-            display: block;
-        }
-
-        .login p.login-subtitle {
-            font-family: Inter, sans-serif;
-            font-size: 13px;
-            color: #7f8ca0;
-            text-align: center;
-            margin: 0 0 28px;
-        }
-
-        .login form {
-            margin-top: 0 !important;
-            border: none !important;
-            padding: 2px;
-            box-shadow: none !important;
-        }
-
-        .login .user-login-wrap {
-            margin-bottom: 14px;
-        }
-
-        .login .user-pass-wrap {
-            margin-bottom: 8px;
-            position: relative;
-        }
-        #backtoblog{
-            display:none;
-        }
-        .login label {
-            display: block;
-            font-family: Inter, sans-serif;
-            font-size: 12px;
-            font-weight: 600;
-            color: #7f8ca0;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            margin-bottom: 6px !important;
-        }
-
-        .login input[type="text"],
-        .login input[type="password"] {
-            width: 100% !important;
-            box-sizing: border-box !important;
-            background: #f7f9fb !important;
-            border: 1px solid #d9dfe6 !important;
-            border-radius: 12px !important;
-            padding: 13px 14px !important;
-            color: #1a2841 !important;
-            font-family: Inter, sans-serif !important;
-            font-size: 14px !important;
-            outline: none !important;
-        }
-
-        .login input[type="text"]:focus,
-        .login input[type="password"]:focus {
-            border-color: #0c2d52 !important;
-            background: white !important;
-        }
-
-        .login input::placeholder {
-            color: #a8b2bf;
-        }
-
-        .login .forgetmenot {
-            display: flex;
-            justify-content: flex-end;
-            margin: 22px 0 16px;
-        }
-
-        .login .forgetmenot label {
-            display: none;
-        }
-
-        .login .forgetmenot input[type="checkbox"] {
-            display: none;
-        }
-
-        .login .forgetmenot a {
-            font-family: Inter, sans-serif;
-            font-size: 12.5px;
-            font-weight: 500;
-            text-decoration: none;
-        }
-
-        .login .button.button-primary {
-            width: 100% !important;
-            background: #0c2d52 !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 14px !important;
-            padding: 15px !important;
-            font-family: Poppins, sans-serif !important;
-            font-size: 14px !important;
-            font-weight: 700 !important;
-            cursor: pointer !important;
-            height: auto !important;
-            line-height: 1.4 !important;
-        }
-
-        .login .button.button-primary:hover {
-            background: #1a3d6f !important;
-        }
-
-        .login .error {
-            background: #fef2f2;
-            border: 1px solid #e5b1b1;
-            border-radius: 10px;
-            padding: 10px 12px;
-            margin-bottom: 16px;
-            font-family: Inter, sans-serif;
-            font-size: 12.5px;
-            color: #74362f;
-        }
-
-        .login .message {
-            background: #f0fdf4;
-            border: 1px solid #a7f3d0;
-            border-radius: 10px;
-            padding: 10px 12px;
-            margin-bottom: 16px;
-            font-family: Inter, sans-serif;
-            font-size: 12.5px;
-            color: #065f46;
-        }
-
-        #nav {
-            display: none !important;
-        }
-
-        .login #nav {
-            display: none !important;
-        }
-
-        .login-back-link {
-            display: none !important;
-        }
-
-        .login-footer {
-            font-family: Inter, sans-serif;
-            font-size: 11.5px;
-            color: #a8b2bf;
-            text-align: center;
-            margin-top: 22px;
-            line-height: 1.5;
-        }
-    </style>
-    <?php
+add_action('login_enqueue_scripts', 'billetera_login_enqueue');
+function billetera_login_enqueue() {
+    wp_enqueue_style('billetera-fonts', get_template_directory_uri() . '/assets/css/billetera-360-fonts.css', array(), '1.0');
+    wp_enqueue_style('billetera-login', get_template_directory_uri() . '/assets/css/billetera-360-login.css', array(), '1.0');
 }
 
 add_filter('login_headerurl', 'billetera_login_logo_url');
@@ -286,54 +58,122 @@ function billetera_login_logo_text() {
 
 add_action('login_head', 'billetera_login_js_reorganize');
 function billetera_login_js_reorganize() {
-    $logo_url = get_template_directory_uri() . '/assets/img/logo-gildemeister.png';
+    $logo_url     = get_template_directory_uri() . '/assets/img/logo.png';
+    $wordmark_url = get_template_directory_uri() . '/assets/img/header-gildemeister.png';
+    $alcancia_url = get_template_directory_uri() . '/assets/img/alcancia.svg';
     ?>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const loginDiv = document.getElementById('login');
-        if (!loginDiv) return;
+        var login = document.getElementById('login');
+        if (!login) return;
 
-        // Crear el header con logo
-        const header = document.createElement('div');
-        header.className = 'login-header';
-        header.innerHTML = '<img src="<?php echo esc_url($logo_url); ?>" alt="Gildemeister Retail">';
+        var wpLogo = login.querySelector('h1.wp-login-logo');
+        if (wpLogo) wpLogo.style.display = 'none';
+        var back = document.getElementById('backtoblog');
+        if (back) back.style.display = 'none';
+        var privacy = login.querySelector('.privacy-policy-page-link');
+        if (privacy) privacy.style.display = 'none';
 
-        // Crear título
-        const title = document.createElement('h1');
-        title.className = 'login-title';
-        title.textContent = 'Billetera 360';
+        var hero = document.createElement('div');
+        hero.className = 'login-hero';
+        hero.innerHTML =
+            '<div class="login-brand">' +
+                '<img class="login-brand-mark" src="<?php echo esc_url($logo_url); ?>" alt="Gildemeister">' +
+                '<span class="login-brand-text">' +
+                    '<img class="login-brand-wordmark" src="<?php echo esc_url($wordmark_url); ?>" alt="Billetera 360">' +
+                    '<span class="login-brand-sub">Billetera 360 &middot; Postventa</span>' +
+                '</span>' +
+            '</div>' +
+            '<div class="login-hero-main">' +
+                '<div class="login-pig"><img src="<?php echo esc_url($alcancia_url); ?>" alt="Alcancía Billetera 360"></div>' +
+                '<div class="login-hero-copy">' +
+                    '<div class="login-hero-title">Billetera 360</div>' +
+                    '<div class="login-hero-sub">Registro de ventas y comisiones</div>' +
+                    '<div class="login-hero-desk-title">Tu comisión,<br>a la vista</div>' +
+                    '<div class="login-hero-desk-sub">Registra la venta apenas la cierras y mira crecer tu alcancía. El monto sale del catálogo oficial, sin cálculos manuales.</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="login-hero-foot">Acceso exclusivo para personal de postventa</div>';
 
-        // Crear subtítulo
-        const subtitle = document.createElement('p');
-        subtitle.className = 'login-subtitle';
-        subtitle.textContent = 'Ingresa con tu cuenta de colaborador';
+        var body = document.createElement('div');
+        body.className = 'login-body';
 
-        // Encontrar el form
-        const form = loginDiv.querySelector('form');
-        if (form) {
-            // Insertar antes del form
-            form.parentNode.insertBefore(header, form);
-            form.parentNode.insertBefore(title, form);
-            form.parentNode.insertBefore(subtitle, form);
+        var bodyTitle = document.createElement('div');
+        bodyTitle.className = 'login-body-title';
+        bodyTitle.textContent = 'Iniciar sesión';
+        var bodySub = document.createElement('div');
+        bodySub.className = 'login-body-sub';
+        bodySub.textContent = 'Usa tu DNI o correo corporativo.';
+        body.appendChild(bodyTitle);
+        body.appendChild(bodySub);
+
+        var error = document.getElementById('login_error');
+        var message = login.querySelector('.message');
+        if (error) body.appendChild(error);
+        if (message) body.appendChild(message);
+
+        var form = document.getElementById('loginform');
+        if (form) body.appendChild(form);
+
+        var note = document.createElement('div');
+        note.className = 'login-note';
+        note.textContent = 'Acceso exclusivo para personal de postventa. Si no tienes usuario, solicítalo a tu jefe de taller.';
+        body.appendChild(note);
+
+        login.insertBefore(hero, login.firstChild);
+        login.appendChild(body);
+
+        var userInput = document.getElementById('user_login');
+        var passInput = document.getElementById('user_pass');
+        if (userInput) userInput.setAttribute('placeholder', '45881207 o correo@gildemeister.pe');
+        if (passInput) passInput.setAttribute('placeholder', '••••••••');
+
+        var pwBtn = login.querySelector('.wp-pwd .wp-hide-pw');
+        if (pwBtn && passInput) {
+            var eyeOn = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+            var eyeOff = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+            pwBtn.innerHTML = eyeOn;
+            pwBtn.setAttribute('aria-label', 'Mostrar contraseña');
+            pwBtn.addEventListener('click', function() {
+                var show = passInput.type === 'password';
+                passInput.type = show ? 'text' : 'password';
+                pwBtn.innerHTML = show ? eyeOff : eyeOn;
+                pwBtn.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+            });
         }
 
-        // Ocultar el h1 de WordPress
-        const h1 = loginDiv.querySelector('h1:first-child');
-        if (h1 && h1 !== title) {
-            h1.style.display = 'none';
+        var forgetmenot = form ? form.querySelector('.forgetmenot') : null;
+        if (forgetmenot) {
+            var tip = forgetmenot.querySelector('.wp-toggletip-wrapper, .wp-toggletip, button[type="button"]');
+            if (tip) tip.remove();
+
+            var remember = document.getElementById('rememberme');
+            if (remember) remember.checked = true;
+
+            var nav = document.getElementById('nav');
+            var lost = nav ? nav.querySelector('.wp-login-lost-password') : null;
+            var submit = form.querySelector('.submit');
+            var meta = document.createElement('div');
+            meta.className = 'login-meta';
+            meta.appendChild(forgetmenot);
+            if (lost) {
+                lost.className = 'login-forgot-link';
+                meta.appendChild(lost);
+            }
+            form.insertBefore(meta, submit);
+
+            if (nav) nav.style.display = 'none';
         }
 
-        // Ocultar el nav de WordPress
-        const nav = document.getElementById('nav');
-        if (nav) {
-            nav.style.display = 'none';
+        var submitBtn = document.getElementById('wp-submit');
+        function refreshSubmit() {
+            var u = userInput ? userInput.value.trim() : '';
+            var p = passInput ? passInput.value : '';
+            if (submitBtn) submitBtn.disabled = !(u && p);
         }
-
-        // Agregar footer dentro de #login
-        const footer = document.createElement('p');
-        footer.className = 'login-footer';
-        footer.innerHTML = 'Uso interno · Gildemeister Retail<br>Comunícate con Sistemas si tienes problemas de acceso.';
-        loginDiv.appendChild(footer);
+        if (userInput) userInput.addEventListener('input', refreshSubmit);
+        if (passInput) passInput.addEventListener('input', refreshSubmit);
+        refreshSubmit();
     });
     </script>
     <?php
@@ -352,7 +192,10 @@ function billetera_translate_login_text($translated, $original, $domain) {
             return 'Ingresar';
         }
         if ($original === 'Remember Me') {
-            return '';
+            return 'Mantener sesión iniciada';
+        }
+        if ($original === 'Lost your password?') {
+            return '¿Olvidaste tu clave?';
         }
     }
     return $translated;
@@ -391,4 +234,3 @@ function billetera_redirect_after_login($_, $user) {
 }
 
 add_filter( 'login_display_language_dropdown', '__return_false' );
-

@@ -15,6 +15,10 @@ if (!array_intersect($allowed_roles, $current_user->roles)) {
     wp_die('Acceso restringido. Solo administradores, asesores y jefes de venta pueden acceder.');
 }
 
+$roles        = (array) $current_user->roles;
+$es_jefe      = in_array('jefe_venta', $roles, true);
+$show_ranking = !$es_jefe;
+
 // Detectar URL de páginas por template
 function get_page_by_template($template_name) {
     global $wpdb;
@@ -32,6 +36,7 @@ function get_page_by_template($template_name) {
 }
 
 $todos_url  = get_page_by_template('page-billetera-360-movimientos-todos.php');
+$registro_url = get_page_by_template('page-billetera-360-responsive.php');
 $alcancia_img = get_template_directory_uri() . '/assets/img/alcancia.svg';
 
 $meses = array('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre');
@@ -52,7 +57,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
     <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-header.css">
     <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-alcancia.css">
 </head>
-<body>
+<body <?php body_class(); ?>>
 
 <?php get_template_part('template-parts/header-app'); ?>
 
@@ -108,7 +113,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                     </div>
 
                     <!-- Stats 3 columnas -->
-                    <div class="alc-grid">
+                    <div class="alc-grid<?php echo $show_ranking ? '' : ' alc-grid--no-ranking'; ?>">
                         <div class="alc-grid__item">
                             <div class="alc-grid__value" id="acumulado-ano">S/ 0.00</div>
                             <div class="alc-grid__label">Acumulado año</div>
@@ -117,10 +122,12 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                             <div class="alc-grid__value" id="ventas-mes">0</div>
                             <div class="alc-grid__label">Ventas del mes</div>
                         </div>
+                        <?php if ($show_ranking): ?>
                         <div class="alc-grid__item">
                             <div class="alc-grid__value alc-grid__value--gold" id="ranking">#0 / 0</div>
                             <div class="alc-grid__label">Ranking taller</div>
                         </div>
+                        <?php endif; ?>
                     </div>
 
                     <!-- Movimientos -->
@@ -131,6 +138,81 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                     <div class="alc-mov-list" id="movs-list"></div>
                 </div>
 
+            </div>
+
+            <!-- DESKTOP: Mi alcancía -->
+            <div class="alc-desk">
+                <div class="alc-desk__head">
+                    <div>
+                        <div class="alc-desk__title">Mi alcancía</div>
+                        <div class="alc-desk__sub">Comisiones acumuladas del periodo en curso.</div>
+                    </div>
+                    <div class="alc-desk__head-actions">
+                        <div class="alc-desk__month"><?php echo esc_html($mes_label); ?></div>
+                        <a class="alc-desk__reg" href="<?php echo esc_url($registro_url); ?>">Registrar venta</a>
+                    </div>
+                </div>
+
+                <div class="alc-desk__grid">
+                    <div class="alc-desk__card">
+                        <div class="alc-desk__pig-zone">
+                            <div class="alc-desk__pig">
+                                <img class="alc-desk__pig-base" src="<?php echo esc_url($alcancia_img); ?>" alt="Alcancía">
+                                <img class="alc-desk__pig-fill" id="desk-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
+                            </div>
+                            <div class="alc-desk__pig-pct"><span id="desk-fill-pct">0%</span> de tu meta mensual</div>
+                        </div>
+                        <div class="alc-desk__card-body">
+                            <div class="alc-desk__saldo-label">Saldo del mes</div>
+                            <div class="alc-desk__saldo" id="desk-saldo">S/ 0.00</div>
+                            <div class="alc-desk__bar"><div class="alc-desk__bar-fill" id="desk-bar-fill"></div></div>
+                            <div class="alc-desk__meta">
+                                <span>Te faltan <b id="desk-faltan">S/ 0.00</b></span>
+                                <span id="desk-meta-label">Meta S/ 0.00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alc-desk__right">
+                        <div class="alc-desk__stats<?php echo $show_ranking ? '' : ' alc-desk__stats--no-ranking'; ?>">
+                            <div class="alc-desk__stat">
+                                <div class="alc-desk__stat-val" id="desk-acumulado-ano">S/ 0.00</div>
+                                <div class="alc-desk__stat-label">Acumulado año</div>
+                            </div>
+                            <div class="alc-desk__stat">
+                                <div class="alc-desk__stat-val" id="desk-ventas-mes">0</div>
+                                <div class="alc-desk__stat-label">Ventas del mes</div>
+                            </div>
+                            <?php if ($show_ranking): ?>
+                            <div class="alc-desk__stat">
+                                <div class="alc-desk__stat-val alc-desk__stat-val--gold" id="desk-ranking">#0 / 0</div>
+                                <div class="alc-desk__stat-label">Ranking taller</div>
+                            </div>
+                            <?php endif; ?>
+                            <div class="alc-desk__stat">
+                                <div class="alc-desk__stat-val" id="desk-promedio">S/ 0.00</div>
+                                <div class="alc-desk__stat-label">Comisión promedio</div>
+                            </div>
+                        </div>
+
+                        <div class="alc-desk__movs">
+                            <div class="alc-desk__movs-head">
+                                <div class="alc-desk__movs-title">Movimientos del mes</div>
+                                <a class="alc-desk__movs-all" href="<?php echo esc_url($todos_url); ?>">Ver historial completo</a>
+                            </div>
+                            <div class="alc-desk__table">
+                                <div class="alc-desk__tr alc-desk__tr--head">
+                                    <div class="alc-desk__td">Cat.</div>
+                                    <div class="alc-desk__td">Producto</div>
+                                    <div class="alc-desk__td"><?php echo $es_jefe ? 'Asesor' : 'Identificador'; ?></div>
+                                    <div class="alc-desk__td">Fecha</div>
+                                    <div class="alc-desk__td alc-desk__td--right">Comisión</div>
+                                </div>
+                                <div id="desk-movs-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 

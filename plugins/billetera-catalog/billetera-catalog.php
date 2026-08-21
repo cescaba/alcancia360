@@ -16,6 +16,27 @@ if (!defined('ABSPATH')) {
 // Crear tablas de catálogo al activar
 register_activation_hook(__FILE__, 'billetera_create_catalog_tables');
 
+// Migración en caliente: asegura que la columna asesor_id exista sin reactivar el plugin
+add_action('plugins_loaded', 'billetera_maybe_upgrade_schema');
+
+function billetera_maybe_upgrade_schema() {
+    if (get_option('billetera_db_version') === '1.1') {
+        return;
+    }
+
+    global $wpdb;
+    $ventas_table = $wpdb->prefix . 'billetera_ventas';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$ventas_table'") == $ventas_table) {
+        $columns = $wpdb->get_results("SHOW COLUMNS FROM $ventas_table");
+        $column_names = array_column((array) $columns, 'Field');
+        if (!in_array('asesor_id', $column_names)) {
+            $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN asesor_id bigint(20)");
+        }
+    }
+
+    update_option('billetera_db_version', '1.1');
+}
+
 function billetera_create_catalog_tables() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
@@ -107,6 +128,7 @@ function billetera_create_catalog_tables() {
         $sql = "CREATE TABLE $ventas_table (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             usuario_id bigint(20) NOT NULL,
+            asesor_id bigint(20),
             subcategoria_id mediumint(9) NOT NULL,
             cantidad int(11) DEFAULT 1,
             monto_comision_sol decimal(10, 2) NOT NULL,
@@ -137,6 +159,10 @@ function billetera_create_catalog_tables() {
 
         if (!in_array('bonus_multiplier', $column_names)) {
             $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN bonus_multiplier decimal(3, 1) DEFAULT 1.0");
+        }
+
+        if (!in_array('asesor_id', $column_names)) {
+            $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN asesor_id bigint(20)");
         }
     }
 
@@ -472,13 +498,14 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
         $ventas_table = $wpdb->prefix . 'billetera_ventas';
         $wpdb->insert($ventas_table, [
             'usuario_id' => $jefe_id,
+            'asesor_id' => intval($registrante_id),
             'subcategoria_id' => $subcategoria_id,
             'cantidad' => $cantidad,
             'monto_comision_sol' => $monto_jefe,
             'id_type' => $id_type,
             'id_value' => $id_value,
             'bonus_multiplier' => 1.0,
-        ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f']);
+        ], ['%d', '%d', '%d', '%d', '%f', '%s', '%s', '%f']);
     }
 }
 
@@ -637,10 +664,11 @@ function billetera_ajax_get_balance() {
     $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
     $movements = $wpdb->get_results($wpdb->prepare("
-        SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, c.nombre as categoria
+        SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, c.nombre as categoria, u.display_name as asesor_nombre
         FROM $ventas_table v
         LEFT JOIN $subcategorias_table s ON v.subcategoria_id = s.id
         LEFT JOIN $categorias_table c ON s.categoria_id = c.id
+        LEFT JOIN {$wpdb->users} u ON v.asesor_id = u.ID
         WHERE v.usuario_id = %d
         ORDER BY v.creado_en DESC
         LIMIT 10
@@ -679,10 +707,11 @@ function billetera_ajax_get_all_movements() {
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
 
     $movements = $wpdb->get_results($wpdb->prepare("
-        SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, c.nombre as categoria
+        SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, c.nombre as categoria, u.display_name as asesor_nombre
         FROM $ventas_table v
         LEFT JOIN $subcategorias_table s ON v.subcategoria_id = s.id
         LEFT JOIN $categorias_table c ON s.categoria_id = c.id
+        LEFT JOIN {$wpdb->users} u ON v.asesor_id = u.ID
         WHERE v.usuario_id = %d
         ORDER BY v.creado_en DESC
     ", $user_id));

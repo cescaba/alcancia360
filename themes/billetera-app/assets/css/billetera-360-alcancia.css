@@ -421,3 +421,378 @@
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ============================================================================
+   Desktop (≥1025px) - Mi alcancía
+   ========================================================================== */
+.alc-desk {
+    display: none;
+}
+
+.alc-grid--no-ranking {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 1025px) {
+    body.page-template-page-billetera-360-movimientos {
+        background: #f5f7fb;
+    }
+
+    body.page-template-page-billetera-360-movimientos .main-content {
+        padding: 24px 26px 34px !important;
+    }
+
+    #screen-wallet {
+        display: block !important;
+        height: auto !important;
+        padding: 0 !important;
+    }
+
+    body.page-template-page-billetera-360-movimientos .alc-wrap {
+        display: none;
+    }
+
+    .alc-desk {
+        display: block;
+    }
+
+    /* Header */
+    .alc-desk__head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        margin-bottom: 18px;
+    }
+
+    .alc-desk__title {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 30px;
+        font-weight: 700;
+        color: #0e2438;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        line-height: 1;
+    }
+
+    .alc-desk__sub {
+        font-size: 13px;
+        color: #5b6b80;
+        margin-top: 5px;
+    }
+
+    .alc-desk__head-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .alc-desk__month {
+        font-size: 12px;
+        font-weight: 600;
+        color: #5b6b80;
+        border: 1px solid #dce3eb;
+        background: #fff;
+        padding: 8px 12px;
+    }
+
+    .alc-desk__reg {
+        background: #0a6cb4;
+        color: #fff;
+        border: none;
+        border-radius: 2px;
+        padding: 11px 20px;
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .alc-desk__reg:hover {
+        background: #095a96;
+    }
+
+    /* Grid principal */
+    .alc-desk__grid {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 22px;
+        align-items: start;
+    }
+
+    /* Tarjeta chancho */
+    .alc-desk__card {
+        background: #fff;
+        border: 1px solid #dce3eb;
+    }
+
+    .alc-desk__pig-zone {
+        padding: 20px 20px 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .alc-desk__pig {
+        width: 186px;
+        position: relative;
+    }
+
+    .alc-desk__pig-base,
+    .alc-desk__pig-fill {
+        width: 100%;
+        display: block;
+    }
+
+    .alc-desk__pig-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        filter: sepia(1) saturate(2.4) hue-rotate(-14deg) brightness(0.97);
+        clip-path: inset(78% 0 0 0);
+        transition: clip-path 0.9s cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
+
+    .alc-desk__pig-pct {
+        font-size: 10.5px;
+        color: #8494a6;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-top: 6px;
+    }
+
+    .alc-desk__card-body {
+        border-top: 1px solid #e4eaf1;
+        padding: 14px 18px;
+    }
+
+    .alc-desk__saldo-label {
+        font-size: 9.5px;
+        color: #5b6b80;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+    }
+
+    .alc-desk__saldo {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 40px;
+        font-weight: 700;
+        color: #0a6cb4;
+        line-height: 1.05;
+        margin-top: 2px;
+    }
+
+    .alc-desk__bar {
+        height: 10px;
+        background: repeating-linear-gradient(115deg, #e4eaf1 0px, #e4eaf1 8px, #dbe3ec 8px, #dbe3ec 14px);
+        background-size: 28px 100%;
+        overflow: hidden;
+        margin-top: 12px;
+    }
+
+    .alc-desk__bar-fill {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, #c98a1e, #f5c563);
+        transition: width 0.9s cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
+
+    .alc-desk__meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11.5px;
+        color: #5b6b80;
+        margin-top: 9px;
+    }
+
+    .alc-desk__meta b {
+        color: #8a5f0f;
+        font-weight: 700;
+    }
+
+    /* Columna derecha */
+    .alc-desk__right {
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        min-width: 0;
+    }
+
+    /* Stats */
+    .alc-desk__stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        border: 1px solid #dce3eb;
+        background: #fff;
+    }
+
+    .alc-desk__stats--no-ranking {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .alc-desk__stat {
+        padding: 16px 18px;
+        border-right: 1px solid #dce3eb;
+    }
+
+    .alc-desk__stat:last-child {
+        border-right: none;
+    }
+
+    .alc-desk__stat:nth-child(even) {
+        background: #f5f8fb;
+    }
+
+    .alc-desk__stat-val {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 26px;
+        font-weight: 700;
+        color: #0e2438;
+        white-space: nowrap;
+    }
+
+    .alc-desk__stat-val--gold {
+        color: #8a5f0f;
+    }
+
+    .alc-desk__stat-label {
+        font-size: 9.5px;
+        color: #5b6b80;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-top: 3px;
+    }
+
+    /* Movimientos */
+    .alc-desk__movs {
+        border: 1px solid #dce3eb;
+        background: #fff;
+    }
+
+    .alc-desk__movs-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 13px 18px;
+        border-bottom: 1px solid #dce3eb;
+    }
+
+    .alc-desk__movs-title {
+        font-size: 10px;
+        color: #5b6b80;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+    }
+
+    .alc-desk__movs-all {
+        font-size: 12px;
+        font-weight: 600;
+        color: #0a6cb4;
+        text-decoration: none;
+    }
+
+    .alc-desk__movs-all:hover {
+        color: #0a2c4e;
+    }
+
+    .alc-desk__tr {
+        display: grid;
+        grid-template-columns: 88px 1fr 150px 130px 120px;
+        align-items: center;
+        border-bottom: 1px solid #e4eaf1;
+        background: #fff;
+    }
+
+    .alc-desk__tr:nth-child(even) {
+        background: #f5f8fb;
+    }
+
+    #desk-movs-list .alc-desk__tr:last-child {
+        border-bottom: none;
+    }
+
+    .alc-desk__tr--head {
+        background: #f3f6fa !important;
+        border-bottom: 1px solid #dce3eb !important;
+    }
+
+    .alc-desk__td {
+        padding: 11px 14px;
+        min-width: 0;
+    }
+
+    .alc-desk__tr--head .alc-desk__td {
+        padding: 9px 14px;
+        font-size: 9.5px;
+        font-weight: 600;
+        color: #5b6b80;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+    }
+
+    .alc-desk__td--right {
+        text-align: right;
+    }
+
+    .alc-desk__badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        font-family: ui-monospace, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        color: #0e2438;
+        border: 1px solid;
+    }
+
+    .alc-desk__td--prod {
+        font-size: 13px;
+        font-weight: 600;
+        color: #0e2438;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .alc-desk__td--id {
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        color: #5b6b80;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .alc-desk__td--asesor {
+        font-family: Barlow, sans-serif;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: #0e2438;
+    }
+
+    .alc-desk__td--fecha {
+        font-size: 12.5px;
+        color: #5b6b80;
+    }
+
+    .alc-desk__td--amt {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+        color: #1b6e46;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .alc-desk__empty {
+        padding: 24px 16px;
+        font-size: 12.5px;
+        color: #8494a6;
+        text-align: center;
+    }
+}

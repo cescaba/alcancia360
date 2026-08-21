@@ -1,0 +1,525 @@
+/* ============================================================================
+   Billetera 360 - Pantalla de login (wp-login.php)
+   Tarjeta de dos secciones: hero azul + formulario blanco.
+   ========================================================================== */
+
+body.login *,
+body.login *::before,
+body.login *::after {
+    box-sizing: border-box;
+}
+
+body.login {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    background: #fff;
+    padding: 0;
+    font-family: Barlow, sans-serif;
+}
+
+/* ---------- Tarjeta (móvil: pantalla completa) ---------- */
+body.login #login {
+    width: 100%;
+    min-height: 100vh;
+    background: #fff;
+    border: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    animation: loginRiseIn 0.45s ease both;
+}
+
+/* ---------- Hero azul ---------- */
+.login-hero {
+    flex: 0 0 auto;
+    background: #0a6cb4;
+    padding: 18px 18px 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.login-hero-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.login-hero-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.login-hero-desk-title,
+.login-hero-desk-sub,
+.login-hero-foot {
+    display: none;
+}
+
+.login-brand {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+}
+
+.login-brand-mark {
+    width: 44px;
+    height: 26px;
+    flex-shrink: 0;
+    object-fit: contain;
+    object-position: left center;
+}
+
+.login-brand-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+}
+
+.login-brand-wordmark {
+    height: 13px;
+    width: auto;
+    flex-shrink: 0;
+}
+
+.login-brand-sub {
+    font-weight: 500;
+    font-size: 10.5px;
+    color: #b7d8f2;
+    letter-spacing: 0.02em;
+    margin-top: 3px;
+}
+
+.login-pig {
+    width: 132px;
+    animation: loginFloatPig 5s ease-in-out infinite;
+    filter: drop-shadow(rgba(6, 40, 72, 0.35) 0px 12px 20px);
+}
+
+.login-pig img {
+    width: 100%;
+    display: block;
+}
+
+.login-hero-title {
+    text-align: center;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    line-height: 1.05;
+}
+
+.login-hero-sub {
+    text-align: center;
+    font-size: 11.5px;
+    color: #b7d8f2;
+    letter-spacing: 0.04em;
+    margin-top: 3px;
+}
+
+/* ---------- Cuerpo ---------- */
+.login-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 20px 18px 22px;
+}
+
+.login-body-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0e2438;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.login-body-sub {
+    font-size: 12px;
+    color: #5b6b80;
+    margin-top: 3px;
+    margin-bottom: 16px;
+}
+
+/* ---------- Formulario ---------- */
+body.login #login form {
+    margin-top: 0;
+    border: none;
+    padding: 0;
+    box-shadow: none;
+    overflow: visible;
+}
+
+body.login #login form > p {
+    margin: 0 0 14px;
+}
+
+body.login #login form label {
+    display: block;
+    font-size: 10px;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 7px;
+    font-weight: 500;
+}
+
+body.login #login form input[type="text"],
+body.login #login form input[type="password"] {
+    width: 100%;
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid #c9d4e0;
+    border-radius: 2px;
+    padding: 13px 14px;
+    font-family: ui-monospace, monospace;
+    font-size: 14px;
+    color: #0e2438;
+    letter-spacing: 0.02em;
+    outline: none;
+    margin: 0;
+    min-height: 0;
+    line-height: 1.3;
+    box-shadow: none;
+}
+
+body.login #login form input[type="text"]:focus,
+body.login #login form input[type="password"]:focus {
+    border-color: #0a6cb4;
+    box-shadow: 0 0 0 2px rgba(10, 108, 180, 0.15);
+}
+
+body.login #login form input::placeholder {
+    color: #8494a6;
+}
+
+/* Campo contraseña + ojo */
+body.login #login .user-pass-wrap {
+    margin: 0 0 12px;
+    position: relative;
+}
+
+body.login #login .wp-pwd {
+    position: relative;
+}
+
+body.login #login .wp-pwd input[type="password"] {
+    padding-right: 44px;
+}
+
+body.login #login .wp-pwd .wp-hide-pw {
+    position: absolute;
+    right: 1px;
+    top: 1px;
+    bottom: 1px;
+    width: 42px;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    height: auto;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #5b6b80;
+}
+
+body.login #login .wp-pwd .wp-hide-pw:hover {
+    color: #0a6cb4;
+}
+
+/* Fila "Mantener sesión iniciada" + "¿Olvidaste tu clave?" */
+.login-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    gap: 12px;
+}
+
+body.login #login .login-meta .forgetmenot {
+    margin: 0;
+    float: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+body.login #login .login-meta .forgetmenot input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin: 0;
+    border: 1px solid #0a6cb4;
+    background: #fff;
+    border-radius: 0;
+    cursor: pointer;
+}
+
+body.login #login .login-meta .forgetmenot input[type="checkbox"]:checked {
+    background: #0a6cb4;
+    box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 8px #0a6cb4;
+}
+
+body.login #login .login-meta .forgetmenot label {
+    display: inline;
+    font-size: 12.5px;
+    color: #33383d;
+    text-transform: none;
+    letter-spacing: normal;
+    margin: 0;
+    font-weight: 400;
+}
+
+.login-meta .login-forgot-link {
+    font-size: 12px;
+    font-weight: 600;
+    color: #0a6cb4;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.login-meta .login-forgot-link:hover {
+    color: #0a2c4e;
+}
+
+/* Botón Ingresar */
+body.login #login .submit {
+    margin: 0;
+}
+
+body.login #login #wp-submit {
+    width: 100%;
+    height: auto;
+    border: none;
+    border-radius: 2px;
+    padding: 15px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    line-height: 1.2;
+    text-shadow: none;
+    box-shadow: none;
+}
+
+body.login #login #wp-submit:disabled {
+    background: #e4eaf1;
+    color: #8494a6;
+    cursor: not-allowed;
+}
+
+body.login #login #wp-submit:not(:disabled) {
+    background: #0a6cb4;
+    color: #fff;
+    cursor: pointer;
+}
+
+body.login #login #wp-submit:not(:disabled):hover {
+    background: #095a96;
+}
+
+/* Nota inferior */
+.login-note {
+    font-size: 11px;
+    color: #8494a6;
+    line-height: 1.55;
+    text-align: center;
+    margin-top: 16px;
+}
+
+/* Mensajes / errores */
+body.login #login #login_error,
+body.login #login .message {
+    border-radius: 2px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    font-family: Barlow, sans-serif;
+    font-size: 12.5px;
+    line-height: 1.4;
+    box-shadow: none;
+}
+
+body.login #login #login_error {
+    background: #fef2f2;
+    border: 1px solid #e5b1b1;
+    color: #74362f;
+}
+
+body.login #login .message {
+    background: #f0fdf4;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
+}
+
+/* ---------- Animaciones ---------- */
+@keyframes loginRiseIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes loginFloatPig {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+}
+
+/* ---------- Responsive (móvil pequeño) ---------- */
+@media (max-width: 420px) {
+    .login-hero {
+        padding: 16px 16px 20px;
+    }
+
+    .login-body {
+        padding: 18px 16px 20px;
+    }
+}
+
+/* ---------- Tablet ---------- */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .login-pig {
+        width: 180px;
+    }
+
+    .login-body {
+        align-items: center;
+    }
+
+    .login-body > * {
+        width: 100%;
+        max-width: 440px;
+    }
+}
+
+/* ---------- Desktop ---------- */
+@media (min-width: 1024px) {
+    body.login {
+        align-items: stretch;
+        background: #fff;
+        padding: 0;
+    }
+
+    body.login #login {
+        width: 100%;
+        min-height: 100vh;
+        border: none;
+        display: grid;
+        grid-template-columns: 1.15fr 1fr;
+    }
+
+    .login-hero {
+        flex: none;
+        padding: 48px clamp(28px, 4.4vw, 56px);
+        justify-content: space-between;
+        align-items: stretch;
+        gap: 0;
+    }
+
+    .login-brand-mark {
+        width: 56px;
+        height: 33px;
+    }
+
+    .login-brand-wordmark {
+        height: 17px;
+    }
+
+    .login-brand-sub {
+        font-size: 12px;
+        letter-spacing: 0.03em;
+        margin-top: 4px;
+    }
+
+    .login-hero-main {
+        flex-direction: row;
+        align-items: center;
+        gap: clamp(24px, 3.4vw, 44px);
+    }
+
+    .login-pig {
+        width: clamp(180px, 18vw, 250px);
+        flex-shrink: 0;
+        filter: drop-shadow(rgba(6, 40, 72, 0.38) 0px 18px 30px);
+    }
+
+    .login-hero-copy {
+        align-items: flex-start;
+        max-width: 340px;
+    }
+
+    .login-hero-title,
+    .login-hero-sub {
+        display: none;
+    }
+
+    .login-hero-desk-title {
+        display: block;
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: clamp(36px, 4vw, 52px);
+        font-weight: 700;
+        color: #fff;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        line-height: 1;
+    }
+
+    .login-hero-desk-sub {
+        display: block;
+        font-size: 15px;
+        color: #b7d8f2;
+        line-height: 1.65;
+        margin-top: 14px;
+    }
+
+    .login-hero-foot {
+        display: block;
+        font-size: 11.5px;
+        color: #8fc0e8;
+        letter-spacing: 0.04em;
+    }
+
+    .login-body {
+        flex: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 48px;
+    }
+
+    .login-body > * {
+        width: 100%;
+        max-width: 390px;
+    }
+
+    .login-body-title {
+        font-size: 30px;
+    }
+
+    .login-body-sub {
+        font-size: 13px;
+        margin-bottom: 24px;
+    }
+
+    .login-note {
+        display: none;
+    }
+}

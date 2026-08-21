@@ -11,7 +11,18 @@ const el = {
     acumuladoAno: document.getElementById('acumulado-ano'),
     ventasMes: document.getElementById('ventas-mes'),
     ranking: document.getElementById('ranking'),
-    movsList: document.getElementById('movs-list')
+    movsList: document.getElementById('movs-list'),
+    deskPigFill: document.getElementById('desk-pig-fill'),
+    deskFillPct: document.getElementById('desk-fill-pct'),
+    deskSaldo: document.getElementById('desk-saldo'),
+    deskBarFill: document.getElementById('desk-bar-fill'),
+    deskFaltan: document.getElementById('desk-faltan'),
+    deskMetaLabel: document.getElementById('desk-meta-label'),
+    deskAcumuladoAno: document.getElementById('desk-acumulado-ano'),
+    deskVentasMes: document.getElementById('desk-ventas-mes'),
+    deskRanking: document.getElementById('desk-ranking'),
+    deskPromedio: document.getElementById('desk-promedio'),
+    deskMovsList: document.getElementById('desk-movs-list')
 };
 
 const ID_LABELS = {
@@ -70,21 +81,45 @@ function updateStats(d) {
 
     const clip = 'inset(' + (100 - fill) + '% 0 0 0)';
     if (el.pigFill) el.pigFill.style.clipPath = clip;
+
+    // Desktop
+    setText(el.deskSaldo, fmt(balance));
+    setText(el.deskFillPct, Math.round(fill) + '%');
+    if (el.deskBarFill) el.deskBarFill.style.width = fill + '%';
+    setText(el.deskFaltan, fmt(Math.max(0, meta - balance)));
+    setText(el.deskMetaLabel, 'Meta ' + fmt(meta));
+    setText(el.deskAcumuladoAno, fmt(d.acumulado_ano || 0));
+    setText(el.deskVentasMes, String(d.ventas_mes || 0));
+    setText(el.deskRanking, rank > 0 ? '#' + rank + ' / ' + total : '—');
+    const ventasNum = Number(d.ventas_mes) || 0;
+    setText(el.deskPromedio, fmt(ventasNum > 0 ? balance / ventasNum : 0));
+    if (el.deskPigFill) el.deskPigFill.style.clipPath = clip;
 }
 
 function renderMovements(movements) {
-    if (!el.movsList) return;
+    if (el.movsList) {
+        el.movsList.innerHTML = '';
 
-    el.movsList.innerHTML = '';
-
-    if (!movements.length) {
-        el.movsList.innerHTML = '<p class="alc-empty">No hay movimientos registrados aún.</p>';
-        return;
+        if (!movements.length) {
+            el.movsList.innerHTML = '<p class="alc-empty">No hay movimientos registrados aún.</p>';
+        } else {
+            movements.forEach(function (m, i) {
+                el.movsList.appendChild(buildRow(m, i === 0));
+            });
+        }
     }
 
-    movements.forEach(function (m, i) {
-        el.movsList.appendChild(buildRow(m, i === 0));
-    });
+    if (el.deskMovsList) {
+        el.deskMovsList.innerHTML = '';
+
+        if (!movements.length) {
+            el.deskMovsList.innerHTML = '<div class="alc-desk__empty">No hay movimientos registrados aún.</div>';
+        } else {
+            movements.forEach(function (m) {
+                el.deskMovsList.appendChild(buildDeskRow(m));
+            });
+        }
+    }
 }
 
 function buildRow(m, isLatest) {
@@ -93,7 +128,8 @@ function buildRow(m, isLatest) {
 
     const color = catColor(m.categoria || '');
     const nombre = (m.categoria ? m.categoria : '') + (m.subcategoria ? ' · ' + m.subcategoria : '');
-    const meta = (ID_LABELS[m.id_type] || (m.id_type || '').toUpperCase()) + ' ' + (m.id_value || '') + ' · ' + timeAgo(new Date(m.created_at));
+    const ident = m.asesor_nombre ? m.asesor_nombre : ((ID_LABELS[m.id_type] || (m.id_type || '').toUpperCase()) + ' ' + (m.id_value || ''));
+    const meta = ident + ' · ' + timeAgo(new Date(m.created_at));
 
     const badge = document.createElement('div');
     badge.className = 'alc-mov__badge';
@@ -127,6 +163,43 @@ function buildRow(m, isLatest) {
 
     row.appendChild(badge);
     row.appendChild(body);
+    row.appendChild(amt);
+
+    return row;
+}
+
+function buildDeskRow(m) {
+    const row = document.createElement('div');
+    row.className = 'alc-desk__tr';
+
+    const color = catColor(m.categoria || '');
+    const nombre = (m.categoria ? m.categoria : '') + (m.subcategoria ? ' · ' + m.subcategoria : '');
+    const fecha = timeAgo(new Date(m.created_at));
+
+    const badge = document.createElement('div');
+    badge.className = 'alc-desk__td';
+    badge.innerHTML = '<span class="alc-desk__badge" style="background:' + hexA(color, 0.1) + ';border-color:' + hexA(color, 0.333) + '">' + catInitials(m.categoria || '') + '</span>';
+
+    const prod = document.createElement('div');
+    prod.className = 'alc-desk__td alc-desk__td--prod';
+    prod.textContent = nombre;
+
+    const id = document.createElement('div');
+    id.className = 'alc-desk__td alc-desk__td--id' + (m.asesor_nombre ? ' alc-desk__td--asesor' : '');
+    id.textContent = m.asesor_nombre || (m.id_value || '');
+
+    const fechaEl = document.createElement('div');
+    fechaEl.className = 'alc-desk__td alc-desk__td--fecha';
+    fechaEl.textContent = fecha;
+
+    const amt = document.createElement('div');
+    amt.className = 'alc-desk__td alc-desk__td--amt';
+    amt.textContent = '+' + fmt(Number(m.amount) || 0);
+
+    row.appendChild(badge);
+    row.appendChild(prod);
+    row.appendChild(id);
+    row.appendChild(fechaEl);
     row.appendChild(amt);
 
     return row;

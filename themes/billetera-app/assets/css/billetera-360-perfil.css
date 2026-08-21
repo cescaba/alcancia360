@@ -1,0 +1,272 @@
+/* ============================================================================
+   Billetera 360 - Pantalla "Mi perfil"
+   ========================================================================== */
+
+.perfil-wrap {
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 0 0 120px;
+    box-sizing: border-box;
+}
+
+/* ---------- Encabezado ---------- */
+.perfil-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid #e4eaf1;
+}
+
+.perfil-back {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0e2438;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+}
+
+.perfil-id {
+    font-size: 11px;
+    font-weight: 600;
+    color: #5b6b80;
+    border: 1px solid #dce3eb;
+    padding: 4px 9px;
+}
+
+/* ---------- Cuerpo ---------- */
+.perfil-card,
+.perfil-stats,
+.perfil-section-label,
+.perfil-datos,
+.perfil-btn {
+    margin-left: 18px;
+    margin-right: 18px;
+}
+
+.perfil-card {
+    border: 1px solid #dce3eb;
+    padding: 16px;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    margin-top: 16px;
+    margin-bottom: 14px;
+}
+
+.perfil-photo {
+    position: relative;
+    width: 78px;
+    height: 78px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    overflow: hidden;
+    border-radius: 50%;
+    background: #f5f8fb;
+    border: 2px solid #0a6cb4;
+}
+
+.perfil-photo-initials {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: #0a6cb4;
+}
+
+.perfil-photo-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 20px;
+    background: rgba(10, 44, 78, 0.78);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #fff;
+}
+
+.perfil-photo input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.perfil-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.perfil-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: #0e2438;
+    letter-spacing: 0.01em;
+    line-height: 1.1;
+}
+
+.perfil-role {
+    font-size: 11.5px;
+    color: #5b6b80;
+    margin-top: 2px;
+}
+
+/* ---------- Stats ---------- */
+.perfil-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border: 1px solid #dce3eb;
+    margin-bottom: 18px;
+}
+
+.perfil-stats--no-ranking {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.perfil-stat {
+    padding: 11px 12px;
+    border-right: 1px solid #dce3eb;
+    background: #fff;
+}
+
+.perfil-stat:last-child {
+    border-right: none;
+}
+
+.perfil-stat--alt {
+    background: #f5f8fb;
+}
+
+.perfil-stat-val {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 21px;
+    font-weight: 700;
+    color: #0e2438;
+}
+
+.perfil-stat-val--gold {
+    color: #8a5f0f;
+}
+
+.perfil-stat-val--blue {
+    color: #0a6cb4;
+}
+
+.perfil-stat-label {
+    font-size: 9px;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+    line-height: 1.3;
+}
+
+/* ---------- Mis datos ---------- */
+.perfil-section-label {
+    font-size: 10px;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 9px;
+}
+
+.perfil-datos {
+    border: 1px solid #dce3eb;
+    margin-bottom: 16px;
+}
+
+.perfil-dato {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 14px;
+    background: #fff;
+    border-bottom: 1px solid #e4eaf1;
+}
+
+.perfil-dato:nth-child(even) {
+    background: #f5f8fb;
+}
+
+.perfil-dato:last-child {
+    border-bottom: none;
+}
+
+.perfil-dato span {
+    font-size: 11.5px;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.perfil-dato b {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #0e2438;
+    text-align: right;
+    word-break: break-word;
+}
+
+/* ---------- Botones ---------- */
+.perfil-btn {
+    display: block;
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid #c9d4e0;
+    border-radius: 2px;
+    padding: 13px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #0e2438;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    margin-bottom: 8px;
+}
+
+.perfil-btn--danger {
+    border-color: #e3bdb8;
+    color: #b3352a;
+}
+
+/* ============================================================================
+   Desktop (≥1025px)
+   ========================================================================== */
+@media (min-width: 1025px) {
+    body.page-template-page-billetera-360-perfil {
+        background: #f5f7fb;
+    }
+
+    body.page-template-page-billetera-360-perfil .main-content {
+        padding: 24px 26px 34px !important;
+    }
+
+    .perfil-wrap {
+        max-width: 560px;
+        padding-bottom: 0;
+    }
+}

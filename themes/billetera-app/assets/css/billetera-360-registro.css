@@ -444,3 +444,394 @@
     0%   { left: -40%; }
     100% { left: 110%; }
 }
+
+/* ============================================================================
+   Desktop (≥1025px) - Registrar venta
+   ========================================================================== */
+.reg-desk {
+    display: none;
+}
+
+@media (min-width: 1025px) {
+    body.page-template-page-billetera-360-responsive {
+        background: #f5f7fb;
+    }
+
+    body.page-template-page-billetera-360-responsive .main-content {
+        padding: 24px 26px 34px !important;
+    }
+
+    #screen-registro {
+        display: block !important;
+        height: auto !important;
+        padding: 0 !important;
+    }
+
+    body.page-template-page-billetera-360-responsive .reg-wrap {
+        display: none;
+    }
+
+    .reg-desk {
+        display: block;
+    }
+
+    /* Header */
+    .reg-desk__head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        margin-bottom: 18px;
+    }
+
+    .reg-desk__title {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 30px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        line-height: 1;
+        color: #0e2438;
+    }
+
+    .reg-desk__sub {
+        font-size: 13px;
+        color: #5b6b80;
+        margin-top: 5px;
+    }
+
+    .reg-desk__step {
+        font-size: 12px;
+        font-weight: 600;
+        color: #5b6b80;
+        border: 1px solid #dce3eb;
+        background: #fff;
+        padding: 8px 12px;
+    }
+
+    /* Grid */
+    .reg-desk__grid {
+        display: grid;
+        grid-template-columns: 1fr 330px;
+        gap: 22px;
+        align-items: start;
+    }
+
+    /* Formulario */
+    .reg-desk__form {
+        background: #fff;
+        border: 1px solid #dce3eb;
+        padding: 22px 24px 24px;
+    }
+
+    .reg-desk__label {
+        font-size: 10px;
+        color: #5b6b80;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        margin-bottom: 8px;
+        margin-top: 8px;
+    }
+
+    .reg-desk__label--obs {
+        margin-top: 18px;
+        margin-bottom: 7px;
+    }
+
+    .reg-desk__seg {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        border: 1px solid #dce3eb;
+        margin-bottom: 20px;
+    }
+
+    .reg-desk__seg button {
+        border: none;
+        border-right: 1px solid #dce3eb;
+        padding: 12px 4px;
+        cursor: pointer;
+        font-family: Barlow, sans-serif;
+        font-size: 12.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        background: #fff;
+        color: #5b6b80;
+    }
+
+    .reg-desk__seg button:last-child {
+        border-right: none;
+    }
+
+    .reg-desk__seg button.is-active {
+        background: #0a6cb4;
+        color: #fff;
+    }
+
+    .reg-desk__row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+    }
+
+    .reg-desk__row + .reg-desk__row {
+        margin-top: 18px;
+    }
+
+    .reg-desk__row input[type="text"],
+    .reg-desk__row select,
+    .reg-desk__form > input[type="text"],
+    .reg-desk__form > select {
+        width: 100%;
+        box-sizing: border-box;
+        background: #fff;
+        border: 1px solid #c9d4e0;
+        border-radius: 2px;
+        padding: 13px 14px;
+        font-family: Barlow, sans-serif;
+        font-size: 14px;
+        color: #0e2438;
+        outline: none;
+    }
+
+    .reg-desk__form > select {
+        margin-bottom: 18px;
+    }
+
+    .reg-desk__row input[type="text"] {
+        font-family: ui-monospace, monospace;
+        font-size: 14.5px;
+        letter-spacing: 0.04em;
+    }
+
+    .reg-desk__row select:disabled {
+        background: #f2f5f9;
+        color: #8494a6;
+        cursor: not-allowed;
+    }
+
+    .reg-desk__fecha {
+        background: #f2f5f9;
+        border: 1px solid #c9d4e0;
+        border-radius: 2px;
+        padding: 13px 14px;
+        font-size: 14px;
+        color: #5b6b80;
+    }
+
+    .reg-desk__foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid #e4eaf1;
+    }
+
+    .reg-desk__note {
+        font-size: 11.5px;
+        color: #8494a6;
+        max-width: 330px;
+        line-height: 1.5;
+    }
+
+    .reg-desk__actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .reg-desk__clear {
+        background: #fff;
+        border: 1px solid #c9d4e0;
+        border-radius: 2px;
+        padding: 13px 20px;
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #0e2438;
+        cursor: pointer;
+    }
+
+    .reg-desk__submit {
+        border: none;
+        border-radius: 2px;
+        padding: 13px 26px;
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        background: #e4eaf1;
+        color: #8494a6;
+        cursor: not-allowed;
+    }
+
+    .reg-desk__submit:not(:disabled) {
+        background: #0a6cb4;
+        color: #fff;
+        cursor: pointer;
+    }
+
+    /* Columna lateral */
+    .reg-desk__side {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .reg-desk__comision {
+        background: #fff;
+        border: 1px solid #dce3eb;
+        border-left: 3px solid #dce3eb;
+        padding: 18px 20px;
+    }
+
+    .reg-desk__comision.is-ready {
+        border-left-color: #0a6cb4;
+    }
+
+    .reg-desk__comision-val {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 42px;
+        font-weight: 700;
+        line-height: 1.05;
+        margin-top: 2px;
+        color: #8494a6;
+    }
+
+    .reg-desk__comision.is-ready .reg-desk__comision-val {
+        color: #0a6cb4;
+    }
+
+    .reg-desk__comision-hint {
+        font-size: 11.5px;
+        color: #5b6b80;
+        line-height: 1.5;
+        margin-top: 6px;
+    }
+
+    .reg-desk__alcancia {
+        background: #fff;
+        border: 1px solid #dce3eb;
+        padding: 18px;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+    }
+
+    .reg-desk__alcancia-pig {
+        width: 96px;
+        flex-shrink: 0;
+        position: relative;
+    }
+
+    .reg-desk__alcancia-pig img {
+        width: 100%;
+        display: block;
+    }
+
+    .reg-desk__alcancia-pig img:last-child {
+        position: absolute;
+        left: 0;
+        top: 0;
+        filter: sepia(1) saturate(2.4) hue-rotate(-14deg) brightness(0.97);
+        clip-path: inset(78% 0 0 0);
+        transition: clip-path 0.9s cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
+
+    .reg-desk__alcancia-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .reg-desk__alcancia-bal {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 30px;
+        font-weight: 700;
+        color: #0a6cb4;
+        line-height: 1.05;
+    }
+
+    .reg-desk__alcancia-bar {
+        height: 9px;
+        background: repeating-linear-gradient(115deg, #e4eaf1 0px, #e4eaf1 8px, #dbe3ec 8px, #dbe3ec 14px);
+        background-size: 28px 100%;
+        overflow: hidden;
+        margin-top: 9px;
+    }
+
+    .reg-desk__alcancia-bar > div {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, #c98a1e, #f5c563);
+        transition: width 0.9s cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
+
+    .reg-desk__alcancia-missing {
+        font-size: 11px;
+        color: #5b6b80;
+        margin-top: 6px;
+    }
+
+    .reg-desk__alcancia-missing b {
+        color: #8a5f0f;
+        font-weight: 700;
+    }
+
+    /* Últimos registros */
+    .reg-desk__recent {
+        background: #fff;
+        border: 1px solid #dce3eb;
+    }
+
+    .reg-desk__recent-head {
+        padding: 12px 16px;
+        border-bottom: 1px solid #e4eaf1;
+        font-size: 10px;
+        color: #5b6b80;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+    }
+
+    .reg-desk__recent-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 11px 16px;
+        border-bottom: 1px solid #e4eaf1;
+    }
+
+    .reg-desk__recent-row:last-child {
+        border-bottom: none;
+    }
+
+    .reg-desk__recent-row--alt {
+        background: #f5f8fb;
+    }
+
+    .reg-desk__recent-name {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: #0e2438;
+    }
+
+    .reg-desk__recent-meta {
+        font-size: 10.5px;
+        color: #8494a6;
+    }
+
+    .reg-desk__recent-amt {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 16px;
+        font-weight: 700;
+        color: #1b6e46;
+    }
+
+    .reg-desk__recent-empty {
+        padding: 16px;
+        font-size: 12px;
+        color: #8494a6;
+        text-align: center;
+    }
+}

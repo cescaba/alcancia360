@@ -33,6 +33,9 @@ function get_page_by_template($template_name) {
 
 $movimientos_url = get_page_by_template('page-billetera-360-movimientos.php');
 $alcancia_img   = get_template_directory_uri() . '/assets/img/alcancia.svg';
+
+$meses_cortos = array('ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic');
+$hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] . ' ' . date('Y');
 ?>
 
 <!DOCTYPE html>
@@ -49,7 +52,7 @@ $alcancia_img   = get_template_directory_uri() . '/assets/img/alcancia.svg';
     <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-header.css">
     <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-registro.css">
 </head>
-<body>
+<body <?php body_class(); ?>>
 
 <?php get_template_part('template-parts/header-app'); ?>
 
@@ -141,6 +144,97 @@ $alcancia_img   = get_template_directory_uri() . '/assets/img/alcancia.svg';
 
                 </div>
             </div>
+
+            <!-- DESKTOP: Registrar venta -->
+            <div class="reg-desk">
+                <div class="reg-desk__head">
+                    <div>
+                        <div class="reg-desk__title">Registrar venta</div>
+                        <div class="reg-desk__sub">Identifica el vehículo y elige el producto vendido. La comisión sale del catálogo oficial.</div>
+                    </div>
+                    <div class="reg-desk__step">Paso 1 de 1</div>
+                </div>
+
+                <div class="reg-desk__grid">
+                    <div class="reg-desk__form">
+                        <div class="reg-desk__label">Identificar con</div>
+                        <div class="reg-desk__seg" id="desk-id-seg">
+                            <button type="button" data-type="placa">Placa</button>
+                            <button type="button" data-type="vin">VIN</button>
+                            <button type="button" data-type="ot">OT</button>
+                            <button type="button" data-type="factura" class="is-active">Factura</button>
+                        </div>
+
+                        <div class="reg-desk__row">
+                            <div>
+                                <div class="reg-desk__label" id="desk-id-label">N° Factura</div>
+                                <input type="text" id="desk-id-input" placeholder="F001-000123">
+                            </div>
+                            <div>
+                                <div class="reg-desk__label">Fecha de venta</div>
+                                <div class="reg-desk__fecha"><?php echo esc_html($hoy_label); ?></div>
+                            </div>
+                        </div>
+
+                        <div class="reg-desk__label">Marca</div>
+                        <select id="desk-marca-select">
+                            <option value="">Selecciona una marca</option>
+                        </select>
+
+                        <div class="reg-desk__row">
+                            <div>
+                                <div class="reg-desk__label">Categoría</div>
+                                <select id="desk-cat-select" disabled>
+                                    <option value="">Primero elige una marca</option>
+                                </select>
+                            </div>
+                            <div>
+                                <div class="reg-desk__label">Subcategoría</div>
+                                <select id="desk-sub-select" disabled>
+                                    <option value="">Primero elige una categoría</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="reg-desk__label reg-desk__label--obs">Observación (opcional)</div>
+                        <input type="text" id="desk-obs" placeholder="Ej. cliente solicitó montaje el mismo día">
+
+                        <div class="reg-desk__foot">
+                            <div class="reg-desk__note">La comisión se acredita al cierre del mes previa validación del jefe de taller.</div>
+                            <div class="reg-desk__actions">
+                                <button type="button" class="reg-desk__clear" id="desk-clear">Limpiar</button>
+                                <button type="button" class="reg-desk__submit" id="desk-submit" disabled>Registrar venta</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="reg-desk__side">
+                        <div class="reg-desk__comision" id="desk-comision">
+                            <div class="reg-desk__label">Comisión a registrar</div>
+                            <div class="reg-desk__comision-val" id="desk-preview-amt">S/ 0.00</div>
+                            <div class="reg-desk__comision-hint" id="desk-preview-hint">Elige categoría y subcategoría para ver el monto.</div>
+                        </div>
+
+                        <div class="reg-desk__alcancia">
+                            <div class="reg-desk__alcancia-pig">
+                                <img src="<?php echo esc_url($alcancia_img); ?>" alt="Alcancía">
+                                <img id="desk-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
+                            </div>
+                            <div class="reg-desk__alcancia-info">
+                                <div class="reg-desk__label">En tu alcancía</div>
+                                <div class="reg-desk__alcancia-bal" id="desk-balance">S/ 0.00</div>
+                                <div class="reg-desk__alcancia-bar"><div id="desk-bar-fill"></div></div>
+                                <div class="reg-desk__alcancia-missing">Te faltan <b id="desk-faltan">S/ 0.00</b></div>
+                            </div>
+                        </div>
+
+                        <div class="reg-desk__recent">
+                            <div class="reg-desk__recent-head">Tus últimos registros</div>
+                            <div id="desk-recent"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- BOTTOM TABBAR -->
@@ -171,6 +265,7 @@ window.billetera = {
 };
 </script>
 <script src="<?php echo get_template_directory_uri(); ?>/assets/js/billetera-360-logic.js"></script>
+<script src="<?php echo get_template_directory_uri(); ?>/assets/js/billetera-360-logic-desk.js"></script>
 
 </body>
 </html>
