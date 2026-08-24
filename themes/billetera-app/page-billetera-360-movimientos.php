@@ -85,7 +85,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                             </button>
                         </div>
                     </div>
-                    <div class="alc-pig-hint">Toca la alcancía</div>
+                    <div class="alc-pig-hint" id="alc-pig-hint">Toca la alcancía</div>
                 </div>
 
                 <div class="alc-content">
@@ -163,7 +163,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                                     <img class="alc-desk__pig-fill" id="desk-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
                                 </button>
                             </div>
-                            <div class="alc-desk__pig-pct"><span id="desk-fill-pct">0%</span> de tu meta mensual</div>
+                            <div class="alc-desk__pig-pct" id="alc-desk-pig-hint">0% de tu meta mensual</div>
                         </div>
                         <div class="alc-desk__card-body">
                             <div class="alc-desk__saldo-label">Mi pocito</div>

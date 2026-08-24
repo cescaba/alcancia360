@@ -10,6 +10,10 @@ if (!is_user_logged_in()) {
 }
 
 $current_user = wp_get_current_user();
+
+$perfil_url = function_exists('billetera_get_template_url')
+    ? billetera_get_template_url('page-billetera-360-perfil.php')
+    : home_url();
 ?>
 
 <!DOCTYPE html>
@@ -24,45 +28,52 @@ $current_user = wp_get_current_user();
     <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-fonts.css">
     <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-responsive.css">
     <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-header.css">
+    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-password.css">
 </head>
-<body>
+<body <?php body_class(); ?>>
 
 <?php get_template_part('template-parts/header-app'); ?>
 
 <div class="site-wrapper">
-    <!-- MAIN CONTENT -->
     <div class="main-content">
 
-        <!-- SCREEN: CAMBIAR CONTRASEÑA -->
         <div class="screen active" id="screen-password">
-            <h1>Cambiar Contraseña</h1>
+            <div class="pw-wrap">
 
-            <div class="password-card">
-                <div id="message" class="message" style="display: none;"></div>
+                <div class="pw-head">
+                    <a class="pw-back" href="<?php echo esc_url($perfil_url); ?>">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#0A6CB4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+                        Cambiar contraseña
+                    </a>
+                </div>
 
-                <form id="password-form">
-                    <div>
-                        <p class="field-label">Contraseña Actual</p>
-                        <input type="password" id="current-password" name="current-password" placeholder="Ingresa tu contraseña actual" required>
-                    </div>
+                <div class="pw-card">
+                    <div class="pw-message" id="message"></div>
 
-                    <div>
-                        <p class="field-label">Nueva Contraseña</p>
-                        <input type="password" id="new-password" name="new-password" placeholder="Ingresa tu nueva contraseña" required>
-                    </div>
+                    <form id="password-form" novalidate>
+                        <div class="pw-field">
+                            <p class="pw-label">Contraseña actual</p>
+                            <input type="password" id="current-password" name="current-password" placeholder="Ingresa tu contraseña actual" required>
+                        </div>
 
-                    <div>
-                        <p class="field-label">Confirmar Nueva Contraseña</p>
-                        <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirma tu nueva contraseña" required>
-                    </div>
+                        <div class="pw-field">
+                            <p class="pw-label">Nueva contraseña</p>
+                            <input type="password" id="new-password" name="new-password" placeholder="Ingresa tu nueva contraseña" required>
+                        </div>
 
-                    <button type="submit" class="btn btn-primary" style="margin-top: 24px; width: 100%;">Cambiar Contraseña</button>
-                    <a href="<?php echo home_url('/registrar-venta'); ?>" class="btn btn-secondary" style="margin-top: 12px; display: block; text-align: center; text-decoration: none;">Cancelar</a>
-                </form>
+                        <div class="pw-field">
+                            <p class="pw-label">Confirmar nueva contraseña</p>
+                            <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirma tu nueva contraseña" required>
+                        </div>
+
+                        <button type="submit" class="pw-submit">Cambiar contraseña</button>
+                        <a class="pw-cancel" href="<?php echo esc_url($perfil_url); ?>">Cancelar</a>
+                    </form>
+                </div>
+
             </div>
         </div>
 
-        <!-- BOTTOM TABBAR -->
         <?php get_template_part('template-parts/bottom-tabbar'); ?>
     </div>
 </div>
@@ -71,50 +82,6 @@ $current_user = wp_get_current_user();
 window.billetera = {
     ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>'
 };
-
-// User menu toggle
-document.addEventListener('DOMContentLoaded', function() {
-    // Desktop sidebar
-    const desktopUserMenu = document.querySelector('.sidebar .user-menu');
-    const desktopDropdown = document.querySelector('.sidebar .user-menu-dropdown');
-    if (desktopUserMenu && desktopDropdown) {
-        const desktopToggle = desktopUserMenu.querySelector('.user-button');
-        if (desktopToggle) {
-            desktopToggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                desktopDropdown.classList.toggle('active');
-            });
-        }
-    }
-
-    // Mobile topbar
-    const mobileTopbar = document.querySelector('.mobile-topbar');
-    const mobileDropdown = document.querySelector('.mobile-topbar .user-menu-dropdown');
-    if (mobileTopbar && mobileDropdown) {
-        const mobileToggle = mobileTopbar.querySelector('.user-button');
-        if (mobileToggle) {
-            mobileToggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                mobileDropdown.classList.toggle('active');
-            });
-        }
-    }
-
-    // Close menu when clicking outside
-    document.addEventListener('click', (e) => {
-        // Si el click es dentro de .user-menu (desktop), no cerrar
-        if (e.target.closest('.sidebar .user-menu')) {
-            return;
-        }
-        // Si el click es dentro del .mobile-topbar, no cerrar
-        if (e.target.closest('.mobile-topbar')) {
-            return;
-        }
-        // Cerrar todos los menús
-        if (desktopDropdown) desktopDropdown.classList.remove('active');
-        if (mobileDropdown) mobileDropdown.classList.remove('active');
-    });
-});
 </script>
 <script>
 document.getElementById('password-form').addEventListener('submit', function(e) {
@@ -125,15 +92,24 @@ document.getElementById('password-form').addEventListener('submit', function(e) 
     const confirmPassword = document.getElementById('confirm-password').value;
     const messageDiv = document.getElementById('message');
 
-    if (newPassword !== confirmPassword) {
-        messageDiv.innerHTML = '<div class="alert-error">Las contraseñas no coinciden</div>';
+    function showMessage(text, type) {
+        messageDiv.textContent = text;
+        messageDiv.className = 'pw-message ' + (type === 'error' ? 'pw-message--error' : 'pw-message--success');
         messageDiv.style.display = 'block';
+    }
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        showMessage('Completa todos los campos', 'error');
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        showMessage('Las contraseñas no coinciden', 'error');
         return;
     }
 
     if (newPassword.length < 8) {
-        messageDiv.innerHTML = '<div class="alert-error">La contraseña debe tener al menos 8 caracteres</div>';
-        messageDiv.style.display = 'block';
+        showMessage('La contraseña debe tener al menos 8 caracteres', 'error');
         return;
     }
 
@@ -145,15 +121,16 @@ document.getElementById('password-form').addEventListener('submit', function(e) 
     .then(r => r.json())
     .then(res => {
         if (res.success) {
-            messageDiv.innerHTML = '<div class="alert-success">Contraseña cambiada exitosamente. Redirigiendo...</div>';
-            messageDiv.style.display = 'block';
+            showMessage('Contraseña cambiada exitosamente. Redirigiendo...', 'success');
             setTimeout(() => {
-                window.location.href = '<?php echo home_url('/registrar-venta'); ?>';
+                window.location.href = '<?php echo esc_url($perfil_url); ?>';
             }, 2000);
         } else {
-            messageDiv.innerHTML = '<div class="alert-error">' + (res.message || 'Error al cambiar contraseña') + '</div>';
-            messageDiv.style.display = 'block';
+            showMessage((res.data && res.data.message) || 'Error al cambiar contraseña', 'error');
         }
+    })
+    .catch(() => {
+        showMessage('Error de conexión al cambiar contraseña', 'error');
     });
 });
 </script>

@@ -52,7 +52,6 @@ ob_start();
         <div class="app-header__menu-user">
             <div class="app-header__menu-name"><?php echo esc_html($current_user->display_name); ?></div>
             <div class="app-header__menu-role"><?php echo esc_html($rol_label . ($tienda_label ? ' · ' . $tienda_label : '')); ?></div>
-            <span class="app-header__menu-level">Nivel Plata</span>
         </div>
     </div>
 
@@ -70,14 +69,6 @@ ob_start();
         <a class="app-header__menu-item" href="<?php echo esc_url($url_movimientos); ?>">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5M3.05 13A9 9 0 1 0 6 5.3L3 8M12 7v5l4 2"/></svg>
             <span>Historial de comisiones</span>
-        </a>
-
-        <a class="app-header__menu-item" href="#">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-            <span>Notificaciones</span>
-            <?php if ($notif_count > 0): ?>
-            <span class="app-header__menu-badge"><?php echo intval($notif_count); ?></span>
-            <?php endif; ?>
         </a>
 
         <a class="app-header__menu-item" href="<?php echo esc_url($url_cambiar); ?>">
@@ -231,7 +222,7 @@ $user_menu_html = ob_get_clean();
         });
 
         document.addEventListener('click', function (e) {
-            if (!e.target.closest('.app-header__user, .app-sidebar__user, .app-topbar__user')) {
+            if (!e.target.closest('[data-app-user-menu]') && !e.target.closest('[data-app-user-toggle]')) {
                 closeAllMenus();
             }
         });

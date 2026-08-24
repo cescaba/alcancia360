@@ -3,6 +3,7 @@
 const el = {
     pigFill: document.getElementById('alc-pig-fill'),
     pigBtn: document.getElementById('alc-pig-btn'),
+    pigHint: document.getElementById('alc-pig-hint'),
     saldoMes: document.getElementById('saldo-mes'),
     avanceMeta: document.getElementById('avance-meta'),
     barFill: document.getElementById('bar-fill'),
@@ -14,7 +15,7 @@ const el = {
     movsList: document.getElementById('movs-list'),
     deskPigFill: document.getElementById('desk-pig-fill'),
     deskPigBtn: document.getElementById('alc-desk-pig-btn'),
-    deskFillPct: document.getElementById('desk-fill-pct'),
+    deskPigHint: document.getElementById('alc-desk-pig-hint'),
     deskSaldo: document.getElementById('desk-saldo'),
     deskBarFill: document.getElementById('desk-bar-fill'),
     deskFaltan: document.getElementById('desk-faltan'),
@@ -36,15 +37,45 @@ const ID_LABELS = {
 const CAT_COLORS = ['#5B5FA8', '#C98A1E', '#0A6CB4', '#B05C34', '#B04E7C', '#1B6E46', '#7A5C16'];
 const STOP_WORDS = ['de', 'del', 'y', 'la', 'el', 'los', 'las', 'liqui', 'moly'];
 
+const PIG_PHRASES = [
+    function () { return 'Toca la alcancía'; },
+    function (ctx) { return ctx.pct + '% de tu meta mensual'; },
+    function (ctx) { return ctx.rank > 0 ? ('Eres el número ' + ctx.rank + ' del taller') : 'Eres una pieza clave del taller'; },
+    function (ctx) { return ctx.racha > 0 ? ('Llevas ' + ctx.racha + ' días de racha') : '¡Empieza tu racha hoy!'; }
+];
+
+let fillPct = 0;
+let rank = 0;
+let racha = 0;
+let mobileHintIdx = 0;
+let deskHintIdx = 1;
+
+function pigPhrase(idx, ctx) {
+    return PIG_PHRASES[idx % PIG_PHRASES.length](ctx);
+}
+
+function renderPigHints() {
+    const ctx = { pct: fillPct, rank: rank, racha: racha };
+    if (el.pigHint) el.pigHint.textContent = pigPhrase(mobileHintIdx, ctx);
+    if (el.deskPigHint) el.deskPigHint.textContent = pigPhrase(deskHintIdx, ctx);
+}
+
 function init() {
-    attachPigTap(el.pigBtn, '.alc-pig__coin');
-    attachPigTap(el.deskPigBtn, '.alc-desk__pig-coin');
+    attachPigTap(el.pigBtn, '.alc-pig__coin', function () {
+        mobileHintIdx = (mobileHintIdx + 1) % PIG_PHRASES.length;
+        renderPigHints();
+    });
+    attachPigTap(el.deskPigBtn, '.alc-desk__pig-coin', function () {
+        deskHintIdx = (deskHintIdx + 1) % PIG_PHRASES.length;
+        renderPigHints();
+    });
     loadUserData();
 }
 
-function attachPigTap(btn, coinSelector) {
+function attachPigTap(btn, coinSelector, onTap) {
     if (!btn) return;
     btn.addEventListener('click', function () {
+        playCoinSound();
         this.style.animation = 'none';
         void this.offsetWidth;
         this.style.animation = '';
@@ -54,7 +85,32 @@ function attachPigTap(btn, coinSelector) {
             void coin.offsetWidth;
             coin.style.animation = '';
         }
+        if (onTap) onTap();
     });
+}
+
+let _audioCtx = null;
+function playCoinSound() {
+    try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!_audioCtx) _audioCtx = new AC();
+        if (_audioCtx.state === 'suspended') _audioCtx.resume();
+        const ctx = _audioCtx;
+        [740, 1040].forEach(function (freq, i) {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            const t = ctx.currentTime + i * 0.08;
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.exponentialRampToValueAtTime(0.09, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+            osc.connect(gain).connect(ctx.destination);
+            osc.start(t);
+            osc.stop(t + 0.3);
+        });
+    } catch (e) {}
 }
 
 function loadUserData() {
@@ -80,7 +136,8 @@ function updateStats(d) {
     setText(el.acumuladoAno, fmt(d.acumulado_ano || 0));
     setText(el.ventasMes, String(d.ventas_mes || 0));
 
-    const rank = (d.ranking && d.ranking.rank) ? d.ranking.rank : 0;
+    rank = (d.ranking && d.ranking.rank) ? d.ranking.rank : 0;
+    racha = Number(d.racha) || 0;
     const total = (d.ranking && d.ranking.total) ? d.ranking.total : 0;
     setText(el.ranking, rank > 0 ? '#' + rank + ' / ' + total : '—');
 
@@ -89,7 +146,6 @@ function updateStats(d) {
 
     // Desktop
     setText(el.deskSaldo, fmt(balance));
-    setText(el.deskFillPct, Math.round(fill) + '%');
     if (el.deskBarFill) el.deskBarFill.style.width = fill + '%';
     setText(el.deskFaltan, fmt(Math.max(0, meta - balance)));
     setText(el.deskMetaLabel, 'Meta ' + fmt(meta));
@@ -99,6 +155,9 @@ function updateStats(d) {
     const ventasNum = Number(d.ventas_mes) || 0;
     setText(el.deskPromedio, fmt(ventasNum > 0 ? balance / ventasNum : 0));
     if (el.deskPigFill) el.deskPigFill.style.clipPath = clip;
+
+    fillPct = Math.round(fill);
+    renderPigHints();
 }
 
 function renderMovements(movements) {

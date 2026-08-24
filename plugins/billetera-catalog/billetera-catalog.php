@@ -671,6 +671,7 @@ function billetera_ajax_get_balance() {
         LEFT JOIN $categorias_table c ON s.categoria_id = c.id
         LEFT JOIN {$wpdb->users} u ON v.asesor_id = u.ID
         WHERE v.usuario_id = %d
+        AND (v.monto_comision_sol * v.bonus_multiplier) > 0
         ORDER BY v.creado_en DESC
         LIMIT 10
     ", $user_id));
@@ -681,12 +682,15 @@ function billetera_ajax_get_balance() {
         $fill_percent = 100;
     }
 
+    $racha = function_exists('billetera_get_racha') ? billetera_get_racha($user_id) : 0;
+
     wp_send_json_success([
         'balance' => $balance,
         'accumulated' => $accumulated,
         'acumulado_ano' => $acumulado_ano,
         'ventas_mes' => $ventas_mes,
         'ranking' => ['rank' => $rank, 'total' => $rank_total],
+        'racha' => $racha,
         'meta' => $meta,
         'fill_percent' => $fill_percent,
         'movements' => $movements,
@@ -714,6 +718,7 @@ function billetera_ajax_get_all_movements() {
         LEFT JOIN $categorias_table c ON s.categoria_id = c.id
         LEFT JOIN {$wpdb->users} u ON v.asesor_id = u.ID
         WHERE v.usuario_id = %d
+        AND (v.monto_comision_sol * v.bonus_multiplier) > 0
         ORDER BY v.creado_en DESC
     ", $user_id));
 
