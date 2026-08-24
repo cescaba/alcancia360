@@ -85,8 +85,31 @@ function attachPigTap(btn, coinSelector, onTap) {
             void coin.offsetWidth;
             coin.style.animation = '';
         }
+        spawnSparks(this);
         if (onTap) onTap();
     });
+}
+
+function spawnSparks(container) {
+    if (!container) return;
+    const n = 9;
+    const spread = Math.PI * 1.1;
+    for (let i = 0; i < n; i++) {
+        const angle = -Math.PI / 2 + (Math.random() - 0.5) * spread;
+        const dist = 42 + Math.random() * 66;
+        const spark = document.createElement('span');
+        spark.className = 'alc-spark';
+        spark.style.left = '52%';
+        spark.style.top = '26%';
+        spark.style.setProperty('--dx', (Math.cos(angle) * dist).toFixed(0) + 'px');
+        spark.style.setProperty('--dy', (Math.sin(angle) * dist).toFixed(0) + 'px');
+        spark.style.setProperty('--rot', (Math.random() * 540 - 270).toFixed(0) + 'deg');
+        spark.style.animationDelay = (Math.random() * 0.14).toFixed(2) + 's';
+        container.appendChild(spark);
+        setTimeout(function () {
+            if (spark.parentNode) spark.parentNode.removeChild(spark);
+        }, 1400);
+    }
 }
 
 let _audioCtx = null;
