@@ -12,7 +12,8 @@
     var marcaSelect = document.getElementById('desk-marca-select');
     var catSelect = document.getElementById('desk-cat-select');
     var subSelect = document.getElementById('desk-sub-select');
-    var obsInput = document.getElementById('desk-obs');
+    var cantidadWrap = document.getElementById('desk-cantidad-wrap');
+    var cantidadInput = document.getElementById('desk-cantidad-input');
     var previewAmt = document.getElementById('desk-preview-amt');
     var previewHint = document.getElementById('desk-preview-hint');
     var comisionBox = document.getElementById('desk-comision');
@@ -162,18 +163,51 @@
             });
     }
 
+    function getCantidad() {
+        var n = parseInt(cantidadInput && cantidadInput.value, 10);
+        if (isNaN(n) || n < 1) return 1;
+        return n;
+    }
+
     function handleSubChange() {
         var subId = subSelect.value;
         if (!subId) {
+            if (cantidadWrap) cantidadWrap.style.display = 'none';
+            if (cantidadInput) cantidadInput.value = 1;
             resetPreview();
             validate();
             return;
         }
 
+        var sub = subcategoriesData[subId];
+        if (cantidadWrap && sub && Number(sub.por_unidad) === 1) {
+            cantidadWrap.style.display = 'block';
+        } else {
+            cantidadWrap.style.display = 'none';
+        }
+        if (cantidadInput) cantidadInput.value = 1;
+
+        loadComision();
+        validate();
+    }
+
+    function handleCantidadChange() {
+        loadComision();
+        validate();
+    }
+
+    function loadComision() {
+        var subId = subSelect.value;
+        if (!subId) {
+            resetPreview();
+            return;
+        }
+
+        var cantidad = getCantidad();
         fetch(billetera.ajax_url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'action=billetera_get_comision&subcategoria_id=' + subId + '&cantidad=1'
+            body: 'action=billetera_get_comision&subcategoria_id=' + subId + '&cantidad=' + cantidad
         })
             .then(function (r) { return r.json(); })
             .then(function (res) {
@@ -197,12 +231,13 @@
     function handleSubmit() {
         if (submitBtn.disabled) return;
         var subId = subSelect.value;
+        var cantidad = getCantidad();
         var idVal = idInput.value.trim();
 
         fetch(billetera.ajax_url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'action=billetera_register_sale_v2&subcategoria_id=' + subId + '&cantidad=1&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal)
+            body: 'action=billetera_register_sale_v2&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal)
         })
             .then(function (r) { return r.json(); })
             .then(function (data) {
@@ -225,9 +260,10 @@
         subSelect.innerHTML = '<option value="">Primero elige una categoría</option>';
         subSelect.disabled = true;
         subcategoriesData = {};
+        if (cantidadWrap) cantidadWrap.style.display = 'none';
+        if (cantidadInput) cantidadInput.value = 1;
         resetPreview();
         submitBtn.disabled = true;
-        if (obsInput) obsInput.value = '';
     }
 
     function loadUserData() {
@@ -275,6 +311,7 @@
     marcaSelect.addEventListener('change', handleMarcaChange);
     catSelect.addEventListener('change', handleCatChange);
     subSelect.addEventListener('change', handleSubChange);
+    if (cantidadInput) cantidadInput.addEventListener('input', handleCantidadChange);
     submitBtn.addEventListener('click', handleSubmit);
     clearBtn.addEventListener('click', resetForm);
 

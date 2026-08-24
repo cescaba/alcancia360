@@ -39,6 +39,9 @@ require get_template_directory() . '/includes/metaboxes.php';
 // Helpers del header (racha, notificaciones, iniciales)
 require get_template_directory() . '/includes/header-helpers.php';
 
+// Foto de perfil (subida + usermeta)
+require get_template_directory() . '/includes/foto-perfil.php';
+
 // ===== LOGIN PERSONALIZADO BILLETERA 360 =====
 add_action('login_enqueue_scripts', 'billetera_login_enqueue');
 function billetera_login_enqueue() {

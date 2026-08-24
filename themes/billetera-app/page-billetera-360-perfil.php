@@ -35,6 +35,8 @@ if ($tienda_id) {
 $user_login = $current_user->user_login;
 $user_email = $current_user->user_email;
 
+$foto_url = function_exists('billetera_get_foto_url') ? billetera_get_foto_url($user_id) : '';
+
 $fecha_ingreso = get_user_meta($user_id, '_fecha_ingreso', true);
 $ingreso_ts    = $fecha_ingreso ? strtotime($fecha_ingreso) : strtotime($current_user->user_registered);
 $meses_full    = array('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre');
@@ -79,17 +81,19 @@ if (function_exists('billetera_get_template_url')) {
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#0A6CB4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
                     Mi perfil
                 </a>
-                <div class="perfil-id">ID <?php echo esc_html($user_login); ?></div>
             </div>
 
             <div class="perfil-card">
-                <label class="perfil-photo" title="Cambiar foto">
+                <label class="perfil-photo<?php echo $foto_url ? ' perfil-photo--has-foto' : ''; ?>" title="Cambiar foto">
                     <span class="perfil-photo-initials"><?php echo esc_html($iniciales); ?></span>
+                    <?php if ($foto_url): ?>
+                    <img class="perfil-photo-img" src="<?php echo esc_url($foto_url); ?>" alt="Foto de perfil">
+                    <?php endif; ?>
                     <span class="perfil-photo-overlay">
                         <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
                         Foto
                     </span>
-                    <input type="file" accept="image/*">
+                    <input type="file" id="perfil-foto-input" accept="image/*">
                 </label>
                 <div class="perfil-info">
                     <div class="perfil-name"><?php echo esc_html($current_user->display_name); ?></div>
@@ -156,6 +160,55 @@ document.addEventListener('DOMContentLoaded', function () {
             var rank = (d.ranking && d.ranking.rank) ? d.ranking.rank : 0;
             set('perfil-ranking', rank > 0 ? '#' + rank : '—');
         });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var input = document.getElementById('perfil-foto-input');
+    if (!input) return;
+
+    input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+
+        var fd = new FormData();
+        fd.append('action', 'billetera_upload_foto');
+        fd.append('nonce', '<?php echo wp_create_nonce('billetera_foto_nonce'); ?>');
+        fd.append('foto', file);
+
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+                if (res.success) {
+                    var label = document.querySelector('.perfil-photo');
+                    if (!label) return;
+                    var img = label.querySelector('.perfil-photo-img');
+                    if (!img) {
+                        img = document.createElement('img');
+                        img.className = 'perfil-photo-img';
+                        img.alt = 'Foto de perfil';
+                        label.insertBefore(img, label.querySelector('.perfil-photo-overlay'));
+                    }
+                    img.src = res.data.url;
+                    label.classList.add('perfil-photo--has-foto');
+
+                    var avatars = document.querySelectorAll('.app-header__menu-avatar, .app-topbar__avatar-btn, .app-header__avatar-btn');
+                    avatars.forEach(function (av) {
+                        av.innerHTML = '<img class="bh-avatar-img" src="' + res.data.url + '" alt="">';
+                    });
+                } else {
+                    alert(res.data && res.data.message ? res.data.message : 'Error al subir la foto');
+                }
+            })
+            .catch(function () {
+                alert('Error de conexión al subir la foto');
+            });
+    });
 });
 </script>
 

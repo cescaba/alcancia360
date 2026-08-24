@@ -640,6 +640,7 @@ function billetera_ajax_get_balance() {
             'meta_key' => '_tienda_asociada',
             'meta_value' => $tienda_id,
             'fields' => 'ID',
+            'role__not_in' => ['jefe_venta'],
         ]);
         $rank_total = count($asesores);
 

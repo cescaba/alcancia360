@@ -66,7 +66,6 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
 
                 <div class="reg-head">
                     <h1 class="reg-title">Registrar venta</h1>
-                    <span class="reg-step">Paso 1 de 1</span>
                 </div>
 
                 <div class="reg-body">
@@ -152,7 +151,6 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
                         <div class="reg-desk__title">Registrar venta</div>
                         <div class="reg-desk__sub">Identifica el vehículo y elige el producto vendido. La comisión sale del catálogo oficial.</div>
                     </div>
-                    <div class="reg-desk__step">Paso 1 de 1</div>
                 </div>
 
                 <div class="reg-desk__grid">
@@ -196,8 +194,10 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
                             </div>
                         </div>
 
-                        <div class="reg-desk__label reg-desk__label--obs">Observación (opcional)</div>
-                        <input type="text" id="desk-obs" placeholder="Ej. cliente solicitó montaje el mismo día">
+                        <div class="reg-desk__cantidad" id="desk-cantidad-wrap" style="display: none;">
+                            <div class="reg-desk__label">Cantidad</div>
+                            <input type="number" id="desk-cantidad-input" min="1" value="1">
+                        </div>
 
                         <div class="reg-desk__foot">
                             <div class="reg-desk__note">La comisión se acredita al cierre del mes previa validación del jefe de taller.</div>

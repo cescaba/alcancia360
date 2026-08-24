@@ -92,7 +92,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                     <!-- Saldo / Avance -->
                     <div class="alc-stats">
                         <div class="alc-stats__saldo">
-                            <div class="alc-stats__label">Saldo del mes</div>
+                            <div class="alc-stats__label">Mi pocito</div>
                             <div class="alc-stats__value alc-stats__value--blue" id="saldo-mes">S/ 0.00</div>
                         </div>
                         <div class="alc-stats__avance">
@@ -157,13 +157,16 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                     <div class="alc-desk__card">
                         <div class="alc-desk__pig-zone">
                             <div class="alc-desk__pig">
-                                <img class="alc-desk__pig-base" src="<?php echo esc_url($alcancia_img); ?>" alt="Alcancía">
-                                <img class="alc-desk__pig-fill" id="desk-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
+                                <button type="button" class="alc-desk__pig-btn" id="alc-desk-pig-btn" aria-label="Toca la alcancía">
+                                    <span class="alc-desk__pig-coin"></span>
+                                    <img class="alc-desk__pig-base" src="<?php echo esc_url($alcancia_img); ?>" alt="Alcancía">
+                                    <img class="alc-desk__pig-fill" id="desk-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
+                                </button>
                             </div>
                             <div class="alc-desk__pig-pct"><span id="desk-fill-pct">0%</span> de tu meta mensual</div>
                         </div>
                         <div class="alc-desk__card-body">
-                            <div class="alc-desk__saldo-label">Saldo del mes</div>
+                            <div class="alc-desk__saldo-label">Mi pocito</div>
                             <div class="alc-desk__saldo" id="desk-saldo">S/ 0.00</div>
                             <div class="alc-desk__bar"><div class="alc-desk__bar-fill" id="desk-bar-fill"></div></div>
                             <div class="alc-desk__meta">

@@ -11,6 +11,7 @@ $roles         = (array) $current_user->roles;
 $es_jefe       = in_array('jefe_venta', $roles, true);
 
 $iniciales = billetera_get_iniciales($current_user);
+$foto_url  = function_exists('billetera_get_foto_url') ? billetera_get_foto_url($user_id) : '';
 $racha     = billetera_get_racha($user_id);
 
 $rol_label = $es_jefe ? 'Jefe de Venta' : 'Asesor';
@@ -47,7 +48,7 @@ ob_start();
 ?>
 <div class="app-header__menu" data-app-user-menu>
     <div class="app-header__menu-head">
-        <span class="app-header__menu-avatar"><?php echo esc_html($iniciales); ?></span>
+        <span class="app-header__menu-avatar"><?php if ($foto_url): ?><img class="bh-avatar-img" src="<?php echo esc_url($foto_url); ?>" alt=""><?php else: ?><?php echo esc_html($iniciales); ?><?php endif; ?></span>
         <div class="app-header__menu-user">
             <div class="app-header__menu-name"><?php echo esc_html($current_user->display_name); ?></div>
             <div class="app-header__menu-role"><?php echo esc_html($rol_label . ($tienda_label ? ' · ' . $tienda_label : '')); ?></div>
@@ -123,7 +124,7 @@ $user_menu_html = ob_get_clean();
                     <div class="app-topbar__user-role"><?php echo esc_html($rol_label . ($tienda_label ? ' · ' . $tienda_label : '')); ?></div>
                 </div>
                 <button class="app-topbar__avatar-btn" type="button" aria-label="Menú de usuario" data-app-user-toggle>
-                    <span class="app-topbar__avatar"><?php echo esc_html($iniciales); ?></span>
+                    <?php if ($foto_url): ?><img class="bh-avatar-img" src="<?php echo esc_url($foto_url); ?>" alt=""><?php else: ?><span class="app-topbar__avatar"><?php echo esc_html($iniciales); ?></span><?php endif; ?>
                 </button>
                 <div class="app-topbar__backdrop" data-app-user-backdrop></div>
                 <?php echo $user_menu_html; ?>
@@ -159,7 +160,7 @@ $user_menu_html = ob_get_clean();
             <!-- Usuario -->
             <div class="app-header__user">
                 <button class="app-header__avatar-btn" type="button" aria-label="Menú de usuario" data-app-user-toggle>
-                    <span class="app-header__avatar-initials"><?php echo esc_html($iniciales); ?></span>
+                    <?php if ($foto_url): ?><img class="bh-avatar-img" src="<?php echo esc_url($foto_url); ?>" alt=""><?php else: ?><span class="app-header__avatar-initials"><?php echo esc_html($iniciales); ?></span><?php endif; ?>
                 </button>
 
                 <div class="app-header__backdrop" data-app-user-backdrop></div>

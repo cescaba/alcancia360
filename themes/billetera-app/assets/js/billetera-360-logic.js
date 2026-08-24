@@ -211,7 +211,7 @@ function loadComision() {
         return;
     }
 
-    const cantidad = parseInt(cantidadInput.value) || 1;
+    const cantidad = Math.max(1, parseInt(cantidadInput.value) || 1);
     fetch(billetera.ajax_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -248,7 +248,7 @@ function handleSubmit() {
     if (!submitBtn.classList.contains('is-ready')) return;
 
     const subId = subSelect.value;
-    const cantidad = parseInt(cantidadInput.value) || 1;
+    const cantidad = Math.max(1, parseInt(cantidadInput.value) || 1);
     const idType = state.idType;
     const idVal = idInput.value.trim();
 

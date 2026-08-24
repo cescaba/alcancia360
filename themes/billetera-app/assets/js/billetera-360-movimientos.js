@@ -13,6 +13,7 @@ const el = {
     ranking: document.getElementById('ranking'),
     movsList: document.getElementById('movs-list'),
     deskPigFill: document.getElementById('desk-pig-fill'),
+    deskPigBtn: document.getElementById('alc-desk-pig-btn'),
     deskFillPct: document.getElementById('desk-fill-pct'),
     deskSaldo: document.getElementById('desk-saldo'),
     deskBarFill: document.getElementById('desk-bar-fill'),
@@ -36,20 +37,24 @@ const CAT_COLORS = ['#5B5FA8', '#C98A1E', '#0A6CB4', '#B05C34', '#B04E7C', '#1B6
 const STOP_WORDS = ['de', 'del', 'y', 'la', 'el', 'los', 'las', 'liqui', 'moly'];
 
 function init() {
-    if (el.pigBtn) {
-        el.pigBtn.addEventListener('click', function () {
-            this.style.animation = 'none';
-            void this.offsetWidth;
-            this.style.animation = '';
-            const coin = this.querySelector('.alc-pig__coin');
-            if (coin) {
-                coin.style.animation = 'none';
-                void coin.offsetWidth;
-                coin.style.animation = '';
-            }
-        });
-    }
+    attachPigTap(el.pigBtn, '.alc-pig__coin');
+    attachPigTap(el.deskPigBtn, '.alc-desk__pig-coin');
     loadUserData();
+}
+
+function attachPigTap(btn, coinSelector) {
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        this.style.animation = 'none';
+        void this.offsetWidth;
+        this.style.animation = '';
+        const coin = this.querySelector(coinSelector);
+        if (coin) {
+            coin.style.animation = 'none';
+            void coin.offsetWidth;
+            coin.style.animation = '';
+        }
+    });
 }
 
 function loadUserData() {

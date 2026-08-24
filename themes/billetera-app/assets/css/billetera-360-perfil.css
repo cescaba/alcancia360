@@ -36,14 +36,6 @@
     text-decoration: none;
 }
 
-.perfil-id {
-    font-size: 11px;
-    font-weight: 600;
-    color: #5b6b80;
-    border: 1px solid #dce3eb;
-    padding: 4px 9px;
-}
-
 /* ---------- Cuerpo ---------- */
 .perfil-card,
 .perfil-stats,
@@ -84,6 +76,19 @@
     font-size: 28px;
     font-weight: 700;
     color: #0a6cb4;
+}
+
+.perfil-photo--has-foto .perfil-photo-initials {
+    display: none;
+}
+
+.perfil-photo-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
 }
 
 .perfil-photo-overlay {

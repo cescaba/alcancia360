@@ -29,16 +29,6 @@
     margin: 0;
 }
 
-.reg-step {
-    font-family: Barlow, sans-serif;
-    font-size: 11px;
-    font-weight: 600;
-    color: #5b6b80;
-    border: 1px solid #dce3eb;
-    padding: 4px 9px;
-    border-radius: 2px;
-}
-
 .reg-body {
     padding: 14px 18px 0;
 }
@@ -499,15 +489,6 @@
         margin-top: 5px;
     }
 
-    .reg-desk__step {
-        font-size: 12px;
-        font-weight: 600;
-        color: #5b6b80;
-        border: 1px solid #dce3eb;
-        background: #fff;
-        padding: 8px 12px;
-    }
-
     /* Grid */
     .reg-desk__grid {
         display: grid;
@@ -530,11 +511,6 @@
         letter-spacing: 0.14em;
         margin-bottom: 8px;
         margin-top: 8px;
-    }
-
-    .reg-desk__label--obs {
-        margin-top: 18px;
-        margin-bottom: 7px;
     }
 
     .reg-desk__seg {
@@ -595,6 +571,23 @@
 
     .reg-desk__form > select {
         margin-bottom: 18px;
+    }
+
+    .reg-desk__cantidad {
+        margin-bottom: 18px;
+    }
+
+    .reg-desk__cantidad input[type="number"] {
+        width: 100%;
+        box-sizing: border-box;
+        background: #fff;
+        border: 1px solid #c9d4e0;
+        border-radius: 2px;
+        padding: 13px 14px;
+        font-family: Barlow, sans-serif;
+        font-size: 14px;
+        color: #0e2438;
+        outline: none;
     }
 
     .reg-desk__row input[type="text"] {
