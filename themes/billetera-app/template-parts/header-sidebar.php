@@ -35,7 +35,7 @@ $current_user = wp_get_current_user();
         </div>
         <div class="logo-text">
             <p class="brand-name">Gildemeister</p>
-            <p class="brand-sub">Billetera 360</p>
+            <p class="brand-sub">Mi alcancia 360</p>
         </div>
     </div>
 

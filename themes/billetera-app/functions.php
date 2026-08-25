@@ -42,7 +42,7 @@ require get_template_directory() . '/includes/header-helpers.php';
 // Foto de perfil (subida + usermeta)
 require get_template_directory() . '/includes/foto-perfil.php';
 
-// ===== LOGIN PERSONALIZADO BILLETERA 360 =====
+// ===== LOGIN PERSONALIZADO MI ALCANCIA 360 =====
 add_action('login_enqueue_scripts', 'billetera_login_enqueue');
 function billetera_login_enqueue() {
     wp_enqueue_style('billetera-fonts', get_template_directory_uri() . '/assets/css/billetera-360-fonts.css', array(), '1.0');
@@ -83,14 +83,14 @@ function billetera_login_js_reorganize() {
             '<div class="login-brand">' +
                 '<img class="login-brand-mark" src="<?php echo esc_url($logo_url); ?>" alt="Gildemeister">' +
                 '<span class="login-brand-text">' +
-                    '<img class="login-brand-wordmark" src="<?php echo esc_url($wordmark_url); ?>" alt="Billetera 360">' +
-                    '<span class="login-brand-sub">Billetera 360 &middot; Postventa</span>' +
+                    '<img class="login-brand-wordmark" src="<?php echo esc_url($wordmark_url); ?>" alt="Mi alcancia 360">' +
+                    '<span class="login-brand-sub">Mi alcancia 360 &middot; Postventa</span>' +
                 '</span>' +
             '</div>' +
             '<div class="login-hero-main">' +
-                '<div class="login-pig"><img src="<?php echo esc_url($alcancia_url); ?>" alt="Alcancía Billetera 360"></div>' +
+                '<div class="login-pig"><img src="<?php echo esc_url($alcancia_url); ?>" alt="Mi alcancia 360"></div>' +
                 '<div class="login-hero-copy">' +
-                    '<div class="login-hero-title">Billetera 360</div>' +
+                    '<div class="login-hero-title">Mi alcancia 360</div>' +
                     '<div class="login-hero-sub">Registro de ventas y comisiones</div>' +
                     '<div class="login-hero-desk-title">Tu comisión,<br>a la vista</div>' +
                     '<div class="login-hero-desk-sub">Registra la venta apenas la cierras y mira crecer tu alcancía. El monto sale del catálogo oficial, sin cálculos manuales.</div>' +
@@ -204,7 +204,7 @@ function billetera_translate_login_text($translated, $original, $domain) {
     return $translated;
 }
 
-// Redirigir al login a la página de Billetera 360
+// Redirigir al login a la página de Mi alcancia 360
 add_action('wp_login', 'billetera_redirect_after_login', 10, 2);
 function billetera_redirect_after_login($_, $user) {
     $user_roles = (array) $user->roles;

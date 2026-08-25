@@ -1,6 +1,6 @@
 <?php
 /**
- * Helpers para el header de la app (Billetera 360)
+ * Helpers para el header de la app (Mi alcancia 360)
  * - Iniciales del avatar
  * - Racha de ventas
  * - Notificaciones

@@ -1,7 +1,7 @@
 <?php
 /**
- * Template Name: Billetera 360 Responsive
- * Description: Billetera 360 con diseño responsive (Desktop + Móvil)
+ * Template Name: Mi alcancia 360 Responsive
+ * Description: Mi alcancia 360 con diseño responsive (Desktop + Móvil)
  */
 
 if (!is_user_logged_in()) {
@@ -15,7 +15,7 @@ if (!array_intersect($allowed_roles, $current_user->roles)) {
     wp_die('Acceso restringido. Solo administradores, asesores y jefes de venta pueden acceder.');
 }
 
-// Detectar URL de página con template Billetera 360 Movimientos
+// Detectar URL de página con template Mi alcancia 360 Movimientos
 function get_page_by_template($template_name) {
     global $wpdb;
     $page = $wpdb->get_row($wpdb->prepare(
@@ -43,7 +43,7 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Billetera 360</title>
+    <title>Mi alcancia 360</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -77,7 +77,7 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
                             <img class="alcancia__pig-fill" id="alcancia-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
                         </div>
                         <div class="alcancia__info">
-                            <div class="alcancia__label">En tu alcancía</div>
+                            <div class="alcancia__label">Mi pocito</div>
                             <div class="alcancia__balance" id="alcancia-balance">S/ 0.00</div>
                             <div class="alcancia__bar"><div class="alcancia__bar-fill" id="alcancia-bar-fill"></div></div>
                             <div class="alcancia__missing">Te faltan <b id="alcancia-missing">S/ 0.00</b></div>
@@ -245,10 +245,11 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
 <!-- OVERLAY DE CELEBRACIÓN -->
 <div class="overlay" id="overlay">
     <div class="celebrate">
-        <div class="celebrate__rings">
-            <span></span><span></span>
-        </div>
         <div class="celebrate__pig">
+            <div class="celebrate__rings">
+                <span></span><span></span>
+            </div>
+            <div class="burst-zone" id="burst-zone"></div>
             <img class="celebrate__pig-base" src="<?php echo esc_url($alcancia_img); ?>" alt="Alcancía">
             <img class="celebrate__pig-fill" id="celebrate-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
         </div>

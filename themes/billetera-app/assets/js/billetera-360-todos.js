@@ -1,4 +1,4 @@
-// Billetera 360 - Historial de movimientos (agrupado por mes)
+// Mi alcancia 360 - Historial de movimientos (agrupado por mes)
 
 const MONTHS_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];

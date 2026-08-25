@@ -1,4 +1,4 @@
-// Billetera 360 - "Mi alcancía" (movimientos)
+// Mi alcancia 360 - "Mi alcancía" (movimientos)
 
 const el = {
     pigFill: document.getElementById('alc-pig-fill'),

@@ -1,7 +1,7 @@
 <?php
 /**
- * Template Name: Billetera 360 Movimientos
- * Description: Billetera 360 - Pantalla "Mi alcancía"
+ * Template Name: Mi alcancia 360 Movimientos
+ * Description: Mi alcancia 360 - Pantalla "Mi alcancía"
  */
 
 if (!is_user_logged_in()) {
@@ -125,7 +125,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                         <?php if ($show_ranking): ?>
                         <div class="alc-grid__item">
                             <div class="alc-grid__value alc-grid__value--gold" id="ranking">#0 / 0</div>
-                            <div class="alc-grid__label">Ranking taller</div>
+                            <div class="alc-grid__label">Ranking</div>
                         </div>
                         <?php endif; ?>
                     </div>
@@ -189,7 +189,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                             <?php if ($show_ranking): ?>
                             <div class="alc-desk__stat">
                                 <div class="alc-desk__stat-val alc-desk__stat-val--gold" id="desk-ranking">#0 / 0</div>
-                                <div class="alc-desk__stat-label">Ranking taller</div>
+                                <div class="alc-desk__stat-label">Ranking</div>
                             </div>
                             <?php endif; ?>
                             <div class="alc-desk__stat">

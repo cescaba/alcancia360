@@ -1,7 +1,7 @@
 <?php
 /**
- * Template Name: Billetera 360 Perfil
- * Description: Billetera 360 - Pantalla "Mi perfil"
+ * Template Name: Mi alcancia 360 Perfil
+ * Description: Mi alcancia 360 - Pantalla "Mi perfil"
  */
 
 if (!is_user_logged_in()) {
@@ -113,7 +113,7 @@ if (function_exists('billetera_get_template_url')) {
                 <?php if ($show_ranking): ?>
                 <div class="perfil-stat">
                     <div class="perfil-stat-val perfil-stat-val--blue" id="perfil-ranking">#0</div>
-                    <div class="perfil-stat-label">Ranking dealer</div>
+                    <div class="perfil-stat-label">Ranking</div>
                 </div>
                 <?php endif; ?>
             </div>

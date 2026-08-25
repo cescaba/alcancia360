@@ -1,6 +1,6 @@
 <?php
 /**
- * Header de Billetera 360
+ * Header de Mi alcancia 360
  * - Móvil / tablet: topbar superior + tabbar inferior
  * - Desktop: sidebar izquierdo
  */
@@ -86,7 +86,7 @@ ob_start();
         </a>
     </div>
 
-    <div class="app-header__menu-foot">Billetera 360</div>
+    <div class="app-header__menu-foot">Mi alcancia 360</div>
 </div>
 <?php
 $user_menu_html = ob_get_clean();
@@ -98,8 +98,8 @@ $user_menu_html = ob_get_clean();
         <a class="app-topbar__brand" href="<?php echo esc_url($home_url); ?>">
             <img class="app-topbar__logo" src="<?php echo esc_url(get_template_directory_uri() . '/assets/img/logo.png'); ?>" alt="Gildemeister">
             <span class="app-topbar__brand-text">
-                <img class="app-topbar__wordmark" src="<?php echo esc_url(get_template_directory_uri() . '/assets/img/header-gildemeister.png'); ?>" alt="Billetera 360">
-                <span class="app-topbar__brand-sub">Billetera 360 · Postventa</span>
+                <img class="app-topbar__wordmark" src="<?php echo esc_url(get_template_directory_uri() . '/assets/img/header-gildemeister.png'); ?>" alt="Mi alcancia 360">
+                <span class="app-topbar__brand-sub">Mi alcancia 360 · Postventa</span>
             </span>
         </a>
 
@@ -132,8 +132,8 @@ $user_menu_html = ob_get_clean();
         <a class="app-header__brand" href="<?php echo esc_url($home_url); ?>">
             <img class="app-header__logo" src="<?php echo esc_url(get_template_directory_uri() . '/assets/img/logo.png'); ?>" alt="Gildemeister">
             <span class="app-header__brand-text">
-                <img class="app-header__wordmark" src="<?php echo esc_url(get_template_directory_uri() . '/assets/img/header-gildemeister.png'); ?>" alt="Billetera 360">
-                <span class="app-header__brand-sub">Billetera 360 · Postventa</span>
+                <img class="app-header__wordmark" src="<?php echo esc_url(get_template_directory_uri() . '/assets/img/header-gildemeister.png'); ?>" alt="Mi alcancia 360">
+                <span class="app-header__brand-sub">Mi alcancia 360 · Postventa</span>
             </span>
         </a>
 
@@ -186,7 +186,7 @@ $user_menu_html = ob_get_clean();
         </a>
     </nav>
 
-    <div class="app-sidebar__foot">Billetera 360 · v1.4</div>
+    <div class="app-sidebar__foot">Mi alcancia 360</div>
 </aside>
 
 <script>

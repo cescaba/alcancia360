@@ -9,7 +9,7 @@ $current_user = wp_get_current_user();
             <img src="<?php echo get_template_directory_uri(); ?>/assets/img/logo-gildemeister.png" alt="Gildemeister">
         </div>
         <div class="mobile-brand-text">
-            <div class="mobile-brand-name">Billetera 360</div>
+            <div class="mobile-brand-name">Mi alcancia 360</div>
         </div>
     </div>
     <button class="user-button" id="user-toggle">

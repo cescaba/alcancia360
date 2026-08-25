@@ -1,5 +1,5 @@
 -- ============================================================================
--- MIGRACIÓN DE COMISIONES - BILLETERA 360
+-- MIGRACIÓN DE COMISIONES - MI ALCANCIA 360
 -- ============================================================================
 -- Fecha: 2026-08-09
 -- Base de datos: WordPress Billetera

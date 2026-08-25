@@ -1,4 +1,4 @@
-// Billetera 360 - Lógica del formulario "Registrar venta"
+// Mi alcancia 360 - Lógica del formulario "Registrar venta"
 
 const ID_PLACEHOLDERS = {
     placa: "ABC-123",
@@ -49,6 +49,7 @@ const alcanciaBarFill = document.getElementById('alcancia-bar-fill');
 const alcanciaMissing = document.getElementById('alcancia-missing');
 const alcanciaPigFill = document.getElementById('alcancia-pig-fill');
 const celebratePigFill = document.getElementById('celebrate-pig-fill');
+const burstZone = document.getElementById('burst-zone');
 
 function init() {
     idInput.placeholder = ID_PLACEHOLDERS[state.idType];
@@ -265,21 +266,39 @@ function handleSubmit() {
                 gainAmount.textContent = '+S/ ' + amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 overlay.classList.add('show');
 
+                spawnCoins(burstZone);
+
                 resetForm();
 
                 setTimeout(() => {
                     loadUserData();
                 }, 1500);
-
-                setTimeout(() => {
-                    closeOverlay();
-                }, 4000);
             }
         });
 }
 
 function closeOverlay() {
     overlay.classList.remove('show');
+}
+
+function spawnCoins(zone) {
+    if (!zone) return;
+    for (let i = 0; i < 18; i++) {
+        const coin = document.createElement('div');
+        coin.className = 'coin';
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 55 + Math.random() * 85;
+        const dx = Math.cos(angle) * dist;
+        const dy = Math.sin(angle) * dist;
+        const rot = (Math.random() * 720 - 360).toFixed(0);
+        const delay = Math.random() * 0.15;
+        coin.style.animation = 'celebrateCoinburst .9s cubic-bezier(.15,.7,.3,1) ' + delay + 's forwards';
+        coin.style.setProperty('--dx', dx + 'px');
+        coin.style.setProperty('--dy', dy + 'px');
+        coin.style.setProperty('--rot', rot + 'deg');
+        zone.appendChild(coin);
+        setTimeout(() => coin.remove(), 1300);
+    }
 }
 
 function goToMovimientos() {

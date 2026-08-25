@@ -1,4 +1,4 @@
-// Billetera 360 - Lógica del formulario desktop "Registrar venta"
+// Mi alcancia 360 - Lógica del formulario desktop "Registrar venta"
 
 (function () {
     var ID_PLACEHOLDERS = { placa: 'ABC-123', vin: 'KMHXX00XXXX000000', ot: 'OT-004521', factura: 'F001-000123' };
@@ -26,6 +26,7 @@
     var recentList = document.getElementById('desk-recent');
     var overlay = document.getElementById('overlay');
     var gainAmount = document.getElementById('gain-amount');
+    var burstZone = document.getElementById('burst-zone');
 
     var segButtons = seg.querySelectorAll('button');
     var idType = 'factura';
@@ -245,11 +246,31 @@
                     var amount = data.data.amount || 0;
                     if (gainAmount) gainAmount.textContent = '+S/ ' + amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     if (overlay) overlay.classList.add('show');
+                    spawnCoins(burstZone);
                     resetForm();
                     setTimeout(loadUserData, 1500);
-                    setTimeout(function () { if (overlay) overlay.classList.remove('show'); }, 4000);
                 }
             });
+    }
+
+    function spawnCoins(zone) {
+        if (!zone) return;
+        for (var i = 0; i < 18; i++) {
+            var coin = document.createElement('div');
+            coin.className = 'coin';
+            var angle = Math.random() * Math.PI * 2;
+            var dist = 55 + Math.random() * 85;
+            var dx = Math.cos(angle) * dist;
+            var dy = Math.sin(angle) * dist;
+            var rot = (Math.random() * 720 - 360).toFixed(0);
+            var delay = Math.random() * 0.15;
+            coin.style.animation = 'celebrateCoinburst .9s cubic-bezier(.15,.7,.3,1) ' + delay + 's forwards';
+            coin.style.setProperty('--dx', dx + 'px');
+            coin.style.setProperty('--dy', dy + 'px');
+            coin.style.setProperty('--rot', rot + 'deg');
+            zone.appendChild(coin);
+            setTimeout(function () { coin.remove(); }, 1300);
+        }
     }
 
     function resetForm() {

@@ -1,7 +1,7 @@
 <?php
 /**
- * Template Name: Billetera 360 Movimientos - Todos
- * Description: Billetera 360 - Historial de movimientos (agrupado por mes)
+ * Template Name: Mi alcancia 360 Movimientos - Todos
+ * Description: Mi alcancia 360 - Historial de movimientos (agrupado por mes)
  */
 
 if (!is_user_logged_in()) {
