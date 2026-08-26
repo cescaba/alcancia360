@@ -99,6 +99,12 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
                         <input type="text" id="id-input" placeholder="F001-000123">
                     </div>
 
+                    <!-- Fecha de venta -->
+                    <p class="reg-label">Fecha de venta</p>
+                    <div class="reg-field">
+                        <input type="date" id="fecha-input" value="<?php echo date('Y-m-d'); ?>" style="">
+                    </div>
+
                     <!-- Marca -->
                     <p class="reg-label">Marca</p>
                     <div class="reg-field">
@@ -163,14 +169,14 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
                             <button type="button" data-type="factura" class="is-active">Factura</button>
                         </div>
 
-                        <div class="reg-desk__row">
+                        <div class="reg-desk__row" style="margin-bottom: 18px;">
                             <div>
                                 <div class="reg-desk__label" id="desk-id-label">N° Factura</div>
                                 <input type="text" id="desk-id-input" placeholder="F001-000123">
                             </div>
                             <div>
                                 <div class="reg-desk__label">Fecha de venta</div>
-                                <div class="reg-desk__fecha"><?php echo esc_html($hoy_label); ?></div>
+                                <input type="date" id="desk-fecha-input" value="<?php echo date('Y-m-d'); ?>">
                             </div>
                         </div>
 

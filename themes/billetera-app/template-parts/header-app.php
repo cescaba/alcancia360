@@ -61,10 +61,12 @@ ob_start();
             <span>Mi perfil</span>
         </a>
 
+        <?php if (in_array('asesor', (array) $current_user->roles)): ?>
         <a class="app-header__menu-item" href="<?php echo esc_url($url_registro); ?>">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
             <span>Registrar venta</span>
         </a>
+        <?php endif; ?>
 
         <a class="app-header__menu-item" href="<?php echo esc_url($url_movimientos); ?>">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5M3.05 13A9 9 0 1 0 6 5.3L3 8M12 7v5l4 2"/></svg>
@@ -166,10 +168,12 @@ $user_menu_html = ob_get_clean();
 <aside class="app-sidebar">
     <nav class="app-sidebar__nav">
         <div class="app-sidebar__section">Operación</div>
+        <?php if (in_array('asesor', (array) $current_user->roles)): ?>
         <a class="app-sidebar__link<?php echo $nav_registro_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_registro); ?>">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
             <span>Registrar venta</span>
         </a>
+        <?php endif; ?>
         <a class="app-sidebar__link<?php echo $nav_alcancia_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_movimientos); ?>">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9c0-8 14-8 14 0"></path><rect x="2" y="9" width="20" height="11" rx="1"></rect><path d="M16 14h2"></path></svg>
             <span>Mi alcancía</span>

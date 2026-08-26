@@ -33,6 +33,7 @@ let subcategoriesData = {};
 const idSegButtons = document.querySelectorAll('#id-seg button');
 const idLabel = document.getElementById('id-label');
 const idInput = document.getElementById('id-input');
+const fechaInput = document.getElementById('fecha-input');
 const marcaSelect = document.getElementById('marca-select');
 const catSelect = document.getElementById('cat-select');
 const subSelect = document.getElementById('sub-select');
@@ -252,11 +253,12 @@ function handleSubmit() {
     const cantidad = Math.max(1, parseInt(cantidadInput.value) || 1);
     const idType = state.idType;
     const idVal = idInput.value.trim();
+    const fecha = fechaInput ? fechaInput.value : new Date().toISOString().split('T')[0];
 
     fetch(billetera.ajax_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=billetera_register_sale_v2&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal)
+        body: 'action=billetera_register_sale_v2&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha
     })
         .then(r => r.json())
         .then(data => {

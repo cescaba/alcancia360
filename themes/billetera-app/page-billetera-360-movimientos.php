@@ -125,7 +125,11 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                         <?php if ($show_ranking): ?>
                         <div class="alc-grid__item">
                             <div class="alc-grid__value alc-grid__value--gold" id="ranking">#0 / 0</div>
-                            <div class="alc-grid__label">Ranking</div>
+                            <div class="alc-grid__label">Ranking en mi tienda</div>
+                        </div>
+                        <div class="alc-grid__item alc-grid__item--alt">
+                            <div class="alc-grid__value alc-grid__value--gold" id="ranking-global">#0 / 0</div>
+                            <div class="alc-grid__label">Ranking global</div>
                         </div>
                         <?php endif; ?>
                     </div>
@@ -189,13 +193,13 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                             <?php if ($show_ranking): ?>
                             <div class="alc-desk__stat">
                                 <div class="alc-desk__stat-val alc-desk__stat-val--gold" id="desk-ranking">#0 / 0</div>
-                                <div class="alc-desk__stat-label">Ranking</div>
+                                <div class="alc-desk__stat-label">Ranking en mi tienda</div>
+                            </div>
+                            <div class="alc-desk__stat">
+                                <div class="alc-desk__stat-val alc-desk__stat-val--gold" id="desk-ranking-global">#0 / 0</div>
+                                <div class="alc-desk__stat-label">Ranking global</div>
                             </div>
                             <?php endif; ?>
-                            <div class="alc-desk__stat">
-                                <div class="alc-desk__stat-val" id="desk-promedio">S/ 0.00</div>
-                                <div class="alc-desk__stat-label">Comisión promedio</div>
-                            </div>
                         </div>
 
                         <div class="alc-desk__movs">

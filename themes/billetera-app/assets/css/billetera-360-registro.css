@@ -163,6 +163,7 @@
 
 .reg-field input[type="text"],
 .reg-field input[type="number"],
+.reg-field input[type="date"],
 .reg-field select {
     width: 100%;
     box-sizing: border-box;
@@ -183,6 +184,7 @@
     letter-spacing: 0.04em;
 }
 
+
 .reg-field select {
     appearance: none;
     -webkit-appearance: none;
@@ -195,6 +197,14 @@
 
 .reg-field input:focus,
 .reg-field select:focus {
+    border-color: #0a6cb4;
+    box-shadow: 0 0 0 2px rgba(10, 108, 180, 0.15);
+}
+
+.reg-desk__row input:focus,
+.reg-desk__row select:focus,
+.reg-desk__form > input:focus,
+.reg-desk__form > select:focus {
     border-color: #0a6cb4;
     box-shadow: 0 0 0 2px rgba(10, 108, 180, 0.15);
 }
@@ -583,8 +593,10 @@
     }
 
     .reg-desk__row input[type="text"],
+    .reg-desk__row input[type="date"],
     .reg-desk__row select,
     .reg-desk__form > input[type="text"],
+    .reg-desk__form > input[type="date"],
     .reg-desk__form > select {
         width: 100%;
         box-sizing: border-box;
@@ -620,10 +632,10 @@
     }
 
     .reg-desk__row input[type="text"] {
-        font-family: ui-monospace, monospace;
         font-size: 14.5px;
         letter-spacing: 0.04em;
     }
+
 
     .reg-desk__row select:disabled {
         background: #f2f5f9;
@@ -848,6 +860,9 @@
         font-size: 16px;
         font-weight: 700;
         color: #1b6e46;
+        white-space: nowrap;
+        flex-shrink: 0;
+        margin-left: 12px;
     }
 
     .reg-desk__recent-empty {

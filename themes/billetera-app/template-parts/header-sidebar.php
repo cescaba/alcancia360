@@ -40,7 +40,7 @@ $current_user = wp_get_current_user();
     </div>
 
     <div class="nav-buttons">
-        <?php if (!in_array('jefe_venta', (array) $current_user->roles)): ?>
+        <?php if (in_array('asesor', (array) $current_user->roles)): ?>
         <a href="<?php echo esc_url($registro_url); ?>" class="nav-button" id="nav-registro">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
             Registrar venta

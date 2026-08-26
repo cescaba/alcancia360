@@ -12,6 +12,7 @@ const el = {
     acumuladoAno: document.getElementById('acumulado-ano'),
     ventasMes: document.getElementById('ventas-mes'),
     ranking: document.getElementById('ranking'),
+    rankingGlobal: document.getElementById('ranking-global'),
     movsList: document.getElementById('movs-list'),
     deskPigFill: document.getElementById('desk-pig-fill'),
     deskPigBtn: document.getElementById('alc-desk-pig-btn'),
@@ -23,7 +24,7 @@ const el = {
     deskAcumuladoAno: document.getElementById('desk-acumulado-ano'),
     deskVentasMes: document.getElementById('desk-ventas-mes'),
     deskRanking: document.getElementById('desk-ranking'),
-    deskPromedio: document.getElementById('desk-promedio'),
+    deskRankingGlobal: document.getElementById('desk-ranking-global'),
     deskMovsList: document.getElementById('desk-movs-list')
 };
 
@@ -162,7 +163,10 @@ function updateStats(d) {
     rank = (d.ranking && d.ranking.rank) ? d.ranking.rank : 0;
     racha = Number(d.racha) || 0;
     const total = (d.ranking && d.ranking.total) ? d.ranking.total : 0;
+    const rankGlobal = (d.ranking_global && d.ranking_global.rank) ? d.ranking_global.rank : 0;
+    const totalGlobal = (d.ranking_global && d.ranking_global.total) ? d.ranking_global.total : 0;
     setText(el.ranking, rank > 0 ? '#' + rank + ' / ' + total : '—');
+    setText(el.rankingGlobal, rankGlobal > 0 ? '#' + rankGlobal + ' / ' + totalGlobal : '—');
 
     const clip = 'inset(' + (100 - fill) + '% 0 0 0)';
     if (el.pigFill) el.pigFill.style.clipPath = clip;
@@ -175,8 +179,7 @@ function updateStats(d) {
     setText(el.deskAcumuladoAno, fmt(d.acumulado_ano || 0));
     setText(el.deskVentasMes, String(d.ventas_mes || 0));
     setText(el.deskRanking, rank > 0 ? '#' + rank + ' / ' + total : '—');
-    const ventasNum = Number(d.ventas_mes) || 0;
-    setText(el.deskPromedio, fmt(ventasNum > 0 ? balance / ventasNum : 0));
+    setText(el.deskRankingGlobal, rankGlobal > 0 ? '#' + rankGlobal + ' / ' + totalGlobal : '—');
     if (el.deskPigFill) el.deskPigFill.style.clipPath = clip;
 
     fillPct = Math.round(fill);

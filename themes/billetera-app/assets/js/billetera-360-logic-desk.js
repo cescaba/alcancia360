@@ -9,6 +9,7 @@
 
     var idLabel = document.getElementById('desk-id-label');
     var idInput = document.getElementById('desk-id-input');
+    var fechaInput = document.getElementById('desk-fecha-input');
     var marcaSelect = document.getElementById('desk-marca-select');
     var catSelect = document.getElementById('desk-cat-select');
     var subSelect = document.getElementById('desk-sub-select');
@@ -234,11 +235,12 @@
         var subId = subSelect.value;
         var cantidad = getCantidad();
         var idVal = idInput.value.trim();
+        var fecha = fechaInput ? fechaInput.value : new Date().toISOString().split('T')[0];
 
         fetch(billetera.ajax_url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'action=billetera_register_sale_v2&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal)
+            body: 'action=billetera_register_sale_v2&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha
         })
             .then(function (r) { return r.json(); })
             .then(function (data) {

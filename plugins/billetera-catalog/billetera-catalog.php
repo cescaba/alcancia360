@@ -302,10 +302,24 @@ function billetera_ajax_register_sale_v2() {
     $cantidad = intval($_POST['cantidad'] ?? 1);
     $id_type = sanitize_text_field($_POST['id_type'] ?? '');
     $id_value = sanitize_text_field($_POST['id_value'] ?? '');
+    $fecha = sanitize_text_field($_POST['fecha'] ?? date('Y-m-d'));
 
     if (!$subcategoria_id || $cantidad < 1 || !$id_type || !$id_value) {
         wp_send_json_error(['message' => 'Datos incompletos']);
     }
+
+    // Validar que la fecha sea válida y no sea futura
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+        wp_send_json_error(['message' => 'Formato de fecha inválido']);
+    }
+    $fecha_timestamp = strtotime($fecha);
+    if ($fecha_timestamp > strtotime(date('Y-m-d'))) {
+        wp_send_json_error(['message' => 'No puedes registrar ventas futuras']);
+    }
+    if ($fecha_timestamp === false) {
+        wp_send_json_error(['message' => 'Fecha inválida']);
+    }
+    $fecha_datetime = date('Y-m-d H:i:s', $fecha_timestamp);
 
     // Obtener rol del usuario
     $user_role = $current_user->roles[0];
@@ -385,11 +399,12 @@ function billetera_ajax_register_sale_v2() {
         'id_type' => $id_type,
         'id_value' => $id_value,
         'bonus_multiplier' => $bonus_multiplier,
-    ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f']);
+        'creado_en' => $fecha_datetime,
+    ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f', '%s']);
 
     if ($result) {
         // Registrar la comisión del jefe de venta de la sucursal (sin bonus 2x)
-        billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $user_id);
+        billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $user_id, $fecha_datetime);
 
         $monto_mostrado = $monto_total_sol * $bonus_multiplier;
         wp_send_json_success([
@@ -466,7 +481,10 @@ function billetera_convert_to_sol($comision) {
     return $monto_sol;
 }
 
-function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $registrante_id = 0) {
+function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $registrante_id = 0, $fecha_datetime = null) {
+    if (!$fecha_datetime) {
+        $fecha_datetime = date('Y-m-d H:i:s');
+    }
     if (!$tienda_id) {
         return;
     }
@@ -505,7 +523,8 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
             'id_type' => $id_type,
             'id_value' => $id_value,
             'bonus_multiplier' => 1.0,
-        ], ['%d', '%d', '%d', '%d', '%f', '%s', '%s', '%f']);
+            'creado_en' => $fecha_datetime,
+        ], ['%d', '%d', '%d', '%d', '%f', '%s', '%s', '%f', '%s']);
     }
 }
 
@@ -661,6 +680,32 @@ function billetera_ajax_get_balance() {
         }
     }
 
+    // Ranking global (todos los asesores del sistema)
+    $rank_global = 0;
+    $rank_total_global = 0;
+    $todos_asesores = get_users([
+        'role__in' => ['asesor', 'jefe_venta'],
+        'fields' => 'ID',
+        'number' => -1,
+    ]);
+    $rank_total_global = count($todos_asesores);
+
+    if ($rank_total_global > 0) {
+        $balances_global = [];
+        foreach ($todos_asesores as $aid) {
+            $balances_global[$aid] = floatval($wpdb->get_var($wpdb->prepare(
+                "SELECT SUM(monto_comision_sol * bonus_multiplier) FROM $ventas_table WHERE usuario_id = %d AND creado_en >= %s",
+                $aid,
+                $current_month
+            )) ?? 0);
+        }
+        arsort($balances_global, SORT_NUMERIC);
+        $pos_global = array_search($user_id, array_keys($balances_global), true);
+        if ($pos_global !== false) {
+            $rank_global = $pos_global + 1;
+        }
+    }
+
     // Últimos movimientos
     $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
@@ -690,6 +735,7 @@ function billetera_ajax_get_balance() {
         'acumulado_ano' => $acumulado_ano,
         'ventas_mes' => $ventas_mes,
         'ranking' => ['rank' => $rank, 'total' => $rank_total],
+        'ranking_global' => ['rank' => $rank_global, 'total' => $rank_total_global],
         'racha' => $racha,
         'meta' => $meta,
         'fill_percent' => $fill_percent,

@@ -113,7 +113,11 @@ if (function_exists('billetera_get_template_url')) {
                 <?php if ($show_ranking): ?>
                 <div class="perfil-stat">
                     <div class="perfil-stat-val perfil-stat-val--blue" id="perfil-ranking">#0</div>
-                    <div class="perfil-stat-label">Ranking</div>
+                    <div class="perfil-stat-label">Ranking en mi tienda</div>
+                </div>
+                <div class="perfil-stat">
+                    <div class="perfil-stat-val perfil-stat-val--blue" id="perfil-ranking-global">#0</div>
+                    <div class="perfil-stat-label">Ranking global</div>
                 </div>
                 <?php endif; ?>
             </div>
@@ -158,7 +162,11 @@ document.addEventListener('DOMContentLoaded', function () {
             set('perfil-ventas', String(d.ventas_mes || 0));
             set('perfil-acumulado', 'S/' + Math.round(d.acumulado_ano || 0).toLocaleString('es-PE'));
             var rank = (d.ranking && d.ranking.rank) ? d.ranking.rank : 0;
-            set('perfil-ranking', rank > 0 ? '#' + rank : '—');
+            var total = (d.ranking && d.ranking.total) ? d.ranking.total : 0;
+            var rankGlobal = (d.ranking_global && d.ranking_global.rank) ? d.ranking_global.rank : 0;
+            var totalGlobal = (d.ranking_global && d.ranking_global.total) ? d.ranking_global.total : 0;
+            set('perfil-ranking', rank > 0 ? '#' + rank + ' / ' + total : '—');
+            set('perfil-ranking-global', rankGlobal > 0 ? '#' + rankGlobal + ' / ' + totalGlobal : '—');
         });
 });
 </script>

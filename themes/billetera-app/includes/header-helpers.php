@@ -77,17 +77,41 @@ function billetera_get_racha($user_id) {
     $hoy = new DateTime('today', wp_timezone());
     $cursor = clone $hoy;
 
-    // Si hoy aún no vendió, permitimos que la racha siga viva desde ayer.
-    if (!in_array($hoy->format('Y-m-d'), $dias, true)) {
-        $cursor->modify('-1 day');
+    // Filtrar solo días de lunes (1) a sábado (6), excluir domingo (0)
+    $dias_laborales = [];
+    foreach ($dias as $dia) {
+        $dt = new DateTime($dia, wp_timezone());
+        $dia_semana = $dt->format('w'); // 0=domingo, 1=lunes, ..., 6=sábado
+        if ($dia_semana != 0) { // Si no es domingo
+            $dias_laborales[] = $dia;
+        }
     }
 
-    $set = array_flip($dias);
+    if (empty($dias_laborales)) {
+        return 0;
+    }
+
+    // Retroceder desde hoy ignorando domingos
+    $set = array_flip($dias_laborales);
     $racha = 0;
 
-    while (isset($set[$cursor->format('Y-m-d')])) {
-        $racha++;
-        $cursor->modify('-1 day');
+    while (true) {
+        $dia_semana = $cursor->format('w'); // 0=domingo, 1=lunes, ..., 6=sábado
+
+        // Si es domingo, saltar al sábado anterior
+        if ($dia_semana == 0) {
+            $cursor->modify('-1 day');
+            continue;
+        }
+
+        // Si el día laboral existe en ventas, contar
+        if (isset($set[$cursor->format('Y-m-d')])) {
+            $racha++;
+            $cursor->modify('-1 day');
+        } else {
+            // Si no hay venta en este día laboral, rompe la racha
+            break;
+        }
     }
 
     return $racha;
