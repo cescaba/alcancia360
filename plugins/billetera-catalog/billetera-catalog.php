@@ -13,6 +13,11 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Incluir funciones de importación masiva de usuarios
+require_once(plugin_dir_path(__FILE__) . 'includes/bulk-user-import.php');
+require_once(plugin_dir_path(__FILE__) . 'includes/csv-import.php');
+require_once(plugin_dir_path(__FILE__) . 'includes/admin-import-page.php');
+
 // Crear tablas de catálogo al activar
 register_activation_hook(__FILE__, 'billetera_create_catalog_tables');
 
@@ -210,20 +215,61 @@ function billetera_insert_default_config() {
     }
 }
 
-// AJAX: Obtener marcas
+// Helper: Obtener marcas permitidas para un usuario según sus permisos
+function billetera_get_marcas_permitidas($user_id = null) {
+    if (!$user_id) {
+        $user_id = get_current_user_id();
+    }
+
+    // Mapeo de permisos a slugs de marca
+    $permisos = [
+        'billetera_hyu' => 'hyundai',
+        'billetera_hcv' => 'hyundai',
+        'billetera_gee' => 'geely',
+        'billetera_jmc' => 'jmc',
+    ];
+
+    $slugs_permitidos = [];
+
+    foreach ($permisos as $meta_key => $slug) {
+        $valor = get_user_meta($user_id, $meta_key, true);
+        if ($valor) {
+            if (!in_array($slug, $slugs_permitidos)) {
+                $slugs_permitidos[] = $slug;
+            }
+        }
+    }
+
+    // Si no tiene permisos, retornar array vacío
+    if (empty($slugs_permitidos)) {
+        return [];
+    }
+
+    // Obtener marcas por slugs
+    global $wpdb;
+    $marcas_table = $wpdb->prefix . 'billetera_marcas';
+
+    $placeholders = implode(',', array_fill(0, count($slugs_permitidos), '%s'));
+    $marcas = $wpdb->get_results($wpdb->prepare(
+        "SELECT id, nombre, slug
+         FROM $marcas_table
+         WHERE activo = 1 AND slug IN ($placeholders)
+         ORDER BY nombre ASC",
+        ...$slugs_permitidos
+    ));
+
+    return $marcas ?: [];
+}
+
+// AJAX: Obtener marcas (filtradas por permisos del usuario)
 add_action('wp_ajax_billetera_get_marcas', 'billetera_ajax_get_marcas');
 add_action('wp_ajax_nopriv_billetera_get_marcas', 'billetera_ajax_get_marcas');
 
 function billetera_ajax_get_marcas() {
-    global $wpdb;
-    $marcas_table = $wpdb->prefix . 'billetera_marcas';
+    $user_id = get_current_user_id();
 
-    $marcas = $wpdb->get_results("
-        SELECT id, nombre, slug
-        FROM $marcas_table
-        WHERE activo = 1
-        ORDER BY nombre ASC
-    ");
+    // Obtener marcas permitidas para el usuario
+    $marcas = billetera_get_marcas_permitidas($user_id);
 
     wp_send_json_success($marcas);
 }
@@ -235,11 +281,21 @@ add_action('wp_ajax_nopriv_billetera_get_categorias', 'billetera_ajax_get_catego
 function billetera_ajax_get_categorias() {
     global $wpdb;
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
+    $marcas_table = $wpdb->prefix . 'billetera_marcas';
 
     $marca_id = intval($_POST['marca_id'] ?? 0);
+    $user_id = get_current_user_id();
 
     if (!$marca_id) {
         wp_send_json_error(['message' => 'ID de marca inválido']);
+    }
+
+    // Validar que el usuario tiene permiso para esta marca
+    $marcas_permitidas = billetera_get_marcas_permitidas($user_id);
+    $marca_ids_permitidos = array_column($marcas_permitidas, 'id');
+
+    if (!in_array($marca_id, $marca_ids_permitidos)) {
+        wp_send_json_error(['message' => 'No tienes permiso para acceder a esta marca']);
     }
 
     $categorias = $wpdb->get_results($wpdb->prepare("
@@ -259,11 +315,31 @@ add_action('wp_ajax_nopriv_billetera_get_subcategorias', 'billetera_ajax_get_sub
 function billetera_ajax_get_subcategorias() {
     global $wpdb;
     $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
+    $categorias_table = $wpdb->prefix . 'billetera_categorias';
 
     $categoria_id = intval($_POST['categoria_id'] ?? 0);
+    $user_id = get_current_user_id();
 
     if (!$categoria_id) {
         wp_send_json_error(['message' => 'ID de categoría inválido']);
+    }
+
+    // Obtener la marca de la categoría
+    $categoria = $wpdb->get_row($wpdb->prepare(
+        "SELECT marca_id FROM $categorias_table WHERE id = %d",
+        $categoria_id
+    ));
+
+    if (!$categoria) {
+        wp_send_json_error(['message' => 'Categoría no encontrada']);
+    }
+
+    // Validar que el usuario tiene permiso para esta marca
+    $marcas_permitidas = billetera_get_marcas_permitidas($user_id);
+    $marca_ids_permitidos = array_column($marcas_permitidas, 'id');
+
+    if (!in_array($categoria->marca_id, $marca_ids_permitidos)) {
+        wp_send_json_error(['message' => 'No tienes permiso para acceder a esta categoría']);
     }
 
     $subcategorias = $wpdb->get_results($wpdb->prepare("
@@ -303,9 +379,30 @@ function billetera_ajax_register_sale_v2() {
     $id_type = sanitize_text_field($_POST['id_type'] ?? '');
     $id_value = sanitize_text_field($_POST['id_value'] ?? '');
     $fecha = sanitize_text_field($_POST['fecha'] ?? date('Y-m-d'));
+    $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
+    $categorias_table = $wpdb->prefix . 'billetera_categorias';
 
     if (!$subcategoria_id || $cantidad < 1 || !$id_type || !$id_value) {
         wp_send_json_error(['message' => 'Datos incompletos']);
+    }
+
+    // Validar que el usuario tiene permiso para esta subcategoría (mediante su marca)
+    $sub_marca = $wpdb->get_row($wpdb->prepare(
+        "SELECT c.marca_id FROM $subcategorias_table s
+         INNER JOIN $categorias_table c ON s.categoria_id = c.id
+         WHERE s.id = %d",
+        $subcategoria_id
+    ));
+
+    if (!$sub_marca) {
+        wp_send_json_error(['message' => 'Producto no encontrado']);
+    }
+
+    $marcas_permitidas = billetera_get_marcas_permitidas($user_id);
+    $marca_ids_permitidos = array_column($marcas_permitidas, 'id');
+
+    if (!in_array($sub_marca->marca_id, $marca_ids_permitidos)) {
+        wp_send_json_error(['message' => 'No tienes permiso para registrar ventas de este producto']);
     }
 
     // Validar que la fecha sea válida y no sea futura
@@ -489,6 +586,9 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
         return;
     }
 
+    // Obtener tipo del asesor/registrante
+    $tipo_asesor = get_user_meta($registrante_id, 'billetera_tipo', true);
+
     $jefes = get_post_meta($tienda_id, '_jefes_venta_asociados', true);
     if (!is_array($jefes)) {
         $jefes = $jefes ? [$jefes] : [];
@@ -502,6 +602,12 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
 
         // Si quien registra es el propio jefe, no duplicar su comisión
         if ($jefe_id === intval($registrante_id)) {
+            continue;
+        }
+
+        // Validar que el jefe tenga el mismo tipo que el asesor
+        $tipo_jefe = get_user_meta($jefe_id, 'billetera_tipo', true);
+        if ($tipo_asesor !== $tipo_jefe) {
             continue;
         }
 
@@ -547,9 +653,30 @@ function billetera_ajax_get_comision() {
     global $wpdb;
     $subcategoria_id = intval($_POST['subcategoria_id'] ?? 0);
     $cantidad = intval($_POST['cantidad'] ?? 1);
+    $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
+    $categorias_table = $wpdb->prefix . 'billetera_categorias';
 
     if (!$subcategoria_id || $cantidad < 1) {
         wp_send_json_error(['message' => 'Datos incompletos']);
+    }
+
+    // Validar que el usuario tiene permiso para esta subcategoría (mediante su marca)
+    $sub_marca = $wpdb->get_row($wpdb->prepare(
+        "SELECT c.marca_id FROM $subcategorias_table s
+         INNER JOIN $categorias_table c ON s.categoria_id = c.id
+         WHERE s.id = %d",
+        $subcategoria_id
+    ));
+
+    if (!$sub_marca) {
+        wp_send_json_error(['message' => 'Producto no encontrado']);
+    }
+
+    $marcas_permitidas = billetera_get_marcas_permitidas($user_id);
+    $marca_ids_permitidos = array_column($marcas_permitidas, 'id');
+
+    if (!in_array($sub_marca->marca_id, $marca_ids_permitidos)) {
+        wp_send_json_error(['message' => 'No tienes permiso para acceder a este producto']);
     }
 
     // Obtener rol del usuario
