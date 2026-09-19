@@ -365,6 +365,10 @@ function billetera_ajax_register_sale_v2() {
         wp_send_json_error(['message' => 'No autenticado']);
     }
 
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_register_sale')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
     $user_id = get_current_user_id();
     $current_user = wp_get_current_user();
     $allowed_roles = ['asesor', 'administrator', 'jefe_venta'];
@@ -642,6 +646,10 @@ function billetera_ajax_get_comision() {
         wp_send_json_error(['message' => 'No autenticado']);
     }
 
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_get_comision')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
     $user_id = get_current_user_id();
     $current_user = wp_get_current_user();
     $allowed_roles = ['asesor', 'administrator', 'jefe_venta'];
@@ -742,6 +750,10 @@ add_action('wp_ajax_billetera_get_balance', 'billetera_ajax_get_balance');
 function billetera_ajax_get_balance() {
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_get_balance')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
     }
 
     $user_id = get_current_user_id();
@@ -878,6 +890,10 @@ function billetera_ajax_get_all_movements() {
         wp_send_json_error(['message' => 'No autenticado']);
     }
 
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_get_all_movements')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
     $user_id = get_current_user_id();
     global $wpdb;
     $ventas_table = $wpdb->prefix . 'billetera_ventas';
@@ -904,6 +920,10 @@ add_action('wp_ajax_billetera_change_password', 'billetera_ajax_change_password'
 function billetera_ajax_change_password() {
     if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_change_password')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
     }
 
     $user_id = get_current_user_id();

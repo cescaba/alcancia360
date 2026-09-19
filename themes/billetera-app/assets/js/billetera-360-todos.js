@@ -19,7 +19,11 @@ const deskList = document.getElementById('hist-desk-list');
 const deskEmpty = document.getElementById('hist-desk-empty');
 
 function init() {
-    fetch(billetera.ajax_url + '?action=billetera_get_all_movements')
+    fetch(billetera.ajax_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=billetera_get_all_movements&nonce=' + encodeURIComponent(billetera.nonce_get_all_movements)
+    })
         .then(r => r.json())
         .then(res => {
             if (!res.success) return;

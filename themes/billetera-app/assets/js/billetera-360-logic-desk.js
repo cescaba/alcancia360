@@ -240,7 +240,7 @@
         fetch(billetera.ajax_url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'action=billetera_register_sale_v2&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha
+            body: 'action=billetera_register_sale_v2&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha
         })
             .then(function (r) { return r.json(); })
             .then(function (data) {
@@ -290,7 +290,11 @@
     }
 
     function loadUserData() {
-        fetch(billetera.ajax_url + '?action=billetera_get_balance')
+        fetch(billetera.ajax_url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=billetera_get_balance&nonce=' + encodeURIComponent(billetera.nonce_get_balance)
+        })
             .then(function (r) { return r.json(); })
             .then(function (res) {
                 if (!res.success) return;

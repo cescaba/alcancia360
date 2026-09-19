@@ -80,7 +80,8 @@ $perfil_url = function_exists('billetera_get_template_url')
 
 <script>
 window.billetera = {
-    ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>'
+    ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
+    nonce_change_password: '<?php echo wp_create_nonce('billetera_change_password'); ?>'
 };
 </script>
 <script>
@@ -116,7 +117,7 @@ document.getElementById('password-form').addEventListener('submit', function(e) 
     fetch(window.billetera.ajax_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=billetera_change_password&current_password=' + encodeURIComponent(currentPassword) + '&new_password=' + encodeURIComponent(newPassword)
+        body: 'action=billetera_change_password&nonce=' + encodeURIComponent(window.billetera.nonce_change_password) + '&current_password=' + encodeURIComponent(currentPassword) + '&new_password=' + encodeURIComponent(newPassword)
     })
     .then(r => r.json())
     .then(res => {

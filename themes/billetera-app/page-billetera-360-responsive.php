@@ -268,7 +268,12 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
 <script>
 window.billetera = {
     ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
-    movimientos_url: '<?php echo esc_url($movimientos_url); ?>'
+    movimientos_url: '<?php echo esc_url($movimientos_url); ?>',
+    nonce_register_sale: '<?php echo wp_create_nonce('billetera_register_sale'); ?>',
+    nonce_get_balance: '<?php echo wp_create_nonce('billetera_get_balance'); ?>',
+    nonce_get_comision: '<?php echo wp_create_nonce('billetera_get_comision'); ?>',
+    nonce_get_all_movements: '<?php echo wp_create_nonce('billetera_get_all_movements'); ?>',
+    nonce_change_password: '<?php echo wp_create_nonce('billetera_change_password'); ?>'
 };
 </script>
 <script src="<?php echo get_template_directory_uri(); ?>/assets/js/billetera-360-logic.js"></script>

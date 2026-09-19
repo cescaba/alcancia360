@@ -217,7 +217,7 @@ function loadComision() {
     fetch(billetera.ajax_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=billetera_get_comision&subcategoria_id=' + subId + '&cantidad=' + cantidad
+        body: 'action=billetera_get_comision&nonce=' + encodeURIComponent(billetera.nonce_get_comision) + '&subcategoria_id=' + subId + '&cantidad=' + cantidad
     })
         .then(r => r.json())
         .then(res => {
@@ -258,7 +258,7 @@ function handleSubmit() {
     fetch(billetera.ajax_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=billetera_register_sale_v2&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha
+        body: 'action=billetera_register_sale_v2&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha
     })
         .then(r => r.json())
         .then(data => {
@@ -330,7 +330,11 @@ function resetForm() {
 }
 
 function loadUserData() {
-    fetch(billetera.ajax_url + '?action=billetera_get_balance')
+    fetch(billetera.ajax_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=billetera_get_balance&nonce=' + encodeURIComponent(billetera.nonce_get_balance)
+    })
         .then(r => r.json())
         .then(res => {
             if (res.success) {

@@ -29,12 +29,9 @@ function billetera_render_import_page() {
             <div class="card" style="padding: 20px; margin-bottom: 20px;">
                 <h2>Paso 1: Descargar CSV de Ejemplo</h2>
                 <p>Haz clic para descargar un CSV con la estructura correcta:</p>
-                <form method="POST" action="">
-                    <?php wp_nonce_field('billetera_csv_download'); ?>
-                    <button class="button button-primary button-large" onclick="descargarCSVEjemplo()">
-                        📥 Descargar CSV Ejemplo
-                    </button>
-                </form>
+                <button class="button button-primary button-large" onclick="descargarCSVEjemplo(); return false;">
+                    📥 Descargar CSV Ejemplo
+                </button>
             </div>
 
             <!-- PASO 2: Completar en Excel -->
@@ -163,15 +160,21 @@ function billetera_render_import_page() {
 
     <script>
     function descargarCSVEjemplo() {
+        // Crear un formulario temporal para descargar el CSV
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '<?php echo admin_ajax_url(); ?>';
+        form.action = '<?php echo admin_url('admin-ajax.php'); ?>';
         form.innerHTML = `
             <input type="hidden" name="action" value="billetera_download_csv_template">
         `;
         document.body.appendChild(form);
         form.submit();
-        document.body.removeChild(form);
+
+        // Limpiar después de un pequeño delay
+        setTimeout(() => {
+            document.body.removeChild(form);
+        }, 500);
+
         return false;
     }
 
@@ -186,7 +189,7 @@ function billetera_render_import_page() {
         button.disabled = true;
         button.textContent = '⏳ Importando...';
 
-        fetch('<?php echo admin_ajax_url(); ?>', {
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
             method: 'POST',
             body: formData,
         })
@@ -196,19 +199,50 @@ function billetera_render_import_page() {
             const messageDiv = document.getElementById('import_message');
 
             if (data.success) {
+                let erroresHTML = '';
+                if (data.data.errores && data.data.errores.length > 0) {
+                    erroresHTML = `
+                        <details style="margin-top: 15px; padding: 10px; background-color: #fff8e5; border-left: 4px solid #ffb900;">
+                            <summary style="cursor: pointer; font-weight: bold;">⚠️ ${data.data.errores_count} usuarios NO se importaron (haz clic para ver)</summary>
+                            <table style="width: 100%; margin-top: 10px; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background-color: #f0f0f0;">
+                                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Fila</th>
+                                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">User Login</th>
+                                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Email</th>
+                                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Razón</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.data.errores.slice(0, 15).map(err => `
+                                        <tr>
+                                            <td style="border: 1px solid #ddd; padding: 8px;">${err.fila || 'N/A'}</td>
+                                            <td style="border: 1px solid #ddd; padding: 8px;"><code>${err.login}</code></td>
+                                            <td style="border: 1px solid #ddd; padding: 8px;"><code>${err.email}</code></td>
+                                            <td style="border: 1px solid #ddd; padding: 8px; color: #c00;">${err.razon}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                            ${data.data.errores.length > 15 ? `<p style="margin-top: 10px; color: #666;">... y ${data.data.errores.length - 15} más</p>` : ''}
+                        </details>
+                    `;
+                }
+
                 messageDiv.innerHTML = `
-                    <div class="notice notice-success" style="padding: 15px; margin: 0;">
-                        <p><strong>✅ ¡Importación exitosa!</strong></p>
-                        <p>${data.data.message}</p>
-                        <ul>
-                            <li>Usuarios creados: <strong>${data.data.usuarios_creados}</strong></li>
-                            <li>Campos asignados: <strong>${data.data.campos_asignados}</strong></li>
+                    <div class="notice notice-success" style="padding: 15px; margin: 0; border-left: 4px solid #46b450;">
+                        <p><strong>✅ Importación completada</strong></p>
+                        <ul style="margin: 10px 0;">
+                            <li>✅ Usuarios creados: <strong style="color: #46b450;">${data.data.usuarios_creados}</strong></li>
+                            <li>✅ Campos asignados: <strong style="color: #46b450;">${data.data.campos_asignados}</strong></li>
+                            ${data.data.errores_count > 0 ? `<li>❌ No importados: <strong style="color: #c00;">${data.data.errores_count}</strong></li>` : ''}
                         </ul>
                     </div>
+                    ${erroresHTML}
                 `;
             } else {
                 messageDiv.innerHTML = `
-                    <div class="notice notice-error" style="padding: 15px; margin: 0;">
+                    <div class="notice notice-error" style="padding: 15px; margin: 0; border-left: 4px solid #dc3545;">
                         <p><strong>❌ Error en la importación</strong></p>
                         <p>${data.data.message}</p>
                     </div>

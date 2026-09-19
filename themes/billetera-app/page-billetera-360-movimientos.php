@@ -230,7 +230,9 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
 
 <script>
 window.billetera = {
-    ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>'
+    ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
+    nonce_get_balance: '<?php echo wp_create_nonce('billetera_get_balance'); ?>',
+    nonce_get_all_movements: '<?php echo wp_create_nonce('billetera_get_all_movements'); ?>'
 };
 </script>
 <script src="<?php echo get_template_directory_uri(); ?>/assets/js/billetera-360-movimientos.js"></script>

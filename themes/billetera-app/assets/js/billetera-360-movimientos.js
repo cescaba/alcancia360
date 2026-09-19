@@ -138,7 +138,11 @@ function playCoinSound() {
 }
 
 function loadUserData() {
-    fetch(billetera.ajax_url + '?action=billetera_get_balance')
+    fetch(billetera.ajax_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=billetera_get_balance&nonce=' + encodeURIComponent(billetera.nonce_get_balance)
+    })
         .then(r => r.json())
         .then(res => {
             if (!res.success) return;

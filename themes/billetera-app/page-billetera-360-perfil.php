@@ -152,8 +152,17 @@ if (function_exists('billetera_get_template_url')) {
 </div>
 
 <script>
+window.billetera = {
+    ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
+    nonce_get_balance: '<?php echo wp_create_nonce('billetera_get_balance'); ?>'
+};
+
 document.addEventListener('DOMContentLoaded', function () {
-    fetch('<?php echo admin_url('admin-ajax.php'); ?>?action=billetera_get_balance')
+    fetch(window.billetera.ajax_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=billetera_get_balance&nonce=' + encodeURIComponent(window.billetera.nonce_get_balance)
+    })
         .then(function (r) { return r.json(); })
         .then(function (res) {
             if (!res.success) return;

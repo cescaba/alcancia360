@@ -24,20 +24,37 @@ function billetera_bulk_create_users($usuarios_data) {
     $errores = [];
 
     foreach ($usuarios_data as $idx => $user_data) {
+        $fila = $idx + 2; // +2 porque fila 1 es encabezado, $idx empieza en 0
+
         // Validar datos requeridos
         if (empty($user_data['user_login']) || empty($user_data['user_email'])) {
-            $errores[] = "Fila $idx: Falta user_login o user_email";
+            $errores[] = [
+                'fila' => $fila,
+                'login' => $user_data['user_login'] ?? 'VACÍO',
+                'email' => $user_data['user_email'] ?? 'VACÍO',
+                'razon' => 'Falta user_login o user_email'
+            ];
             continue;
         }
 
         // Verificar que el usuario no exista
         if (username_exists($user_data['user_login'])) {
-            $errores[] = "Usuario '{$user_data['user_login']}' ya existe";
+            $errores[] = [
+                'fila' => $fila,
+                'login' => $user_data['user_login'],
+                'email' => $user_data['user_email'],
+                'razon' => "Usuario '{$user_data['user_login']}' YA EXISTE en la BD"
+            ];
             continue;
         }
 
         if (email_exists($user_data['user_email'])) {
-            $errores[] = "Email '{$user_data['user_email']}' ya existe";
+            $errores[] = [
+                'fila' => $fila,
+                'login' => $user_data['user_login'],
+                'email' => $user_data['user_email'],
+                'razon' => "Email '{$user_data['user_email']}' YA EXISTE en la BD"
+            ];
             continue;
         }
 
@@ -75,9 +92,12 @@ function billetera_bulk_create_users($usuarios_data) {
 
     return [
         'success' => count($usuarios_creados) > 0,
-        'message' => count($usuarios_creados) . " usuarios creados, " . count($errores) . " errores",
+        'message' => count($usuarios_creados) . " usuarios creados, " . count($errores) . " NO se importaron",
+        'usuarios_creados_count' => count($usuarios_creados),
+        'errores_count' => count($errores),
         'usuarios' => $usuarios_creados,
         'errores' => $errores,
+        'errores_resumen' => array_slice($errores, 0, 10), // Primeros 10 errores
     ];
 }
 
@@ -93,7 +113,12 @@ function billetera_bulk_create_users($usuarios_data) {
  */
 function billetera_bulk_assign_fields($asignaciones) {
     if (!is_array($asignaciones) || empty($asignaciones)) {
-        return ['success' => false, 'message' => 'Array de asignaciones vacío'];
+        return [
+            'success' => false,
+            'message' => 'Array de asignaciones vacío',
+            'completadas' => 0,
+            'errores' => []
+        ];
     }
 
     $completadas = 0;
@@ -163,36 +188,44 @@ function billetera_bulk_assign_fields($asignaciones) {
  */
 function billetera_bulk_create_and_assign($usuarios_data) {
     if (!is_array($usuarios_data) || empty($usuarios_data)) {
-        return ['success' => false, 'message' => 'Array vacío'];
+        error_log("billetera_bulk_create_and_assign: Array vacío");
+        return ['success' => false, 'message' => 'Array vacío', 'usuarios_creados' => 0, 'campos_asignados' => 0, 'errores' => []];
     }
 
     $usuarios_creados = [];
+    $usuarios_existentes = [];
+    $usuarios_actualizados = [];
     $asignaciones = [];
+    $errores_creacion = [];
+
+    error_log("billetera_bulk_create_and_assign: Iniciando con " . count($usuarios_data) . " usuarios");
 
     // Primero crear todos los usuarios
-    foreach ($usuarios_data as $user_data) {
-        $userdata = [
-            'user_login' => sanitize_user($user_data['user_login']),
-            'user_email' => sanitize_email($user_data['user_email']),
-            'first_name' => sanitize_text_field($user_data['first_name'] ?? ''),
-            'last_name' => sanitize_text_field($user_data['last_name'] ?? ''),
-            'user_pass' => $user_data['password'] ?? wp_generate_password(12),
-            'role' => 'subscriber',
-        ];
+    foreach ($usuarios_data as $idx => $user_data) {
+        $user_login = sanitize_user($user_data['user_login']);
+        $user_email = sanitize_email($user_data['user_email']);
 
-        $user_id = wp_insert_user($userdata);
+        // Verificar si ya existe por user_login o email
+        $user_exists = get_user_by('login', $user_login);
+        if (!$user_exists) {
+            $user_exists = get_user_by('email', $user_email);
+        }
 
-        if (!is_wp_error($user_id)) {
-            // Asignar rol
-            $rol = sanitize_text_field($user_data['rol'] ?? 'asesor');
-            $user = new WP_User($user_id);
-            $user->set_role($rol);
+        // Si existe, actualizar rol y campos personalizados
+        if ($user_exists) {
+            $user_id = $user_exists->ID;
+            error_log("Usuario existente: {$user_login} (ID: $user_id), actualizando campos y rol...");
+            $usuarios_existentes[] = $user_login;
 
-            $usuarios_creados[] = $user_id;
+            // Actualizar rol si está especificado
+            if (isset($user_data['rol'])) {
+                $rol = sanitize_text_field($user_data['rol']);
+                $user = new WP_User($user_id);
+                $user->set_role($rol);
+            }
 
-            // Preparar asignaciones
+            // Preparar asignaciones para actualizar
             $asignacion = ['user_id' => $user_id];
-
             if (isset($user_data['billetera_hyu'])) $asignacion['billetera_hyu'] = intval($user_data['billetera_hyu']);
             if (isset($user_data['billetera_hcv'])) $asignacion['billetera_hcv'] = intval($user_data['billetera_hcv']);
             if (isset($user_data['billetera_gee'])) $asignacion['billetera_gee'] = intval($user_data['billetera_gee']);
@@ -201,17 +234,71 @@ function billetera_bulk_create_and_assign($usuarios_data) {
             if (isset($user_data['tienda_id'])) $asignacion['tienda_id'] = intval($user_data['tienda_id']);
 
             $asignaciones[] = $asignacion;
+            $usuarios_actualizados[] = $user_login;
+            continue;
         }
+
+        // Si no existe, crearlo
+        $userdata = [
+            'user_login' => $user_login,
+            'user_email' => $user_email,
+            'first_name' => sanitize_text_field($user_data['first_name'] ?? ''),
+            'last_name' => sanitize_text_field($user_data['last_name'] ?? ''),
+            'user_pass' => $user_data['password'] ?? wp_generate_password(12),
+            'role' => 'subscriber',
+        ];
+
+        $user_id = wp_insert_user($userdata);
+
+        if (is_wp_error($user_id)) {
+            error_log("Error creando usuario {$userdata['user_login']}: " . $user_id->get_error_message());
+            $errores_creacion[] = [
+                'fila' => $idx + 2,
+                'login' => $userdata['user_login'],
+                'email' => $userdata['user_email'],
+                'razon' => $user_id->get_error_message(),
+            ];
+            continue;
+        }
+
+        // Asignar rol
+        $rol = sanitize_text_field($user_data['rol'] ?? 'asesor');
+        $user = new WP_User($user_id);
+        $user->set_role($rol);
+
+        $usuarios_creados[] = $user_id;
+
+        // Preparar asignaciones
+        $asignacion = ['user_id' => $user_id];
+
+        if (isset($user_data['billetera_hyu'])) $asignacion['billetera_hyu'] = intval($user_data['billetera_hyu']);
+        if (isset($user_data['billetera_hcv'])) $asignacion['billetera_hcv'] = intval($user_data['billetera_hcv']);
+        if (isset($user_data['billetera_gee'])) $asignacion['billetera_gee'] = intval($user_data['billetera_gee']);
+        if (isset($user_data['billetera_jmc'])) $asignacion['billetera_jmc'] = intval($user_data['billetera_jmc']);
+        if (isset($user_data['billetera_tipo'])) $asignacion['billetera_tipo'] = $user_data['billetera_tipo'];
+        if (isset($user_data['tienda_id'])) $asignacion['tienda_id'] = intval($user_data['tienda_id']);
+
+        $asignaciones[] = $asignacion;
     }
 
-    // Luego asignar campos
+    error_log("Usuarios creados: " . count($usuarios_creados) . ", Usuarios existentes: " . count($usuarios_existentes) . ", Asignaciones preparadas: " . count($asignaciones));
+
+    // Luego asignar campos (para nuevos y existentes)
     $resultado_asignacion = billetera_bulk_assign_fields($asignaciones);
 
+    error_log("Resultado asignaciones: " . json_encode($resultado_asignacion));
+
+    $total_procesados = count($usuarios_creados) + count($usuarios_existentes);
+    $mensaje = count($usuarios_creados) . " NUEVOS creados + " . count($usuarios_existentes) . " EXISTENTES actualizados = " . $total_procesados . " totales procesados. " . $resultado_asignacion['message'];
+
     return [
-        'success' => count($usuarios_creados) > 0,
+        'success' => $total_procesados > 0,
         'usuarios_creados' => count($usuarios_creados),
-        'campos_asignados' => $resultado_asignacion['completadas'],
-        'mensaje' => $resultado_asignacion['message'],
+        'usuarios_existentes' => count($usuarios_existentes),
+        'usuarios_actualizados' => count($usuarios_actualizados),
+        'campos_asignados' => $resultado_asignacion['completadas'] ?? 0,
+        'mensaje' => $mensaje,
         'usuarios' => $usuarios_creados,
+        'errores' => $errores_creacion,
     ];
 }
