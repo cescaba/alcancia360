@@ -246,15 +246,18 @@
             .then(function (data) {
                 if (data.success) {
                     var amount = data.data.amount || 0;
+                    var bonus = Number(data.data.bonus_multiplier) || 1;
                     if (gainAmount) {
                         gainAmount.textContent = '+S/ ' + amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        var olds = gainAmount.querySelectorAll('.alc-mov__bonus');
-                        for (var k = 0; k < olds.length; k++) { olds[k].remove(); }
-                        if (Number(data.data.bonus_multiplier) > 1) {
-                            var bx = document.createElement('span');
-                            bx.className = 'alc-mov__bonus';
-                            bx.textContent = 'x2 ¡Bono Prepagados!';
-                            gainAmount.appendChild(bx);
+                    }
+                    var gainBonus = document.getElementById('gain-bonus');
+                    if (gainBonus) {
+                        if (bonus > 1) {
+                            gainBonus.textContent = 'x2 ¡Bono Prepagados!';
+                            gainBonus.hidden = false;
+                        } else {
+                            gainBonus.textContent = '';
+                            gainBonus.hidden = true;
                         }
                     }
                     if (overlay) overlay.classList.add('show');

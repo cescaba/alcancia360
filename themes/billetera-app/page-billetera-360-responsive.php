@@ -260,6 +260,7 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
             <img class="celebrate__pig-fill" id="celebrate-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
         </div>
         <div class="celebrate__amount" id="gain-amount">+S/ 0.00</div>
+        <div class="celebrate__bonus" id="gain-bonus" hidden></div>
         <div class="celebrate__label">Comisión acreditada</div>
         <button class="celebrate__btn" id="continue-btn">Ver mi alcancía</button>
     </div>
