@@ -25,7 +25,7 @@ register_activation_hook(__FILE__, 'billetera_create_catalog_tables');
 add_action('plugins_loaded', 'billetera_maybe_upgrade_schema');
 
 function billetera_maybe_upgrade_schema() {
-    if (get_option('billetera_db_version') === '1.1') {
+    if (get_option('billetera_db_version') === '1.2') {
         return;
     }
 
@@ -39,7 +39,29 @@ function billetera_maybe_upgrade_schema() {
         }
     }
 
-    update_option('billetera_db_version', '1.1');
+    // Tabla de METAS por sucursal x marca x tipo (sin reactivar)
+    $metas_table = $wpdb->prefix . 'billetera_metas';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$metas_table'") != $metas_table) {
+        $charset_collate = $wpdb->get_charset_collate();
+        $sql = "CREATE TABLE $metas_table (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            tienda_id bigint(20) NOT NULL,
+            marca_id mediumint(9) NOT NULL,
+            tipo varchar(20) NOT NULL,
+            meta decimal(10, 2) NOT NULL DEFAULT 0,
+            creado_en datetime DEFAULT CURRENT_TIMESTAMP,
+            actualizado_en datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY cruce_unico (tienda_id, marca_id, tipo),
+            KEY tienda_id (tienda_id),
+            KEY marca_id (marca_id)
+        ) $charset_collate;";
+
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+    }
+
+    update_option('billetera_db_version', '1.2');
 }
 
 function billetera_create_catalog_tables() {
@@ -189,6 +211,27 @@ function billetera_create_catalog_tables() {
 
     // Insertar configuración por defecto
     billetera_insert_default_config();
+
+    // Tabla de METAS por sucursal x marca x tipo (Venta / Post Venta)
+    $metas_table = $wpdb->prefix . 'billetera_metas';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$metas_table'") != $metas_table) {
+        $sql = "CREATE TABLE $metas_table (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            tienda_id bigint(20) NOT NULL,
+            marca_id mediumint(9) NOT NULL,
+            tipo varchar(20) NOT NULL,
+            meta decimal(10, 2) NOT NULL DEFAULT 0,
+            creado_en datetime DEFAULT CURRENT_TIMESTAMP,
+            actualizado_en datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY cruce_unico (tienda_id, marca_id, tipo),
+            KEY tienda_id (tienda_id),
+            KEY marca_id (marca_id)
+        ) $charset_collate;";
+
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+    }
 }
 
 function billetera_insert_default_config() {
@@ -513,6 +556,7 @@ function billetera_ajax_register_sale_v2() {
             'amount' => floatval($monto_mostrado),
             'id_type_label' => ucfirst($id_type),
             'id_value' => $id_value,
+            'bonus_multiplier' => floatval($bonus_multiplier),
         ]);
     } else {
         wp_send_json_error(['message' => 'Error al registrar venta']);
@@ -541,6 +585,40 @@ function billetera_get_meta_asesor() {
     ));
 
     return floatval($meta ?? 1200);
+}
+
+// Meta por usuario: suma de wp_billetera_metas por su tienda + marcas + tipo.
+// Fallback a meta global (1200) si no tiene tienda/tipo/marcas o no hay fila.
+function billetera_get_meta_por_usuario($user_id) {
+    $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
+    $tipo = trim((string) get_user_meta($user_id, 'billetera_tipo', true));
+
+    if (!$tienda_id || $tipo === '') {
+        return billetera_get_meta_asesor();
+    }
+
+    $marcas = billetera_get_marcas_permitidas($user_id);
+    if (empty($marcas)) {
+        return billetera_get_meta_asesor();
+    }
+    $marca_ids = array_map('intval', array_column((array) $marcas, 'id'));
+    $marca_ids = array_values(array_filter($marca_ids));
+    if (empty($marca_ids)) {
+        return billetera_get_meta_asesor();
+    }
+
+    global $wpdb;
+    $metas_table = $wpdb->prefix . 'billetera_metas';
+    $placeholders = implode(',', array_fill(0, count($marca_ids), '%d'));
+    $params = array_merge([$tienda_id, $tipo], $marca_ids);
+    $query = "SELECT SUM(meta) FROM $metas_table WHERE tienda_id = %d AND tipo = %s AND marca_id IN ($placeholders)";
+    $sum = $wpdb->get_var($wpdb->prepare($query, ...$params));
+
+    if ($sum === null || floatval($sum) <= 0) {
+        return billetera_get_meta_asesor();
+    }
+
+    return floatval($sum);
 }
 
 function billetera_find_comision($subcategoria_id, $distribuidor_id, $rol) {
@@ -860,7 +938,7 @@ function billetera_ajax_get_balance() {
         LIMIT 10
     ", $user_id));
 
-    $meta = billetera_get_meta_asesor();
+    $meta = billetera_get_meta_por_usuario($user_id);
     $fill_percent = $meta > 0 ? round(($balance / $meta) * 100, 1) : 0;
     if ($fill_percent > 100) {
         $fill_percent = 100;

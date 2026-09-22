@@ -246,7 +246,17 @@
             .then(function (data) {
                 if (data.success) {
                     var amount = data.data.amount || 0;
-                    if (gainAmount) gainAmount.textContent = '+S/ ' + amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    if (gainAmount) {
+                        gainAmount.textContent = '+S/ ' + amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        var olds = gainAmount.querySelectorAll('.alc-mov__bonus');
+                        for (var k = 0; k < olds.length; k++) { olds[k].remove(); }
+                        if (Number(data.data.bonus_multiplier) > 1) {
+                            var bx = document.createElement('span');
+                            bx.className = 'alc-mov__bonus';
+                            bx.textContent = 'x2 ¡Bono Prepagados!';
+                            gainAmount.appendChild(bx);
+                        }
+                    }
                     if (overlay) overlay.classList.add('show');
                     spawnCoins(burstZone);
                     resetForm();
@@ -322,13 +332,14 @@
         }
         items.forEach(function (m, i) {
             var nombre = (m.categoria ? m.categoria : '') + (m.subcategoria ? ' · ' + m.subcategoria : '');
+            var bonus = (Number(m.bonus_multiplier) > 1) ? ' <span class="alc-mov__bonus">x2</span>' : '';
             var meta = (m.asesor_nombre || (m.id_value || '')) + ' · ' + timeAgo(new Date(m.created_at));
             var row = document.createElement('div');
             row.className = 'reg-desk__recent-row' + (i % 2 === 1 ? ' reg-desk__recent-row--alt' : '');
             row.innerHTML =
                 '<div><div class="reg-desk__recent-name">' + nombre + '</div>' +
                 '<div class="reg-desk__recent-meta">' + meta + '</div></div>' +
-                '<div class="reg-desk__recent-amt">+' + fmt(Number(m.amount) || 0) + '</div>';
+                '<div class="reg-desk__recent-amt">+' + fmt(Number(m.amount) || 0) + bonus + '</div>';
             recentList.appendChild(row);
         });
     }

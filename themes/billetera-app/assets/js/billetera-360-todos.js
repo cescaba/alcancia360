@@ -194,6 +194,12 @@ function buildDeskRow(m) {
     const amt = document.createElement('div');
     amt.className = 'hist-desk__td hist-desk__td--amt';
     amt.textContent = '+' + fmt(Number(m.amount) || 0);
+    if (Number(m.bonus_multiplier) > 1) {
+        const b = document.createElement('span');
+        b.className = 'alc-mov__bonus';
+        b.textContent = '2x';
+        amt.appendChild(b);
+    }
 
     row.appendChild(badge);
     row.appendChild(prod);

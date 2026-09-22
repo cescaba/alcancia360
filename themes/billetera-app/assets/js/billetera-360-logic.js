@@ -266,6 +266,13 @@ function handleSubmit() {
                 const amount = data.data.amount || 0;
 
                 gainAmount.textContent = '+S/ ' + amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                gainAmount.querySelectorAll('.alc-mov__bonus').forEach(function (n) { n.remove(); });
+                if (Number(data.data.bonus_multiplier) > 1) {
+                    const bx = document.createElement('span');
+                    bx.className = 'alc-mov__bonus';
+                    bx.textContent = 'x2 ¡Bono Prepagados!';
+                    gainAmount.appendChild(bx);
+                }
                 overlay.classList.add('show');
 
                 spawnCoins(burstZone);
