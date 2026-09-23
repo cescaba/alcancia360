@@ -17,7 +17,7 @@
 -- - Dealer (Excel) → IGNORADO
 --
 -- DISTRIBUIDORES:
--- - TODOS → NULL (comisión genérica)
+-- - TODOS → NULL (comisión genérica)sdfdsf
 -- - MANASA → 12
 -- - AUTOMOTRIZ INCAMOTORS S.A.C → 13
 -- - MAQUINARIAS → 14
