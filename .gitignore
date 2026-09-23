@@ -5,6 +5,7 @@
 !.gitignore
 !plugins/
 !themes/
+!.github/
 
 # Ignorar carpetas de caché/sistema
 uploads/
