@@ -3,12 +3,14 @@
 
 # Excepto plugins y themes
 !.gitignore
-!plugins/billetara-catalog/
-!plugins/billetara-setup/
-!plugins/crear-usuarios-masivo/
-!plugins/hyundai-usuarios/
-!themes/billettera-app/
-!.github/
+!/plugins/
+!/plugins/billetera-catalog/
+!/plugins/billetera-setup/
+!/plugins/crear-usuarios-masivo/
+!/plugins/hyundai-usuarios/
+!/themes/
+!/themes/billetera-app/
+!/.github/
 
 # Ignorar carpetas de caché/sistema
 uploads/
