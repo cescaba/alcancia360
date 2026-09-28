@@ -71,15 +71,15 @@ function init() {
 }
 
 function loadMarcas() {
-    fetch(billetera.ajax_url + '?action=billetera_get_marcas')
+    fetch(billetera.ajax_url + '?action=billetera_get_lineas')
         .then(r => r.json())
         .then(res => {
             if (res.success) {
-                res.data.forEach(marca => {
-                    marcasData[marca.id] = marca;
+                res.data.forEach(linea => {
+                    marcasData[linea.codigo] = linea;
                     const opt = document.createElement('option');
-                    opt.value = marca.id;
-                    opt.textContent = marca.nombre;
+                    opt.value = linea.codigo;
+                    opt.textContent = linea.nombre;
                     marcaSelect.appendChild(opt);
                 });
             }
@@ -100,6 +100,7 @@ function handleIdTypeChange(e) {
 function handleMarcaChange() {
     const marcaId = marcaSelect.value;
     state.marca = marcaId;
+    const lineaCodigo = marcaId;
     catSelect.innerHTML = '';
     subSelect.innerHTML = '';
     subcategoriesData = {};
@@ -127,7 +128,7 @@ function handleMarcaChange() {
     fetch(billetera.ajax_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=billetera_get_categorias&marca_id=' + marcaId
+        body: 'action=billetera_get_categorias&linea_codigo=' + encodeURIComponent(lineaCodigo)
     })
         .then(r => r.json())
         .then(res => {

@@ -31,6 +31,7 @@ $notif_count    = count($notificaciones);
 $url_registro    = billetera_get_template_url('page-billetera-360-responsive.php');
 $url_movimientos = billetera_get_template_url('page-billetera-360-movimientos.php');
 $url_historial   = billetera_get_template_url('page-billetera-360-movimientos-todos.php');
+$url_stats       = billetera_get_template_url('page-billetera-360-estadisticas.php');
 $url_perfil      = billetera_get_template_url('page-billetera-360-perfil.php');
 $url_cambiar     = home_url('/cambiar-contrasena');
 $logout_url      = wp_logout_url(home_url());
@@ -38,6 +39,7 @@ $logout_url      = wp_logout_url(home_url());
 $current_slug       = get_page_template_slug();
 $nav_registro_active = ($current_slug === 'page-billetera-360-responsive.php');
 $nav_alcancia_active = in_array($current_slug, array('page-billetera-360-movimientos.php', 'page-billetera-360-movimientos-todos.php'), true);
+$nav_stats_active    = ($current_slug === 'page-billetera-360-estadisticas.php');
 
 $home_url = $es_jefe ? $url_movimientos : $url_registro;
 ?>
@@ -71,6 +73,11 @@ ob_start();
         <a class="app-header__menu-item" href="<?php echo esc_url($url_movimientos); ?>">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5M3.05 13A9 9 0 1 0 6 5.3L3 8M12 7v5l4 2"/></svg>
             <span>Historial de comisiones</span>
+        </a>
+
+        <a class="app-header__menu-item" href="<?php echo esc_url($url_stats); ?>">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+            <span>Mi desempeño</span>
         </a>
 
         <a class="app-header__menu-item" href="<?php echo esc_url($url_cambiar); ?>">
@@ -177,6 +184,10 @@ $user_menu_html = ob_get_clean();
         <a class="app-sidebar__link<?php echo $nav_alcancia_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_movimientos); ?>">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9c0-8 14-8 14 0"></path><rect x="2" y="9" width="20" height="11" rx="1"></rect><path d="M16 14h2"></path></svg>
             <span>Mi alcancía</span>
+        </a>
+        <a class="app-sidebar__link<?php echo $nav_stats_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_stats); ?>">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>
+            <span>Mi desempeño</span>
         </a>
 
         <div class="app-sidebar__section app-sidebar__section--spaced">Mi cuenta</div>

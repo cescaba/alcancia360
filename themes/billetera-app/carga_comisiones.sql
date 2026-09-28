@@ -26,12 +26,20 @@
 --
 -- ============================================================================
 
--- PASO 1: INSERTAR MARCAS
+-- PASO 1: INSERTAR MARCAS (agrupador)
 -- ============================================================================
 INSERT IGNORE INTO wp_billetera_marcas (nombre, slug, activo) VALUES
 ('Hyundai', 'hyundai', 1),
 ('JMC', 'jmc', 1),
 ('Geely', 'geely', 1);
+
+-- PASO 1.1: INSERTAR LÍNEAS (hyu/hcv/gee/jmc) ligadas a su marca
+-- ============================================================================
+INSERT IGNORE INTO wp_billetera_lineas (codigo, nombre, marca_id, orden_display, activo) VALUES
+('hyu', 'Hyundai Autos',    (SELECT id FROM wp_billetera_marcas WHERE slug = 'hyundai'), 1, 1),
+('hcv', 'Hyundai Camiones', (SELECT id FROM wp_billetera_marcas WHERE slug = 'hyundai'), 2, 1),
+('gee', 'Geely',            (SELECT id FROM wp_billetera_marcas WHERE slug = 'geely'),   3, 1),
+('jmc', 'JMC',              (SELECT id FROM wp_billetera_marcas WHERE slug = 'jmc'),     4, 1);
 
 -- PASO 2: OBTENER IDs DE MARCAS (para referencias)
 -- SELECT @hyundai_id := id FROM wp_billetera_marcas WHERE slug = 'hyundai';
@@ -40,30 +48,30 @@ INSERT IGNORE INTO wp_billetera_marcas (nombre, slug, activo) VALUES
 
 -- PASO 3: INSERTAR CATEGORÍAS
 -- ============================================================================
-INSERT IGNORE INTO wp_billetera_categorias (marca_id, nombre, slug, orden_display, activo) VALUES
-(1,'Kit360','Kit360',1,1),
-(1,'Kit Seguridad','Kit Seguridad',2,1),
-(1,'Prepagados','Prepagados',3,1),
-(1,'Baterías','Baterías',4,1),
-(1,'i3000+','i3000+',5,1),
-(1,'Aditivos Liquimoly','Aditivos Liquimoly',6,1),
-(1,'Glasscoat','Glasscoat',7,1),
-(1,'Airlife','Airlife',8,1),
-(1,'ECOEVOL','ECOEVOL',9,1),
-(2,'Kit360','Kit360',1,1),
-(2,'Llantas Cosmo','Llantas Cosmo',2,1),
-(2,'Kit Seguridad','Kit Seguridad',3,1),
-(2,'Prepagados','Prepagados',4,1),
-(2,'Baterías','Baterías',5,1),
-(2,'i3000+','i3000+',6,1),
-(2,'Aditivos Liquimoly','Aditivos Liquimoly',7,1),
-(2,'Llantas','Llantas',8,1),
-(3,'Kit360','Kit360',1,1),
-(3,'Prepagados','Prepagados',2,1),
-(3,'Baterías','Baterías',3,1),
-(3,'i3000+','i3000+',4,1),
-(3,'Aditivos Liquimoly','Aditivos Liquimoly',5,1),
-(3,'Glasscoat','Glasscoat',6,1);
+INSERT IGNORE INTO wp_billetera_categorias (linea_codigo, nombre, slug, orden_display, activo) VALUES
+('hyu','Kit360','Kit360',1,1),
+('hyu','Kit Seguridad','Kit Seguridad',2,1),
+('hyu','Prepagados','Prepagados',3,1),
+('hyu','Baterías','Baterías',4,1),
+('hyu','i3000+','i3000+',5,1),
+('hyu','Aditivos Liquimoly','Aditivos Liquimoly',6,1),
+('hyu','Glasscoat','Glasscoat',7,1),
+('hyu','Airlife','Airlife',8,1),
+('hyu','ECOEVOL','ECOEVOL',9,1),
+('jmc','Kit360','Kit360',1,1),
+('jmc','Llantas Cosmo','Llantas Cosmo',2,1),
+('jmc','Kit Seguridad','Kit Seguridad',3,1),
+('jmc','Prepagados','Prepagados',4,1),
+('jmc','Baterías','Baterías',5,1),
+('jmc','i3000+','i3000+',6,1),
+('jmc','Aditivos Liquimoly','Aditivos Liquimoly',7,1),
+('jmc','Llantas','Llantas',8,1),
+('gee','Kit360','Kit360',1,1),
+('gee','Prepagados','Prepagados',2,1),
+('gee','Baterías','Baterías',3,1),
+('gee','i3000+','i3000+',4,1),
+('gee','Aditivos Liquimoly','Aditivos Liquimoly',5,1),
+('gee','Glasscoat','Glasscoat',6,1);
 
 
 
@@ -158,146 +166,146 @@ INSERT IGNORE INTO wp_billetera_subcategorias (categoria_id, nombre, por_unidad,
 
 
 -- Hyundai Kit360
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND marca_id = 1), 'Gold', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND marca_id = 1), 'Bronze', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND linea_codigo = 'hyu'), 'Gold', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND linea_codigo = 'hyu'), 'Bronze', 0, 2, 1),
 -- JMC Kit360
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND marca_id = 2), 'Gold', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND marca_id = 2), 'Bronze', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND linea_codigo = 'jmc'), 'Gold', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND linea_codigo = 'jmc'), 'Bronze', 0, 2, 1),
 -- Geely Kit360
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND marca_id = 3), 'Gold', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND marca_id = 3), 'Bronze', 0, 2, 1);
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND linea_codigo = 'gee'), 'Gold', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit360' AND linea_codigo = 'gee'), 'Bronze', 0, 2, 1);
 
 -- PASO 5: INSERTAR SUBCATEGORÍAS (Llantas)
 -- ============================================================================
 INSERT IGNORE INTO wp_billetera_subcategorias (categoria_id, nombre, por_unidad, orden_display, activo) VALUES
 -- JMC Llantas Cosmo
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas-cosmo' AND marca_id = 2), 'Mudkicker Juego', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas-cosmo' AND marca_id = 2), 'Mudkicker Unidad', 1, 2, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas-cosmo' AND marca_id = 2), 'GripitXT', 0, 3, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas-cosmo' AND marca_id = 2), 'GripitXT Unidad', 1, 4, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas-cosmo' AND linea_codigo = 'jmc'), 'Mudkicker Juego', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas-cosmo' AND linea_codigo = 'jmc'), 'Mudkicker Unidad', 1, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas-cosmo' AND linea_codigo = 'jmc'), 'GripitXT', 0, 3, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas-cosmo' AND linea_codigo = 'jmc'), 'GripitXT Unidad', 1, 4, 1),
 -- JMC Llantas
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas' AND marca_id = 2), 'GITIXROSS HT71 265/65R17', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas' AND marca_id = 2), '275/70R18 GRIPIT XT', 0, 2, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas' AND marca_id = 2), '265/70R17 GRIPIT XT', 0, 3, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas' AND marca_id = 2), '265/70R17 MUD KICKER MT', 0, 4, 1);
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas' AND linea_codigo = 'jmc'), 'GITIXROSS HT71 265/65R17', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas' AND linea_codigo = 'jmc'), '275/70R18 GRIPIT XT', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas' AND linea_codigo = 'jmc'), '265/70R17 GRIPIT XT', 0, 3, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'llantas' AND linea_codigo = 'jmc'), '265/70R17 MUD KICKER MT', 0, 4, 1);
 
 -- PASO 6: INSERTAR SUBCATEGORÍAS (Kit Seguridad)
 -- ============================================================================
 INSERT IGNORE INTO wp_billetera_subcategorias (categoria_id, nombre, por_unidad, orden_display, activo) VALUES
 -- Hyundai Kit Seguridad
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit-seguridad' AND marca_id = 1), 'Pick Ups', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit-seguridad' AND marca_id = 1), 'Camiones', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit-seguridad' AND linea_codigo = 'hyu'), 'Pick Ups', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit-seguridad' AND linea_codigo = 'hyu'), 'Camiones', 0, 2, 1),
 -- JMC Kit Seguridad
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit-seguridad' AND marca_id = 2), 'Pick Ups', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit-seguridad' AND marca_id = 2), 'Camiones', 0, 2, 1);
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit-seguridad' AND linea_codigo = 'jmc'), 'Pick Ups', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'kit-seguridad' AND linea_codigo = 'jmc'), 'Camiones', 0, 2, 1);
 
 -- PASO 7: INSERTAR SUBCATEGORÍAS (Prepagados)
 -- ============================================================================
 INSERT IGNORE INTO wp_billetera_subcategorias (categoria_id, nombre, por_unidad, orden_display, activo) VALUES
 -- Hyundai Prepagados
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 1), '2-3 mpps', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 1), '4-5 mpps', 0, 2, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 1), '6-7 mpps', 0, 3, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 1), '8-9 mpps', 0, 4, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 1), '10 mpps / 50,000 km', 0, 5, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'hyu'), '2-3 mpps', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'hyu'), '4-5 mpps', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'hyu'), '6-7 mpps', 0, 3, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'hyu'), '8-9 mpps', 0, 4, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'hyu'), '10 mpps / 50,000 km', 0, 5, 1),
 -- JMC Prepagados
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 2), '2-3 mpps', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 2), '4-5 mpps', 0, 2, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 2), '6-7 mpps', 0, 3, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 2), '8-9 mpps', 0, 4, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 2), '10 mpps / 50,000 km', 0, 5, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'jmc'), '2-3 mpps', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'jmc'), '4-5 mpps', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'jmc'), '6-7 mpps', 0, 3, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'jmc'), '8-9 mpps', 0, 4, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'jmc'), '10 mpps / 50,000 km', 0, 5, 1),
 -- Geely Prepagados
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 3), '2 mpps', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 3), '3 mpps', 0, 2, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 3), '4 mpps', 0, 3, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND marca_id = 3), '5+ mpps', 0, 4, 1);
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'gee'), '2 mpps', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'gee'), '3 mpps', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'gee'), '4 mpps', 0, 3, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'prepagados' AND linea_codigo = 'gee'), '5+ mpps', 0, 4, 1);
 
 -- PASO 8: INSERTAR SUBCATEGORÍAS (Baterías)
 -- ============================================================================
 INSERT IGNORE INTO wp_billetera_subcategorias (categoria_id, nombre, por_unidad, orden_display, activo) VALUES
 -- Hyundai Baterías
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 1), '44B19FL - Batería 187', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 1), '55054 - Batería 207', 0, 2, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 1), '80D23L - Batería 231', 0, 3, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 1), '56077 - Batería 242', 0, 4, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 1), '24R-670 - Batería 258', 0, 5, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 1), '56828 - Batería 277', 0, 6, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 1), '105D31R - Batería 303', 0, 7, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 1), '105D31L - Batería 303', 0, 8, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 1), '94R-800 - Batería 315', 0, 9, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 1), '94L-800 - Batería 315', 0, 10, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 1), '115D33R - Batería 326', 0, 11, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'hyu'), '44B19FL - Batería 187', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'hyu'), '55054 - Batería 207', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'hyu'), '80D23L - Batería 231', 0, 3, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'hyu'), '56077 - Batería 242', 0, 4, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'hyu'), '24R-670 - Batería 258', 0, 5, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'hyu'), '56828 - Batería 277', 0, 6, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'hyu'), '105D31R - Batería 303', 0, 7, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'hyu'), '105D31L - Batería 303', 0, 8, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'hyu'), '94R-800 - Batería 315', 0, 9, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'hyu'), '94L-800 - Batería 315', 0, 10, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'hyu'), '115D33R - Batería 326', 0, 11, 1),
 -- Geely Baterías
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 3), '56077G - Batería 242', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 3), '56828G - Batería 277', 0, 2, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 3), 'JMC105D31L - Batería 303', 0, 3, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'gee'), '56077G - Batería 242', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'gee'), '56828G - Batería 277', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'gee'), 'JMC105D31L - Batería 303', 0, 3, 1),
 -- JMC Baterías
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND marca_id = 2), 'JCM105D31R - Batería 303', 0, 1, 1);
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'baterias' AND linea_codigo = 'jmc'), 'JCM105D31R - Batería 303', 0, 1, 1);
 
 -- PASO 9: INSERTAR SUBCATEGORÍAS (i3000+)
 -- ============================================================================
 INSERT IGNORE INTO wp_billetera_subcategorias (categoria_id, nombre, por_unidad, orden_display, activo) VALUES
 -- Hyundai i3000+
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND marca_id = 1), 'i3000+ GASOL. HYUNDAI', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND marca_id = 1), 'i3000+ DIESEL 500ml HYUNDAI', 0, 2, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND marca_id = 1), 'i3000+ MAQUILADO (SIN LOGO HYUNDAI)', 0, 3, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND marca_id = 1), 'i3000+ GASOL. -VOLVO (SIN LOGO HYUNDAI)', 0, 4, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND marca_id = 1), 'i3000+ GASOL. JLRO (SIN LOGO HYUNDAI)', 0, 5, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND linea_codigo = 'hyu'), 'i3000+ GASOL. HYUNDAI', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND linea_codigo = 'hyu'), 'i3000+ DIESEL 500ml HYUNDAI', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND linea_codigo = 'hyu'), 'i3000+ MAQUILADO (SIN LOGO HYUNDAI)', 0, 3, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND linea_codigo = 'hyu'), 'i3000+ GASOL. -VOLVO (SIN LOGO HYUNDAI)', 0, 4, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND linea_codigo = 'hyu'), 'i3000+ GASOL. JLRO (SIN LOGO HYUNDAI)', 0, 5, 1),
 -- Geely i3000+
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND marca_id = 3), 'I3000+ GASOL. (SIN LOGO HYUNDAI)', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND linea_codigo = 'gee'), 'I3000+ GASOL. (SIN LOGO HYUNDAI)', 0, 1, 1),
 -- JMC i3000+
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND marca_id = 2), 'I3000+ DIESEL (SIN LOGO HYUNDAI)', 0, 1, 1);
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'i3000' AND linea_codigo = 'jmc'), 'I3000+ DIESEL (SIN LOGO HYUNDAI)', 0, 1, 1);
 
 -- PASO 10: INSERTAR SUBCATEGORÍAS (Aditivos Liquimoly)
 -- ============================================================================
 INSERT IGNORE INTO wp_billetera_subcategorias (categoria_id, nombre, por_unidad, orden_display, activo) VALUES
 -- Hyundai Aditivos Liquimoly
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'Pack Inyección + Obturador (Vehículos Diesel)', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'PACK MANTEMIENTO DE FRENOS (3 Productos)', 0, 2, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'PACK DPF Preventivo', 0, 3, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'PACK DE INYECCIÓN GASOLINA (2 Productos)', 0, 4, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'PACK DE INYECCIÓN DIESEL (2 Productos)', 0, 5, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'PACK DE LIMPIEZA DE INYECCIÓN Y OBTURADOR (3 Productos)', 0, 6, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'PACK MANTENIMIENTO DE MOTOR (2 Productos, Gasolina & Diesel)', 0, 7, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'PACK MANTENIMIENTO RADIADOR (2 Productos)', 0, 8, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'PACK MANTENIMIENTO DIRECCIÓN HIDRÁULICA (2 Productos)', 0, 9, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'Pack Inyección Diesel', 0, 10, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'Pack Inyección Gasolina', 0, 11, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 1), 'KLIMA REFRESH: LIMPIEZA DE A/C', 0, 12, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'Pack Inyección + Obturador (Vehículos Diesel)', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'PACK MANTEMIENTO DE FRENOS (3 Productos)', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'PACK DPF Preventivo', 0, 3, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'PACK DE INYECCIÓN GASOLINA (2 Productos)', 0, 4, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'PACK DE INYECCIÓN DIESEL (2 Productos)', 0, 5, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'PACK DE LIMPIEZA DE INYECCIÓN Y OBTURADOR (3 Productos)', 0, 6, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'PACK MANTENIMIENTO DE MOTOR (2 Productos, Gasolina & Diesel)', 0, 7, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'PACK MANTENIMIENTO RADIADOR (2 Productos)', 0, 8, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'PACK MANTENIMIENTO DIRECCIÓN HIDRÁULICA (2 Productos)', 0, 9, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'Pack Inyección Diesel', 0, 10, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'Pack Inyección Gasolina', 0, 11, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'hyu'), 'KLIMA REFRESH: LIMPIEZA DE A/C', 0, 12, 1),
 -- JMC Aditivos Liquimoly
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 2), 'PACK DE INYECCIÓN DIESEL (2 Productos)', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'jmc'), 'PACK DE INYECCIÓN DIESEL (2 Productos)', 0, 1, 1),
 -- Geely Aditivos Liquimoly
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 3), 'PACK DE INYECCIÓN GASOLINA (2 Productos)', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 3), 'PACK DE LIMPIEZA DE INYECCIÓN Y OBTURADOR (3 Productos)', 0, 2, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 3), 'PACK MANTENIMIENTO DE MOTOR (2 Productos, Gasolina & Diesel)', 0, 3, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 3), 'PACK MANTENIMIENTO RADIADOR (2 Productos)', 0, 4, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 3), 'PACK MANTEMIENTO DE FRENOS (3 Productos)', 0, 5, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND marca_id = 3), 'PACK MANTENIMIENTO DIRECCIÓN HIDRÁULICA (2 Productos)', 0, 6, 1);
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'gee'), 'PACK DE INYECCIÓN GASOLINA (2 Productos)', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'gee'), 'PACK DE LIMPIEZA DE INYECCIÓN Y OBTURADOR (3 Productos)', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'gee'), 'PACK MANTENIMIENTO DE MOTOR (2 Productos, Gasolina & Diesel)', 0, 3, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'gee'), 'PACK MANTENIMIENTO RADIADOR (2 Productos)', 0, 4, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'gee'), 'PACK MANTEMIENTO DE FRENOS (3 Productos)', 0, 5, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'aditivos-liquimoly' AND linea_codigo = 'gee'), 'PACK MANTENIMIENTO DIRECCIÓN HIDRÁULICA (2 Productos)', 0, 6, 1);
 
 -- PASO 11: INSERTAR SUBCATEGORÍAS (Glasscoat)
 -- ============================================================================
 INSERT IGNORE INTO wp_billetera_subcategorias (categoria_id, nombre, por_unidad, orden_display, activo) VALUES
 -- Hyundai Glasscoat
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND marca_id = 1), 'HYUNDAI BRONZE PACK - GLASSCOAT', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND marca_id = 1), 'HYUNDAI GOLD PACK- GLASSCOAT', 0, 2, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND marca_id = 1), 'GOLD PACK- GLASSCOAT LRO (PARA REPOSICION)', 0, 3, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND marca_id = 1), 'GOLD PACK- GLASSCOAT VOLVO (PARA REPOSICION)', 0, 4, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND linea_codigo = 'hyu'), 'HYUNDAI BRONZE PACK - GLASSCOAT', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND linea_codigo = 'hyu'), 'HYUNDAI GOLD PACK- GLASSCOAT', 0, 2, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND linea_codigo = 'hyu'), 'GOLD PACK- GLASSCOAT LRO (PARA REPOSICION)', 0, 3, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND linea_codigo = 'hyu'), 'GOLD PACK- GLASSCOAT VOLVO (PARA REPOSICION)', 0, 4, 1),
 -- Geely Glasscoat
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND marca_id = 3), 'GEELY BRONZE PACK - GLASSCOAT', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND marca_id = 3), 'GEELY GOLD PACK- GLASSCOAT', 0, 2, 1);
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND linea_codigo = 'gee'), 'GEELY BRONZE PACK - GLASSCOAT', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'glasscoat' AND linea_codigo = 'gee'), 'GEELY GOLD PACK- GLASSCOAT', 0, 2, 1);
 
 -- PASO 12: INSERTAR SUBCATEGORÍAS (Airlife)
 -- ============================================================================
 INSERT IGNORE INTO wp_billetera_subcategorias (categoria_id, nombre, por_unidad, orden_display, activo) VALUES
 -- Hyundai Airlife
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'airlife' AND marca_id = 1), 'Venta Servicio Airlife', 0, 1, 1);
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'airlife' AND linea_codigo = 'hyu'), 'Venta Servicio Airlife', 0, 1, 1);
 
 -- PASO 13: INSERTAR SUBCATEGORÍAS (ECOEVOL)
 -- ============================================================================
 INSERT IGNORE INTO wp_billetera_subcategorias (categoria_id, nombre, por_unidad, orden_display, activo) VALUES
 -- Hyundai ECOEVOL
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'ecoevol' AND marca_id = 1), 'PURIFICADOR DE DIESEL ECOEVOL F+', 0, 1, 1),
-((SELECT id FROM wp_billetera_categorias WHERE slug = 'ecoevol' AND marca_id = 1), 'CATALIZADOR DE COMBUSTIBLE ECOEVOL C', 1, 2, 1);
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'ecoevol' AND linea_codigo = 'hyu'), 'PURIFICADOR DE DIESEL ECOEVOL F+', 0, 1, 1),
+((SELECT id FROM wp_billetera_categorias WHERE slug = 'ecoevol' AND linea_codigo = 'hyu'), 'CATALIZADOR DE COMBUSTIBLE ECOEVOL C', 1, 2, 1);
 
 -- ============================================================================
 -- PASO 14: INSERTAR COMISIONES (TODOS = NULL)
@@ -583,3 +591,32 @@ INSERT IGNORE INTO wp_billetera_comisiones (subcategoria_id, distribuidor_id, ro
 INSERT IGNORE INTO wp_billetera_comisiones (subcategoria_id, distribuidor_id, rol, monto, moneda, activo) VALUES
 (77,16,'asesor',10,'SOL',1),
 (77,16,'jefe_venta',0,'SOL',1);
+
+-- ============================================================================
+-- PASO 15: DUPLICAR LA LÍNEA 'hyu' (Hyundai Autos) HACIA 'hcv' (Hyundai Camiones)
+-- Se clonan categorías, subcategorías y comisiones para que ambas líneas
+-- arranquen con el mismo catálogo. Ejecutar una sola vez.
+-- ============================================================================
+
+-- 15.1 Categorías hyu -> hcv
+INSERT IGNORE INTO wp_billetera_categorias (linea_codigo, nombre, slug, orden_display, activo)
+SELECT 'hcv', nombre, slug, orden_display, activo
+FROM wp_billetera_categorias
+WHERE linea_codigo = 'hyu';
+
+-- 15.2 Subcategorías hyu -> hcv
+INSERT INTO wp_billetera_subcategorias (categoria_id, nombre, por_unidad, orden_display, activo)
+SELECT chcv.id, s.nombre, s.por_unidad, s.orden_display, s.activo
+FROM wp_billetera_categorias chcv
+JOIN wp_billetera_categorias chyu ON chyu.linea_codigo = 'hyu' AND chyu.slug = chcv.slug
+JOIN wp_billetera_subcategorias s ON s.categoria_id = chyu.id
+WHERE chcv.linea_codigo = 'hcv';
+
+-- 15.3 Comisiones hyu -> hcv
+INSERT INTO wp_billetera_comisiones (subcategoria_id, distribuidor_id, rol, monto, moneda, activo)
+SELECT shcv.id, com.distribuidor_id, com.rol, com.monto, com.moneda, com.activo
+FROM wp_billetera_subcategorias shcv
+JOIN wp_billetera_categorias chcv ON chcv.id = shcv.categoria_id AND chcv.linea_codigo = 'hcv'
+JOIN wp_billetera_categorias chyu ON chyu.linea_codigo = 'hyu' AND chyu.slug = chcv.slug
+JOIN wp_billetera_subcategorias shyu ON shyu.categoria_id = chyu.id AND shyu.nombre = shcv.nombre
+JOIN wp_billetera_comisiones com ON com.subcategoria_id = shyu.id;

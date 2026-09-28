@@ -21,47 +21,251 @@ require_once(plugin_dir_path(__FILE__) . 'includes/admin-import-page.php');
 // Crear tablas de catálogo al activar
 register_activation_hook(__FILE__, 'billetera_create_catalog_tables');
 
-// Migración en caliente: asegura que la columna asesor_id exista sin reactivar el plugin
+// Migración en caliente: mantiene el esquema sin reactivar el plugin
 add_action('plugins_loaded', 'billetera_maybe_upgrade_schema');
 
 function billetera_maybe_upgrade_schema() {
-    if (get_option('billetera_db_version') === '1.2') {
+    if (get_option('billetera_db_version') === '1.3') {
         return;
     }
 
     global $wpdb;
+
+    // --- 1.2: columna asesor_id en ventas ---
     $ventas_table = $wpdb->prefix . 'billetera_ventas';
     if ($wpdb->get_var("SHOW TABLES LIKE '$ventas_table'") == $ventas_table) {
-        $columns = $wpdb->get_results("SHOW COLUMNS FROM $ventas_table");
-        $column_names = array_column((array) $columns, 'Field');
+        $column_names = array_column((array) $wpdb->get_results("SHOW COLUMNS FROM $ventas_table"), 'Field');
         if (!in_array('asesor_id', $column_names)) {
             $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN asesor_id bigint(20)");
         }
     }
 
-    // Tabla de METAS por sucursal x marca x tipo (sin reactivar)
-    $metas_table = $wpdb->prefix . 'billetera_metas';
-    if ($wpdb->get_var("SHOW TABLES LIKE '$metas_table'") != $metas_table) {
-        $charset_collate = $wpdb->get_charset_collate();
-        $sql = "CREATE TABLE $metas_table (
-            id mediumint(9) NOT NULL AUTO_INCREMENT,
-            tienda_id bigint(20) NOT NULL,
-            marca_id mediumint(9) NOT NULL,
-            tipo varchar(20) NOT NULL,
-            meta decimal(10, 2) NOT NULL DEFAULT 0,
-            creado_en datetime DEFAULT CURRENT_TIMESTAMP,
-            actualizado_en datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            UNIQUE KEY cruce_unico (tienda_id, marca_id, tipo),
-            KEY tienda_id (tienda_id),
-            KEY marca_id (marca_id)
-        ) $charset_collate;";
+    // --- 1.3: líneas (hyu/hcv/gee/jmc) independientes de las marcas ---
+    billetera_create_lineas_table();
+    billetera_seed_lineas();
+    billetera_migrate_categorias_to_lineas();
+    billetera_reset_metas_table();
 
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-        dbDelta($sql);
+    update_option('billetera_db_version', '1.3');
+}
+
+/**
+ * Crea la tabla de LÍNEAS (hyu, hcv, gee, jmc) si no existe.
+ * Cada línea pertenece a una marca (agrupador).
+ */
+function billetera_create_lineas_table() {
+    global $wpdb;
+    $lineas_table = $wpdb->prefix . 'billetera_lineas';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$lineas_table'") == $lineas_table) {
+        return;
     }
 
-    update_option('billetera_db_version', '1.2');
+    $charset_collate = $wpdb->get_charset_collate();
+    $sql = "CREATE TABLE $lineas_table (
+        codigo varchar(3) NOT NULL,
+        nombre varchar(100) NOT NULL,
+        marca_id mediumint(9) NOT NULL,
+        orden_display int(3) DEFAULT 0,
+        activo tinyint(1) DEFAULT 1,
+        creado_en datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (codigo),
+        KEY marca_id (marca_id)
+    ) $charset_collate;";
+
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+}
+
+/**
+ * Inserta las 4 líneas base mapeadas a su marca (por slug), si la tabla está vacía.
+ */
+function billetera_seed_lineas() {
+    global $wpdb;
+    $lineas_table = $wpdb->prefix . 'billetera_lineas';
+    $marcas_table = $wpdb->prefix . 'billetera_marcas';
+
+    $count = intval($wpdb->get_var("SELECT COUNT(*) FROM $lineas_table"));
+    if ($count > 0) {
+        return;
+    }
+
+    $marca_ids = [];
+    foreach ($wpdb->get_results("SELECT id, slug FROM $marcas_table") as $m) {
+        $marca_ids[$m->slug] = intval($m->id);
+    }
+
+    $lineas = [
+        ['hyu', 'Hyundai Autos',    'hyundai', 1],
+        ['hcv', 'Hyundai Camiones', 'hyundai', 2],
+        ['gee', 'Geely',            'geely',   3],
+        ['jmc', 'JMC',              'jmc',     4],
+    ];
+
+    foreach ($lineas as $l) {
+        if (empty($marca_ids[$l[2]])) {
+            continue;
+        }
+        $wpdb->query($wpdb->prepare(
+            "INSERT IGNORE INTO $lineas_table (codigo, nombre, marca_id, orden_display, activo) VALUES (%s, %s, %d, %d, 1)",
+            $l[0], $l[1], $marca_ids[$l[2]], $l[3]
+        ));
+    }
+}
+
+/**
+ * Migra categorías de marca_id a linea_codigo.
+ * hyundai → hyu, y además clona toda su rama (subcategorías y comisiones) a hcv.
+ */
+function billetera_migrate_categorias_to_lineas() {
+    global $wpdb;
+    $categorias_table = $wpdb->prefix . 'billetera_categorias';
+    $marcas_table = $wpdb->prefix . 'billetera_marcas';
+
+    if ($wpdb->get_var("SHOW TABLES LIKE '$categorias_table'") != $categorias_table) {
+        return;
+    }
+
+    $columns = array_column((array) $wpdb->get_results("SHOW COLUMNS FROM $categorias_table"), 'Field');
+    if (!in_array('linea_codigo', $columns)) {
+        $wpdb->query("ALTER TABLE $categorias_table ADD COLUMN linea_codigo varchar(3) NULL AFTER id");
+    }
+
+    if (in_array('marca_id', $columns)) {
+        $map = [
+            'hyundai' => 'hyu',
+            'jmc'     => 'jmc',
+            'geely'   => 'gee',
+        ];
+        foreach ($wpdb->get_results("SELECT id, slug FROM $marcas_table") as $m) {
+            if (!isset($map[$m->slug])) {
+                continue;
+            }
+            $wpdb->query($wpdb->prepare(
+                "UPDATE $categorias_table SET linea_codigo = %s WHERE marca_id = %d AND (linea_codigo IS NULL OR linea_codigo = '')",
+                $map[$m->slug], $m->id
+            ));
+        }
+
+        // Quitar marca_id ANTES de clonar (es NOT NULL y bloquearía los inserts)
+        $pending = intval($wpdb->get_var("SELECT COUNT(*) FROM $categorias_table WHERE linea_codigo IS NULL OR linea_codigo = ''"));
+        if ($pending > 0) {
+            return; // Hay filas sin línea; no continuar para no perder datos
+        }
+
+        $wpdb->query("ALTER TABLE $categorias_table DROP INDEX categoria_unica");
+        $wpdb->query("ALTER TABLE $categorias_table DROP INDEX marca_id");
+        $wpdb->query("ALTER TABLE $categorias_table DROP COLUMN marca_id");
+        $wpdb->query("ALTER TABLE $categorias_table ADD UNIQUE KEY categoria_unica (linea_codigo, slug)");
+        $wpdb->query("ALTER TABLE $categorias_table ADD KEY linea_codigo (linea_codigo)");
+
+        // Clonar la rama de hyu hacia hcv
+        $hyu_cats = $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM $categorias_table WHERE linea_codigo = %s", 'hyu'
+        ));
+        foreach ($hyu_cats as $cat_id) {
+            billetera_clone_categoria((int) $cat_id, 'hcv');
+        }
+    }
+}
+
+/**
+ * Clona una categoría (con sus subcategorías y comisiones) a otra línea.
+ */
+function billetera_clone_categoria($categoria_id, $target_linea) {
+    global $wpdb;
+    $cat_table = $wpdb->prefix . 'billetera_categorias';
+    $sub_table = $wpdb->prefix . 'billetera_subcategorias';
+    $com_table = $wpdb->prefix . 'billetera_comisiones';
+
+    $cat = $wpdb->get_row($wpdb->prepare("SELECT * FROM $cat_table WHERE id = %d", $categoria_id));
+    if (!$cat) {
+        return;
+    }
+
+    // Evitar duplicar si ya existe esa línea+slug
+    $exists = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $cat_table WHERE linea_codigo = %s AND slug = %s",
+        $target_linea, $cat->slug
+    ));
+    if ($exists) {
+        return;
+    }
+
+    $wpdb->insert($cat_table, [
+        'linea_codigo'  => $target_linea,
+        'nombre'        => $cat->nombre,
+        'slug'          => $cat->slug,
+        'orden_display' => $cat->orden_display,
+        'activo'        => $cat->activo,
+    ], ['%s', '%s', '%s', '%d', '%d']);
+    $new_cat_id = intval($wpdb->insert_id);
+    if (!$new_cat_id) {
+        return;
+    }
+
+    foreach ($wpdb->get_results($wpdb->prepare("SELECT * FROM $sub_table WHERE categoria_id = %d", $categoria_id)) as $sub) {
+        $wpdb->insert($sub_table, [
+            'categoria_id'  => $new_cat_id,
+            'nombre'        => $sub->nombre,
+            'por_unidad'    => $sub->por_unidad,
+            'orden_display' => $sub->orden_display,
+            'activo'        => $sub->activo,
+        ], ['%d', '%s', '%d', '%d', '%d']);
+        $new_sub_id = intval($wpdb->insert_id);
+        if (!$new_sub_id) {
+            continue;
+        }
+
+        foreach ($wpdb->get_results($wpdb->prepare("SELECT * FROM $com_table WHERE subcategoria_id = %d", $sub->id)) as $com) {
+            $wpdb->insert($com_table, [
+                'subcategoria_id' => $new_sub_id,
+                'distribuidor_id' => $com->distribuidor_id,
+                'rol'             => $com->rol,
+                'monto'           => $com->monto,
+                'moneda'          => $com->moneda,
+                'activo'          => $com->activo,
+            ], ['%d', '%d', '%s', '%f', '%s', '%d']);
+        }
+    }
+}
+
+/**
+ * Recrea la tabla de METAS con linea_codigo (resetea datos).
+ */
+function billetera_reset_metas_table() {
+    global $wpdb;
+    $metas_table = $wpdb->prefix . 'billetera_metas';
+    $wpdb->query("DROP TABLE IF EXISTS $metas_table");
+    billetera_create_metas_table();
+}
+
+/**
+ * Esquema de METAS: sucursal x línea x tipo (Venta / Post Venta).
+ */
+function billetera_create_metas_table() {
+    global $wpdb;
+    $metas_table = $wpdb->prefix . 'billetera_metas';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$metas_table'") == $metas_table) {
+        return;
+    }
+
+    $charset_collate = $wpdb->get_charset_collate();
+    $sql = "CREATE TABLE $metas_table (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        tienda_id bigint(20) NOT NULL,
+        linea_codigo varchar(3) NOT NULL,
+        tipo varchar(20) NOT NULL,
+        meta decimal(10, 2) NOT NULL DEFAULT 0,
+        creado_en datetime DEFAULT CURRENT_TIMESTAMP,
+        actualizado_en datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cruce_unico (tienda_id, linea_codigo, tipo),
+        KEY tienda_id (tienda_id),
+        KEY linea_codigo (linea_codigo)
+    ) $charset_collate;";
+
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
 }
 
 function billetera_create_catalog_tables() {
@@ -85,20 +289,24 @@ function billetera_create_catalog_tables() {
         dbDelta($sql);
     }
 
-    // Tabla de CATEGORÍAS
+    // Tabla de LÍNEAS (hyu/hcv/gee/jmc) — cada una agrupada en una marca
+    billetera_create_lineas_table();
+    billetera_seed_lineas();
+
+    // Tabla de CATEGORÍAS (pertenecen a una línea, no a la marca)
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
     if ($wpdb->get_var("SHOW TABLES LIKE '$categorias_table'") != $categorias_table) {
         $sql = "CREATE TABLE $categorias_table (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
-            marca_id mediumint(9) NOT NULL,
+            linea_codigo varchar(3) NOT NULL,
             nombre varchar(100) NOT NULL,
             slug varchar(100) NOT NULL,
             orden_display int(3) DEFAULT 0,
             activo tinyint(1) DEFAULT 1,
             creado_en datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
-            KEY marca_id (marca_id),
-            UNIQUE KEY categoria_unica (marca_id, slug)
+            KEY linea_codigo (linea_codigo),
+            UNIQUE KEY categoria_unica (linea_codigo, slug)
         ) $charset_collate;";
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -212,26 +420,8 @@ function billetera_create_catalog_tables() {
     // Insertar configuración por defecto
     billetera_insert_default_config();
 
-    // Tabla de METAS por sucursal x marca x tipo (Venta / Post Venta)
-    $metas_table = $wpdb->prefix . 'billetera_metas';
-    if ($wpdb->get_var("SHOW TABLES LIKE '$metas_table'") != $metas_table) {
-        $sql = "CREATE TABLE $metas_table (
-            id mediumint(9) NOT NULL AUTO_INCREMENT,
-            tienda_id bigint(20) NOT NULL,
-            marca_id mediumint(9) NOT NULL,
-            tipo varchar(20) NOT NULL,
-            meta decimal(10, 2) NOT NULL DEFAULT 0,
-            creado_en datetime DEFAULT CURRENT_TIMESTAMP,
-            actualizado_en datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            UNIQUE KEY cruce_unico (tienda_id, marca_id, tipo),
-            KEY tienda_id (tienda_id),
-            KEY marca_id (marca_id)
-        ) $charset_collate;";
-
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-        dbDelta($sql);
-    }
+    // Tabla de METAS por sucursal x línea x tipo (Venta / Post Venta)
+    billetera_create_metas_table();
 }
 
 function billetera_insert_default_config() {
@@ -258,95 +448,96 @@ function billetera_insert_default_config() {
     }
 }
 
-// Helper: Obtener marcas permitidas para un usuario según sus permisos
-function billetera_get_marcas_permitidas($user_id = null) {
+// Helper: Obtener líneas (hyu/hcv/gee/jmc) permitidas para un usuario
+function billetera_get_lineas_permitidas($user_id = null) {
     if (!$user_id) {
         $user_id = get_current_user_id();
     }
 
-    // Mapeo de permisos a slugs de marca
+    // Mapeo 1:1 de permisos a códigos de línea
     $permisos = [
-        'billetera_hyu' => 'hyundai',
-        'billetera_hcv' => 'hyundai',
-        'billetera_gee' => 'geely',
+        'billetera_hyu' => 'hyu',
+        'billetera_hcv' => 'hcv',
+        'billetera_gee' => 'gee',
         'billetera_jmc' => 'jmc',
     ];
 
-    $slugs_permitidos = [];
+    $codigos = [];
 
-    foreach ($permisos as $meta_key => $slug) {
-        $valor = get_user_meta($user_id, $meta_key, true);
-        if ($valor) {
-            if (!in_array($slug, $slugs_permitidos)) {
-                $slugs_permitidos[] = $slug;
-            }
+    foreach ($permisos as $meta_key => $codigo) {
+        if (get_user_meta($user_id, $meta_key, true)) {
+            $codigos[] = $codigo;
         }
     }
 
-    // Si no tiene permisos, retornar array vacío
-    if (empty($slugs_permitidos)) {
+    if (empty($codigos)) {
         return [];
     }
 
-    // Obtener marcas por slugs
     global $wpdb;
+    $lineas_table = $wpdb->prefix . 'billetera_lineas';
     $marcas_table = $wpdb->prefix . 'billetera_marcas';
 
-    $placeholders = implode(',', array_fill(0, count($slugs_permitidos), '%s'));
-    $marcas = $wpdb->get_results($wpdb->prepare(
-        "SELECT id, nombre, slug
-         FROM $marcas_table
-         WHERE activo = 1 AND slug IN ($placeholders)
-         ORDER BY nombre ASC",
-        ...$slugs_permitidos
-    ));
+    $placeholders = implode(',', array_fill(0, count($codigos), '%s'));
+    $lineas = $wpdb->get_results($wpdb->prepare("
+        SELECT l.codigo, l.nombre, l.marca_id, l.orden_display,
+               m.nombre AS marca_nombre, m.slug AS marca_slug
+        FROM $lineas_table l
+        LEFT JOIN $marcas_table m ON l.marca_id = m.id
+        WHERE l.activo = 1 AND l.codigo IN ($placeholders)
+        ORDER BY l.orden_display ASC, l.nombre ASC
+    ", ...$codigos));
 
-    return $marcas ?: [];
+    return $lineas ?: [];
 }
 
-// AJAX: Obtener marcas (filtradas por permisos del usuario)
-add_action('wp_ajax_billetera_get_marcas', 'billetera_ajax_get_marcas');
-add_action('wp_ajax_nopriv_billetera_get_marcas', 'billetera_ajax_get_marcas');
+// Alias de compatibilidad: devuelve las líneas permitidas
+function billetera_get_marcas_permitidas($user_id = null) {
+    return billetera_get_lineas_permitidas($user_id);
+}
 
-function billetera_ajax_get_marcas() {
+// AJAX: Obtener líneas (filtradas por permisos del usuario)
+add_action('wp_ajax_billetera_get_lineas', 'billetera_ajax_get_lineas');
+add_action('wp_ajax_nopriv_billetera_get_lineas', 'billetera_ajax_get_lineas');
+// Alias por compatibilidad con clientes previos
+add_action('wp_ajax_billetera_get_marcas', 'billetera_ajax_get_lineas');
+add_action('wp_ajax_nopriv_billetera_get_marcas', 'billetera_ajax_get_lineas');
+
+function billetera_ajax_get_lineas() {
     $user_id = get_current_user_id();
-
-    // Obtener marcas permitidas para el usuario
-    $marcas = billetera_get_marcas_permitidas($user_id);
-
-    wp_send_json_success($marcas);
+    $lineas = billetera_get_lineas_permitidas($user_id);
+    wp_send_json_success($lineas);
 }
 
-// AJAX: Obtener categorías por marca
+// AJAX: Obtener categorías por línea
 add_action('wp_ajax_billetera_get_categorias', 'billetera_ajax_get_categorias');
 add_action('wp_ajax_nopriv_billetera_get_categorias', 'billetera_ajax_get_categorias');
 
 function billetera_ajax_get_categorias() {
     global $wpdb;
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
-    $marcas_table = $wpdb->prefix . 'billetera_marcas';
 
-    $marca_id = intval($_POST['marca_id'] ?? 0);
+    $linea_codigo = sanitize_text_field($_POST['linea_codigo'] ?? '');
     $user_id = get_current_user_id();
 
-    if (!$marca_id) {
-        wp_send_json_error(['message' => 'ID de marca inválido']);
+    if (!$linea_codigo) {
+        wp_send_json_error(['message' => 'Línea inválida']);
     }
 
-    // Validar que el usuario tiene permiso para esta marca
-    $marcas_permitidas = billetera_get_marcas_permitidas($user_id);
-    $marca_ids_permitidos = array_column($marcas_permitidas, 'id');
+    // Validar que el usuario tiene permiso para esta línea
+    $lineas_permitidas = billetera_get_lineas_permitidas($user_id);
+    $codigos_permitidos = array_column($lineas_permitidas, 'codigo');
 
-    if (!in_array($marca_id, $marca_ids_permitidos)) {
-        wp_send_json_error(['message' => 'No tienes permiso para acceder a esta marca']);
+    if (!in_array($linea_codigo, $codigos_permitidos, true)) {
+        wp_send_json_error(['message' => 'No tienes permiso para acceder a esta línea']);
     }
 
     $categorias = $wpdb->get_results($wpdb->prepare("
         SELECT id, nombre, slug
         FROM $categorias_table
-        WHERE marca_id = %d AND activo = 1
+        WHERE linea_codigo = %s AND activo = 1
         ORDER BY orden_display ASC
-    ", $marca_id));
+    ", $linea_codigo));
 
     wp_send_json_success($categorias);
 }
@@ -367,9 +558,9 @@ function billetera_ajax_get_subcategorias() {
         wp_send_json_error(['message' => 'ID de categoría inválido']);
     }
 
-    // Obtener la marca de la categoría
+    // Obtener la línea de la categoría
     $categoria = $wpdb->get_row($wpdb->prepare(
-        "SELECT marca_id FROM $categorias_table WHERE id = %d",
+        "SELECT linea_codigo FROM $categorias_table WHERE id = %d",
         $categoria_id
     ));
 
@@ -377,11 +568,11 @@ function billetera_ajax_get_subcategorias() {
         wp_send_json_error(['message' => 'Categoría no encontrada']);
     }
 
-    // Validar que el usuario tiene permiso para esta marca
-    $marcas_permitidas = billetera_get_marcas_permitidas($user_id);
-    $marca_ids_permitidos = array_column($marcas_permitidas, 'id');
+    // Validar que el usuario tiene permiso para esta línea
+    $lineas_permitidas = billetera_get_lineas_permitidas($user_id);
+    $codigos_permitidos = array_column($lineas_permitidas, 'codigo');
 
-    if (!in_array($categoria->marca_id, $marca_ids_permitidos)) {
+    if (!in_array($categoria->linea_codigo, $codigos_permitidos, true)) {
         wp_send_json_error(['message' => 'No tienes permiso para acceder a esta categoría']);
     }
 
@@ -433,22 +624,22 @@ function billetera_ajax_register_sale_v2() {
         wp_send_json_error(['message' => 'Datos incompletos']);
     }
 
-    // Validar que el usuario tiene permiso para esta subcategoría (mediante su marca)
-    $sub_marca = $wpdb->get_row($wpdb->prepare(
-        "SELECT c.marca_id FROM $subcategorias_table s
+    // Validar que el usuario tiene permiso para esta subcategoría (mediante su línea)
+    $sub_linea = $wpdb->get_row($wpdb->prepare(
+        "SELECT c.linea_codigo FROM $subcategorias_table s
          INNER JOIN $categorias_table c ON s.categoria_id = c.id
          WHERE s.id = %d",
         $subcategoria_id
     ));
 
-    if (!$sub_marca) {
+    if (!$sub_linea) {
         wp_send_json_error(['message' => 'Producto no encontrado']);
     }
 
-    $marcas_permitidas = billetera_get_marcas_permitidas($user_id);
-    $marca_ids_permitidos = array_column($marcas_permitidas, 'id');
+    $lineas_permitidas = billetera_get_lineas_permitidas($user_id);
+    $codigos_permitidos = array_column($lineas_permitidas, 'codigo');
 
-    if (!in_array($sub_marca->marca_id, $marca_ids_permitidos)) {
+    if (!in_array($sub_linea->linea_codigo, $codigos_permitidos, true)) {
         wp_send_json_error(['message' => 'No tienes permiso para registrar ventas de este producto']);
     }
 
@@ -597,21 +788,20 @@ function billetera_get_meta_por_usuario($user_id) {
         return billetera_get_meta_asesor();
     }
 
-    $marcas = billetera_get_marcas_permitidas($user_id);
-    if (empty($marcas)) {
+    $lineas = billetera_get_lineas_permitidas($user_id);
+    if (empty($lineas)) {
         return billetera_get_meta_asesor();
     }
-    $marca_ids = array_map('intval', array_column((array) $marcas, 'id'));
-    $marca_ids = array_values(array_filter($marca_ids));
-    if (empty($marca_ids)) {
+    $codigos = array_values(array_filter(array_column((array) $lineas, 'codigo')));
+    if (empty($codigos)) {
         return billetera_get_meta_asesor();
     }
 
     global $wpdb;
     $metas_table = $wpdb->prefix . 'billetera_metas';
-    $placeholders = implode(',', array_fill(0, count($marca_ids), '%d'));
-    $params = array_merge([$tienda_id, $tipo], $marca_ids);
-    $query = "SELECT SUM(meta) FROM $metas_table WHERE tienda_id = %d AND tipo = %s AND marca_id IN ($placeholders)";
+    $placeholders = implode(',', array_fill(0, count($codigos), '%s'));
+    $params = array_merge([$tienda_id, $tipo], $codigos);
+    $query = "SELECT SUM(meta) FROM $metas_table WHERE tienda_id = %d AND tipo = %s AND linea_codigo IN ($placeholders)";
     $sum = $wpdb->get_var($wpdb->prepare($query, ...$params));
 
     if ($sum === null || floatval($sum) <= 0) {
@@ -746,22 +936,22 @@ function billetera_ajax_get_comision() {
         wp_send_json_error(['message' => 'Datos incompletos']);
     }
 
-    // Validar que el usuario tiene permiso para esta subcategoría (mediante su marca)
-    $sub_marca = $wpdb->get_row($wpdb->prepare(
-        "SELECT c.marca_id FROM $subcategorias_table s
+    // Validar que el usuario tiene permiso para esta subcategoría (mediante su línea)
+    $sub_linea = $wpdb->get_row($wpdb->prepare(
+        "SELECT c.linea_codigo FROM $subcategorias_table s
          INNER JOIN $categorias_table c ON s.categoria_id = c.id
          WHERE s.id = %d",
         $subcategoria_id
     ));
 
-    if (!$sub_marca) {
+    if (!$sub_linea) {
         wp_send_json_error(['message' => 'Producto no encontrado']);
     }
 
-    $marcas_permitidas = billetera_get_marcas_permitidas($user_id);
-    $marca_ids_permitidos = array_column($marcas_permitidas, 'id');
+    $lineas_permitidas = billetera_get_lineas_permitidas($user_id);
+    $codigos_permitidos = array_column($lineas_permitidas, 'codigo');
 
-    if (!in_array($sub_marca->marca_id, $marca_ids_permitidos)) {
+    if (!in_array($sub_linea->linea_codigo, $codigos_permitidos, true)) {
         wp_send_json_error(['message' => 'No tienes permiso para acceder a este producto']);
     }
 
@@ -839,7 +1029,7 @@ function billetera_ajax_get_balance() {
     $ventas_table = $wpdb->prefix . 'billetera_ventas';
 
     // Saldo actual (mes)
-    $current_month = date('Y-m-01');
+    $current_month = current_time('Y-m-01');
     $balance = floatval($wpdb->get_var($wpdb->prepare(
         "SELECT SUM(monto_comision_sol * bonus_multiplier) FROM $ventas_table WHERE usuario_id = %d AND creado_en >= %s",
         $user_id,
@@ -853,7 +1043,7 @@ function billetera_ajax_get_balance() {
     )) ?? 0);
 
     // Acumulado del año
-    $year_start = date('Y-01-01');
+    $year_start = current_time('Y-01-01');
     $acumulado_ano = floatval($wpdb->get_var($wpdb->prepare(
         "SELECT SUM(monto_comision_sol * bonus_multiplier) FROM $ventas_table WHERE usuario_id = %d AND creado_en >= %s",
         $user_id,
@@ -990,6 +1180,346 @@ function billetera_ajax_get_all_movements() {
     ", $user_id));
 
     wp_send_json_success(['movements' => $movements]);
+}
+
+// ============================================================================
+// ESTADÍSTICAS PERSONALES DEL ASESOR ("Mi desempeño")
+// ============================================================================
+
+// AJAX: Estadísticas personales (una sola llamada)
+add_action('wp_ajax_billetera_get_mi_stats', 'billetera_ajax_get_mi_stats');
+
+function billetera_ajax_get_mi_stats() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_get_mi_stats')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
+    $user_id = get_current_user_id();
+    $current_user = wp_get_current_user();
+
+    if (!array_intersect(['asesor', 'jefe_venta', 'administrator'], (array) $current_user->roles)) {
+        wp_send_json_error(['message' => 'No tienes permiso']);
+    }
+
+    $periodo = isset($_POST['periodo']) ? sanitize_text_field($_POST['periodo']) : 'mes';
+    if (!in_array($periodo, ['mes', 'ano', 'historico'], true)) {
+        $periodo = 'mes';
+    }
+
+    $resumen = billetera_stats_resumen_usuario($user_id);
+    $racha   = function_exists('billetera_get_racha') ? intval(billetera_get_racha($user_id)) : 0;
+
+    wp_send_json_success([
+        'periodo'          => $periodo,
+        'resumen'          => $resumen,
+        'tendencia'        => billetera_stats_tendencia_usuario($user_id, 6),
+        'por_categoria'    => billetera_stats_desglose($user_id, $periodo, 'categoria'),
+        'por_subcategoria' => billetera_stats_desglose($user_id, $periodo, 'subcategoria'),
+        'por_linea'        => billetera_stats_desglose($user_id, $periodo, 'linea'),
+        'ranking'          => billetera_stats_ranking($user_id),
+        'racha'            => $racha,
+    ]);
+}
+
+/**
+ * "Ahora" en la zona horaria del sitio (no UTC).
+ *
+ * Nota de almacenamiento: tanto el registro de ventas como los reportes usan
+ * el día calendario LOCAL (Perú) de `date()` —que WordPress fuerza a UTC—, es
+ * decir, se guarda directo la fecha/hora ya "local-izada" en columnas DATETIME.
+ * Los cortes de mes se calculan como texto de fecha, sin volver a convertir a
+ * UTC, para ser consistentes con lo ya guardado.
+ */
+function billetera_stats_local_now() {
+    return new DateTime('now', wp_timezone());
+}
+
+/**
+ * Rango de fechas [desde, hasta) como texto de fecha local, según el periodo.
+ * Devuelve null en los extremos abiertos (histórico).
+ */
+function billetera_stats_rango($periodo) {
+    $now = billetera_stats_local_now();
+
+    $mes_inicio = (clone $now)->modify('first day of this month')->setTime(0, 0, 0);
+    $mes_fin    = (clone $now)->modify('first day of next month')->setTime(0, 0, 0);
+
+    if ($periodo === 'ano') {
+        $ano_inicio = (clone $now)->setDate((int) $now->format('Y'), 1, 1)->setTime(0, 0, 0);
+        return [$ano_inicio->format('Y-m-d H:i:s'), $mes_fin->format('Y-m-d H:i:s')];
+    }
+    if ($periodo === 'historico') {
+        return [null, null];
+    }
+    return [$mes_inicio->format('Y-m-d H:i:s'), $mes_fin->format('Y-m-d H:i:s')];
+}
+
+/**
+ * Resumen: comisión mes actual/anterior/año/histórico, ventas, unidades,
+ * ticket promedio, meta, avance, faltante y proyección de cierre.
+ */
+function billetera_stats_resumen_usuario($user_id) {
+    global $wpdb;
+    $v = $wpdb->prefix . 'billetera_ventas';
+
+    $now        = billetera_stats_local_now();
+    $mes_inicio = $now->format('Y-m-01 00:00:00');
+    $mes_fin    = (clone $now)->modify('first day of next month')->format('Y-m-01 00:00:00');
+    $mes_prev   = (clone $now)->modify('first day of last month')->format('Y-m-01 00:00:00');
+    $ano_inicio = $now->format('Y-01-01 00:00:00');
+
+    $row = $wpdb->get_row($wpdb->prepare("
+        SELECT
+            SUM(CASE WHEN creado_en >= %s AND creado_en < %s THEN monto_comision_sol * bonus_multiplier ELSE 0 END) AS mes_actual,
+            SUM(CASE WHEN creado_en >= %s AND creado_en < %s THEN monto_comision_sol * bonus_multiplier ELSE 0 END) AS mes_anterior,
+            SUM(CASE WHEN creado_en >= %s THEN monto_comision_sol * bonus_multiplier ELSE 0 END) AS acumulado_ano,
+            SUM(monto_comision_sol * bonus_multiplier) AS historico,
+            SUM(CASE WHEN creado_en >= %s AND creado_en < %s THEN 1 ELSE 0 END) AS ventas_mes,
+            SUM(CASE WHEN creado_en >= %s AND creado_en < %s THEN cantidad ELSE 0 END) AS unidades_mes,
+            COUNT(*) AS ventas_historicas
+        FROM $v
+        WHERE usuario_id = %d AND (monto_comision_sol * bonus_multiplier) > 0
+    ",
+        $mes_inicio, $mes_fin,
+        $mes_prev, $mes_inicio,
+        $ano_inicio,
+        $mes_inicio, $mes_fin,
+        $mes_inicio, $mes_fin,
+        $user_id
+    ));
+
+    $mes_actual   = floatval($row->mes_actual ?? 0);
+    $mes_anterior = floatval($row->mes_anterior ?? 0);
+    $ventas_mes   = intval($row->ventas_mes ?? 0);
+    $unidades_mes = intval($row->unidades_mes ?? 0);
+
+    $meta = floatval(billetera_get_meta_por_usuario($user_id));
+    $fill = $meta > 0 ? round(($mes_actual / $meta) * 100, 1) : 0;
+
+    // Proyección sobre días laborables (lun–sáb), consistente con la racha.
+    $dia_actual  = intval($now->format('j'));
+    $anio_actual = intval($now->format('Y'));
+    $mes_num     = intval($now->format('n'));
+    list($lab_trans, $lab_total) = billetera_stats_dias_laborables_mes($anio_actual, $mes_num, $dia_actual);
+    $lab_trans  = max($lab_trans, 1);
+    $proyeccion = round($mes_actual / $lab_trans * $lab_total, 2);
+
+    $var_mes = $mes_anterior > 0 ? round((($mes_actual - $mes_anterior) / $mes_anterior) * 100, 1) : null;
+
+    return [
+        'mes_actual'        => round($mes_actual, 2),
+        'mes_anterior'      => round($mes_anterior, 2),
+        'acumulado_ano'     => round(floatval($row->acumulado_ano ?? 0), 2),
+        'historico'         => round(floatval($row->historico ?? 0), 2),
+        'ventas_mes'        => $ventas_mes,
+        'unidades_mes'      => $unidades_mes,
+        'ventas_historicas' => intval($row->ventas_historicas ?? 0),
+        'ticket_promedio'   => $ventas_mes > 0 ? round($mes_actual / $ventas_mes, 2) : 0,
+        'meta'              => $meta,
+        'fill_percent'      => min(round($fill, 1), 100),
+        'fill_real'         => round($fill, 1),
+        'faltan'            => max(round($meta - $mes_actual, 2), 0),
+        'proyeccion'        => $proyeccion,
+        'var_mes'           => $var_mes,
+        'dias_laborables'   => $lab_total,
+        'dias_laborables_transcurridos' => $lab_trans,
+    ];
+}
+
+/**
+ * Días laborables (lunes a sábado, excluye domingo) de un mes.
+ * Si se pasa $hasta_dia, también devuelve los transcurridos hasta ese día.
+ * Devuelve [transcurridos, total].
+ */
+function billetera_stats_dias_laborables_mes($year, $month, $hasta_dia = null) {
+    $tz = wp_timezone();
+    $dias_mes = (int) (new DateTime(sprintf('%04d-%02d-01', $year, $month), $tz))->format('t');
+
+    $total = 0;
+    $transcurridos = 0;
+    for ($d = 1; $d <= $dias_mes; $d++) {
+        $fecha = sprintf('%04d-%02d-%02d', $year, $month, $d);
+        $dow = (int) (new DateTime($fecha, $tz))->format('w'); // 0 = domingo
+        if ($dow === 0) {
+            continue;
+        }
+        $total++;
+        if ($hasta_dia !== null && $d <= $hasta_dia) {
+            $transcurridos++;
+        }
+    }
+
+    return [$transcurridos, $total];
+}
+
+/**
+ * Tendencia de los últimos N meses (rellena meses sin ventas con 0).
+ */
+function billetera_stats_tendencia_usuario($user_id, $meses = 6) {
+    global $wpdb;
+    $v = $wpdb->prefix . 'billetera_ventas';
+
+    $meses = max(1, intval($meses));
+    $now   = billetera_stats_local_now();
+    $desde = (clone $now)->modify('-' . ($meses - 1) . ' months')->format('Y-m-01 00:00:00');
+
+    $offset = (int) $now->format('P'); // ej. -05:00
+    $rows = $wpdb->get_results($wpdb->prepare("
+        SELECT DATE_FORMAT(DATE_ADD(creado_en, INTERVAL %d MINUTE), '%%Y-%%m') AS mes,
+               SUM(monto_comision_sol * bonus_multiplier) AS total,
+               COUNT(*) AS ventas
+        FROM $v
+        WHERE usuario_id = %d
+          AND creado_en >= %s
+          AND (monto_comision_sol * bonus_multiplier) > 0
+        GROUP BY mes
+        ORDER BY mes ASC
+    ", $offset * 60, $user_id, $desde));
+
+    $meses_abbr = [1 => 'Ene', 2 => 'Feb', 3 => 'Mar', 4 => 'Abr', 5 => 'May', 6 => 'Jun', 7 => 'Jul', 8 => 'Ago', 9 => 'Sep', 10 => 'Oct', 11 => 'Nov', 12 => 'Dic'];
+    $map = [];
+    foreach ($rows as $r) {
+        $map[$r->mes] = $r;
+    }
+
+    $out = [];
+    for ($i = $meses - 1; $i >= 0; $i--) {
+        $ts  = (clone $now)->modify("-$i months");
+        $key = $ts->format('Y-m');
+        $r   = $map[$key] ?? null;
+        $out[] = [
+            'mes'    => $key,
+            'label'  => $meses_abbr[intval($ts->format('n'))] . ' ' . $ts->format('y'),
+            'total'  => $r ? round(floatval($r->total), 2) : 0,
+            'ventas' => $r ? intval($r->ventas) : 0,
+        ];
+    }
+
+    return $out;
+}
+
+/**
+ * Desglose por categoría, subcategoría o línea para el periodo.
+ */
+function billetera_stats_desglose($user_id, $periodo, $tipo) {
+    global $wpdb;
+    $v   = $wpdb->prefix . 'billetera_ventas';
+    $sub = $wpdb->prefix . 'billetera_subcategorias';
+    $cat = $wpdb->prefix . 'billetera_categorias';
+    $lin = $wpdb->prefix . 'billetera_lineas';
+
+    list($desde, $hasta) = billetera_stats_rango($periodo);
+
+    $where  = "v.usuario_id = %d AND (v.monto_comision_sol * v.bonus_multiplier) > 0";
+    $params = [$user_id];
+    if ($desde !== null) {
+        $where   .= " AND v.creado_en >= %s";
+        $params[] = $desde;
+    }
+    if ($hasta !== null) {
+        $where   .= " AND v.creado_en < %s";
+        $params[] = $hasta;
+    }
+
+    if ($tipo === 'linea') {
+        $select = "l.nombre AS label";
+        $join   = "JOIN $lin l ON l.codigo = c.linea_codigo";
+        $group  = "l.codigo";
+    } elseif ($tipo === 'categoria') {
+        $select = "c.nombre AS label";
+        $join   = "";
+        $group  = "c.id";
+    } else {
+        $select = "s.nombre AS label";
+        $join   = "";
+        $group  = "s.id";
+    }
+
+    $sql = "SELECT $select,
+                   SUM(v.monto_comision_sol * v.bonus_multiplier) AS total,
+                   COUNT(*) AS ventas
+            FROM $v v
+            JOIN $sub s ON s.id = v.subcategoria_id
+            JOIN $cat c ON c.id = s.categoria_id
+            $join
+            WHERE $where
+            GROUP BY $group
+            ORDER BY total DESC
+            LIMIT 20";
+
+    $rows = $wpdb->get_results($wpdb->prepare($sql, ...$params));
+
+    $out = [];
+    foreach ($rows as $r) {
+        $out[] = [
+            'label'  => $r->label,
+            'total'  => round(floatval($r->total), 2),
+            'ventas' => intval($r->ventas),
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Ranking del mes: dentro de la tienda y global (asesores/jefes).
+ */
+function billetera_stats_ranking($user_id) {
+    global $wpdb;
+    $v = $wpdb->prefix . 'billetera_ventas';
+    $mes_inicio = billetera_stats_local_now()->format('Y-m-01 00:00:00');
+
+    $totales = $wpdb->get_results($wpdb->prepare("
+        SELECT usuario_id, SUM(monto_comision_sol * bonus_multiplier) AS total
+        FROM $v
+        WHERE creado_en >= %s AND (monto_comision_sol * bonus_multiplier) > 0
+        GROUP BY usuario_id
+    ", $mes_inicio));
+
+    $balances = [];
+    foreach ($totales as $t) {
+        $balances[intval($t->usuario_id)] = floatval($t->total);
+    }
+
+    $user_id = intval($user_id);
+
+    // Tienda
+    $tienda_rank = ['rank' => 0, 'total' => 0];
+    $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
+    if ($tienda_id) {
+        $asesores = get_users([
+            'meta_key'     => '_tienda_asociada',
+            'meta_value'   => $tienda_id,
+            'fields'       => 'ID',
+            'role__not_in' => ['jefe_venta'],
+        ]);
+        $tienda_balances = [];
+        foreach ($asesores as $aid) {
+            $tienda_balances[intval($aid)] = $balances[intval($aid)] ?? 0;
+        }
+        arsort($tienda_balances, SORT_NUMERIC);
+        $pos = array_search($user_id, array_keys($tienda_balances), true);
+        $tienda_rank = ['rank' => $pos === false ? 0 : $pos + 1, 'total' => count($tienda_balances)];
+    }
+
+    // Global
+    $globales = get_users([
+        'role__in' => ['asesor', 'jefe_venta'],
+        'fields'   => 'ID',
+        'number'   => -1,
+    ]);
+    $global_balances = [];
+    foreach ($globales as $gid) {
+        $global_balances[intval($gid)] = $balances[intval($gid)] ?? 0;
+    }
+    arsort($global_balances, SORT_NUMERIC);
+    $posg = array_search($user_id, array_keys($global_balances), true);
+    $global_rank = ['rank' => $posg === false ? 0 : $posg + 1, 'total' => count($global_balances)];
+
+    return ['tienda' => $tienda_rank, 'global' => $global_rank];
 }
 
 // AJAX: Cambiar contraseña

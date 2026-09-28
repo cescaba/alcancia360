@@ -47,14 +47,14 @@
     }
 
     function loadMarcas() {
-        fetch(billetera.ajax_url + '?action=billetera_get_marcas')
+        fetch(billetera.ajax_url + '?action=billetera_get_lineas')
             .then(function (r) { return r.json(); })
             .then(function (res) {
                 if (res.success) {
-                    res.data.forEach(function (marca) {
+                    res.data.forEach(function (linea) {
                         var opt = document.createElement('option');
-                        opt.value = marca.id;
-                        opt.textContent = marca.nombre;
+                        opt.value = linea.codigo;
+                        opt.textContent = linea.nombre;
                         marcaSelect.appendChild(opt);
                     });
                 }
@@ -108,7 +108,7 @@
         fetch(billetera.ajax_url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'action=billetera_get_categorias&marca_id=' + marcaId
+            body: 'action=billetera_get_categorias&linea_codigo=' + encodeURIComponent(marcaId)
         })
             .then(function (r) { return r.json(); })
             .then(function (res) {

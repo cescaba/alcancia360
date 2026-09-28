@@ -237,3 +237,27 @@ function billetera_redirect_after_login($_, $user) {
 }
 
 add_filter( 'login_display_language_dropdown', '__return_false' );
+
+// Asegura que exista la página "Mi desempeño" con su template (una sola vez)
+add_action('admin_init', 'billetera_maybe_create_stats_page');
+function billetera_maybe_create_stats_page() {
+    if (get_option('billetera_stats_page_ready')) {
+        return;
+    }
+
+    if (billetera_get_template_url('page-billetera-360-estadisticas.php') === '#') {
+        $page_id = wp_insert_post(array(
+            'post_type'   => 'page',
+            'post_status' => 'publish',
+            'post_title'  => 'Mi desempeño',
+            'post_name'   => 'mi-desempeno',
+            'post_author' => get_current_user_id() ? get_current_user_id() : 1,
+        ));
+
+        if ($page_id && !is_wp_error($page_id)) {
+            update_post_meta($page_id, '_wp_page_template', 'page-billetera-360-estadisticas.php');
+        }
+    }
+
+    update_option('billetera_stats_page_ready', 1);
+}
