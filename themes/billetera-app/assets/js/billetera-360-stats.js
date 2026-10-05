@@ -76,7 +76,6 @@
         renderMeta(data.resumen || {});
         renderTrend(data.tendencia || []);
         renderBreakdown();
-        renderRanking(data.ranking || {}, data.racha || 0);
     }
 
     function renderResumen(r) {
@@ -231,14 +230,6 @@
             row.appendChild(meta);
             els.breakdown.appendChild(row);
         });
-    }
-
-    function renderRanking(rank, racha) {
-        var t = rank.tienda || { rank: 0, total: 0 };
-        var g = rank.global || { rank: 0, total: 0 };
-        setText('st-rank-tienda', '#' + (t.rank || 0) + ' / ' + (t.total || 0));
-        setText('st-rank-global', '#' + (g.rank || 0) + ' / ' + (g.total || 0));
-        setText('st-racha', (racha || 0) + (racha === 1 ? ' día' : ' días'));
     }
 
     function emptyNote(msg) {

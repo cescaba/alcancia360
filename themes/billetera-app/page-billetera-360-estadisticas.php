@@ -119,24 +119,6 @@ $mes_label = $meses[intval(current_time('n')) - 1] . ' ' . current_time('Y');
                         <div class="st-breakdown" id="st-breakdown"></div>
                     </div>
 
-                    <!-- RANKING -->
-                    <div class="st-card">
-                        <div class="st-card__head">
-                            <div class="st-card__title">Mi posición del mes</div>
-                        </div>
-                        <div class="st-rank-grid">
-                            <div class="st-rank">
-                                <div class="st-rank__value" id="st-rank-tienda">#0 / 0</div>
-                                <div class="st-rank__label">En mi tienda</div>
-                            </div>
-                            <div class="st-rank">
-                                <div class="st-rank__value" id="st-rank-global">#0 / 0</div>
-                                <div class="st-rank__label">Global</div>
-                            </div>
-                        </div>
-                        <div class="st-rank__racha">Racha actual: <b id="st-racha">0 días</b></div>
-                    </div>
-
                     <div class="st-error" id="st-error" hidden></div>
                 </div>
 

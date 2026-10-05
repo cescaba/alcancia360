@@ -73,8 +73,6 @@ if (!array_intersect($allowed_roles, $current_user->roles)) {
                     <div class="rk-error" id="rk-error" hidden></div>
                 </div>
 
-                <p class="rk-note">Solo se muestran los nombres. Las comisiones y ganancias de cada asesor son privadas.</p>
-
             </div>
 
             <!-- BOTTOM TABBAR -->

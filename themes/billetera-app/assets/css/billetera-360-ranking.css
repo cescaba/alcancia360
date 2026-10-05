@@ -210,13 +210,6 @@
     background: var(--gray-border, #e5e9f0);
 }
 
-.rk-note {
-    margin: 14px 4px 0;
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--text-secondary, #6b7280);
-}
-
 /* Desktop */
 @media (min-width: 1025px) {
     .rk-wrap { padding: 28px 32px 48px; }

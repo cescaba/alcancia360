@@ -315,41 +315,6 @@
     color: var(--text-secondary, #6b7280);
 }
 
-.st-rank-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-
-.st-rank {
-    background: var(--gray-light, #f9fafb);
-    border: 1px solid var(--gray-border, #e5e9f0);
-    border-radius: 12px;
-    padding: 14px;
-    text-align: center;
-}
-
-.st-rank__value {
-    font-family: Poppins, Inter, sans-serif;
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--gold, #D4A02A);
-}
-
-.st-rank__label {
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--text-secondary, #6b7280);
-}
-
-.st-rank__racha {
-    margin-top: 12px;
-    text-align: center;
-    font-size: 13px;
-    color: var(--text-secondary, #6b7280);
-}
-.st-rank__racha b { color: var(--text-primary, #0f1b2e); }
-
 .st-empty {
     padding: 20px 0;
     text-align: center;
