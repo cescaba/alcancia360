@@ -12,6 +12,7 @@ if (!defined('ABSPATH')) exit;
 
 // Capacidades para dealer y tienda
 define('HU_MANAGE_CAP', 'manage_options');
+define('HU_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 require_once plugin_dir_path(__FILE__) . 'includes/class-hu-roles.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-dealer-tienda.php';

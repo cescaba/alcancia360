@@ -42,6 +42,7 @@ class HU_DealerTienda {
         add_action('save_post_tienda', [$this, 'save_tienda_fields']);
         add_action('admin_menu', [$this, 'restructure_menu']);
         add_action('admin_footer', [$this, 'enqueue_dynamic_js']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
         add_filter('manage_dealer_posts_columns', [$this, 'add_dealer_columns']);
         add_action('manage_dealer_posts_custom_column', [$this, 'render_dealer_columns'], 10, 2);
         add_filter('manage_tienda_posts_columns', [$this, 'add_tienda_columns']);
@@ -206,18 +207,20 @@ class HU_DealerTienda {
             'order' => 'ASC',
         ]);
         ?>
-        <p>
-            <label><strong>Gerentes asociados:</strong></label><br>
-            <select name="gerentes_asociados[]" multiple="multiple" style="width:100%; min-height: 160px;">
-                <?php foreach ($gerentes as $gerente): ?>
-                    <option value="<?php echo esc_attr($gerente->ID); ?>"
-                        <?php echo in_array($gerente->ID, $gerentes_asociados, true) ? 'selected="selected"' : ''; ?>>
-                        <?php echo esc_html($gerente->display_name); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-            <br><small>Mantén presionada la tecla Command o Ctrl para seleccionar más de un gerente.</small>
-        </p>
+        <div class="hu-grid">
+            <div class="hu-field hu-field--full">
+                <label class="hu-label" for="hu_gerentes">Gerentes asociados</label>
+                <select id="hu_gerentes" name="gerentes_asociados[]" multiple="multiple" class="hu-select hu-chips" data-placeholder="Buscar gerente…">
+                    <?php foreach ($gerentes as $gerente): ?>
+                        <option value="<?php echo esc_attr($gerente->ID); ?>"
+                            <?php echo in_array($gerente->ID, $gerentes_asociados, true) ? 'selected="selected"' : ''; ?>>
+                            <?php echo esc_html($gerente->display_name); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <span class="hu-help">Escribe para filtrar y haz clic para agregar o quitar gerentes.</span>
+            </div>
+        </div>
         <?php
     }
 
@@ -251,62 +254,65 @@ class HU_DealerTienda {
         ]);
         ?>
 
-        <p>
-            <label><strong>Código:</strong></label><br>
-            <input type="text" name="codigo" value="<?php echo esc_attr($codigo); ?>" style="width:100%; padding: 8px;" placeholder="Ej: SUC-001">
-        </p>
+        <div class="hu-grid">
+            <div class="hu-field">
+                <label class="hu-label" for="hu_codigo">Código</label>
+                <input type="text" id="hu_codigo" name="codigo" class="hu-input" value="<?php echo esc_attr($codigo); ?>" placeholder="Ej: SUC-001">
+            </div>
 
-        <p>
-            <label><strong>Concesionaria asociada:</strong></label><br>
-            <select name="dealer_id" style="width:100%; padding: 8px;">
-                <option value="">— Selecciona una Concesionaria —</option>
-                <?php foreach ($dealers as $d): ?>
-                    <option value="<?php echo esc_attr($d->ID); ?>"
-                        <?php echo selected($dealer_id, $d->ID, false); ?>>
-                        <?php echo esc_html($d->post_title); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </p>
+            <div class="hu-field">
+                <label class="hu-label" for="hu_dealer">Concesionaria asociada</label>
+                <select id="hu_dealer" name="dealer_id" class="hu-select">
+                    <option value="">— Selecciona una Concesionaria —</option>
+                    <?php foreach ($dealers as $d): ?>
+                        <option value="<?php echo esc_attr($d->ID); ?>"
+                            <?php echo selected($dealer_id, $d->ID, false); ?>>
+                            <?php echo esc_html($d->post_title); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-        <p>
-            <label><strong>Departamento (opcional):</strong></label><br>
-            <select name="departamento" id="departamento-select" style="width:100%; padding: 8px;">
-                <option value="">— Selecciona un departamento —</option>
-                <?php foreach ($this->departamentos_provincias as $dep => $prov): ?>
-                    <option value="<?php echo esc_attr($dep); ?>"
-                        <?php echo selected($departamento, $dep, false); ?>>
-                        <?php echo esc_html($dep); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </p>
+            <div class="hu-field">
+                <label class="hu-label" for="departamento-select">Departamento (opcional)</label>
+                <select name="departamento" id="departamento-select" class="hu-select">
+                    <option value="">— Selecciona un departamento —</option>
+                    <?php foreach ($this->departamentos_provincias as $dep => $prov): ?>
+                        <option value="<?php echo esc_attr($dep); ?>"
+                            <?php echo selected($departamento, $dep, false); ?>>
+                            <?php echo esc_html($dep); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-        <p>
-            <label><strong>Provincia (opcional):</strong></label><br>
-            <select name="provincia" id="provincia-select" style="width:100%; padding: 8px;">
-                <option value="">— Selecciona una provincia —</option>
-                <?php
-                if ($departamento && isset($this->departamentos_provincias[$departamento])) {
-                    foreach ($this->departamentos_provincias[$departamento] as $prov) {
-                        echo '<option value="' . esc_attr($prov) . '"' . selected($provincia, $prov, false) . '>' . esc_html($prov) . '</option>';
+            <div class="hu-field">
+                <label class="hu-label" for="provincia-select">Provincia (opcional)</label>
+                <select name="provincia" id="provincia-select" class="hu-select">
+                    <option value="">— Selecciona una provincia —</option>
+                    <?php
+                    if ($departamento && isset($this->departamentos_provincias[$departamento])) {
+                        foreach ($this->departamentos_provincias[$departamento] as $prov) {
+                            echo '<option value="' . esc_attr($prov) . '"' . selected($provincia, $prov, false) . '>' . esc_html($prov) . '</option>';
+                        }
                     }
-                }
-                ?>
-            </select>
-        </p>
+                    ?>
+                </select>
+            </div>
 
-        <p>
-            <label><strong>Jefes de Venta Asociados (opcional):</strong></label><br>
-            <select name="jefes_venta_asociados[]" multiple="multiple" style="width:100%; min-height: 160px;">
-                <?php foreach ($usuarios as $u): ?>
-                    <option value="<?php echo esc_attr($u->ID); ?>"
-                        <?php echo in_array($u->ID, $jefes_venta_asociados, true) ? 'selected="selected"' : ''; ?>>
-                        <?php echo esc_html($u->display_name); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </p>
+            <div class="hu-field hu-field--full">
+                <label class="hu-label" for="hu_jefes">Jefes de Venta asociados</label>
+                <select id="hu_jefes" name="jefes_venta_asociados[]" multiple="multiple" class="hu-select hu-chips" data-placeholder="Buscar jefe de venta…">
+                    <?php foreach ($usuarios as $u): ?>
+                        <option value="<?php echo esc_attr($u->ID); ?>"
+                            <?php echo in_array($u->ID, $jefes_venta_asociados, true) ? 'selected="selected"' : ''; ?>>
+                            <?php echo esc_html($u->display_name); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <span class="hu-help">Escribe para filtrar y haz clic para agregar o quitar jefes de venta.</span>
+            </div>
+        </div>
 
         <script>
             const provinciasPorDep = <?php echo json_encode($this->departamentos_provincias); ?>;
@@ -344,6 +350,22 @@ class HU_DealerTienda {
         $jefes = isset($_POST['jefes_venta_asociados']) ? (array) $_POST['jefes_venta_asociados'] : [];
         $jefes = array_values(array_filter(array_map('intval', $jefes)));
         update_post_meta($post_id, '_jefes_venta_asociados', $jefes);
+    }
+
+    /**
+     * Encolar CSS/JS de admin solo en las pantallas de Concesionaria y Sucursal
+     */
+    public function enqueue_admin_assets() {
+        $screen = get_current_screen();
+        if (!$screen || !in_array($screen->post_type, ['dealer', 'tienda'], true)) {
+            return;
+        }
+        if (!in_array($screen->base, ['post', 'edit'], true)) {
+            return;
+        }
+
+        wp_enqueue_style('hu-admin', HU_PLUGIN_URL . 'assets/admin.css', [], '1.0');
+        wp_enqueue_script('hu-admin', HU_PLUGIN_URL . 'assets/admin.js', [], '1.0', true);
     }
 
     /**

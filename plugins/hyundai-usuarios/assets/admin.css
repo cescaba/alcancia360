@@ -1,0 +1,175 @@
+/* Hyundai Usuarios - Admin (Concesionarias y Sucursales) */
+
+.hu-metabox {
+    --hu-navy: #0C2D52;
+    --hu-navy-light: #1a3d6f;
+    --hu-gold: #D4A02A;
+    --hu-border: #e5e9f0;
+    --hu-bg: #f5f7fb;
+    --hu-text: #0f1b2e;
+    --hu-muted: #6b7280;
+}
+
+/* Grid del formulario */
+.hu-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 4px 0;
+}
+
+.hu-field { margin: 0; min-width: 0; }
+.hu-field--full { grid-column: 1 / -1; }
+
+.hu-label {
+    display: block;
+    font-weight: 600;
+    color: #0f1b2e;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.hu-input,
+.hu-select {
+    width: 100%;
+    padding: 9px 11px;
+    border: 1px solid #e5e9f0;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 14px;
+    color: #0f1b2e;
+    box-sizing: border-box;
+    line-height: 1.3;
+}
+
+.hu-input:focus,
+.hu-select:focus {
+    border-color: #0C2D52;
+    box-shadow: 0 0 0 2px rgba(12, 45, 82, .12);
+    outline: none;
+}
+
+.hu-help {
+    display: block;
+    margin-top: 6px;
+    color: #6b7280;
+    font-size: 12px;
+}
+
+/* Cabecera de metabox con color de marca */
+#dealer_info > .postbox-header,
+#tienda_info > .postbox-header {
+    background: linear-gradient(135deg, #0C2D52, #1a3d6f);
+    border-radius: 6px 6px 0 0;
+}
+#dealer_info > .postbox-header .hndle,
+#tienda_info > .postbox-header .hndle,
+#dealer_info > .postbox-header .handle-actions,
+#tienda_info > .postbox-header .handle-actions,
+#dealer_info > .postbox-header .handlediv,
+#tienda_info > .postbox-header .handlediv {
+    color: #fff;
+}
+
+/* ===== Chips multiselect ===== */
+.hu-chips { position: relative; }
+.hu-chips__native { display: none !important; }
+
+.hu-chips__box {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    min-height: 44px;
+    padding: 6px 8px;
+    border: 1px solid #e5e9f0;
+    border-radius: 8px;
+    background: #fff;
+    cursor: text;
+}
+
+.hu-chips__box:focus-within {
+    border-color: #0C2D52;
+    box-shadow: 0 0 0 2px rgba(12, 45, 82, .12);
+}
+
+.hu-chips__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.hu-chips__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #0C2D52;
+    color: #fff;
+    border-radius: 999px;
+    padding: 4px 8px 4px 11px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.hu-chips__chip button {
+    border: 0;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    padding: 0;
+    opacity: .8;
+}
+.hu-chips__chip button:hover { opacity: 1; }
+
+.hu-chips__input {
+    flex: 1;
+    min-width: 130px;
+    border: 0;
+    outline: none;
+    padding: 4px 2px;
+    font-size: 14px;
+    background: transparent;
+    color: #0f1b2e;
+}
+
+.hu-chips__menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    margin-top: 4px;
+    background: #fff;
+    border: 1px solid #e5e9f0;
+    border-radius: 8px;
+    box-shadow: 0 10px 26px rgba(15, 27, 46, .14);
+    max-height: 220px;
+    overflow: auto;
+    z-index: 60;
+}
+
+.hu-chips__opt {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: #fff;
+    padding: 9px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #0f1b2e;
+}
+.hu-chips__opt:hover { background: #f5f7fb; }
+.hu-chips__opt.is-selected { color: #0C2D52; font-weight: 600; }
+
+.hu-chips__empty {
+    padding: 10px 12px;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+@media (max-width: 782px) {
+    .hu-grid { grid-template-columns: 1fr; }
+}

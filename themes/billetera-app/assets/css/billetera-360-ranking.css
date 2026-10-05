@@ -1,0 +1,226 @@
+/* Mi alcancia 360 - Ranking (solo nombres) */
+
+.rk-wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 20px 16px 96px;
+}
+
+.rk-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.rk-title {
+    font-family: Poppins, Inter, sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-primary, #0f1b2e);
+}
+
+.rk-sub {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--text-secondary, #6b7280);
+}
+
+/* Resumen de posición */
+.rk-hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.rk-hero__item {
+    background: linear-gradient(135deg, var(--navy, #0C2D52), var(--navy-light, #1a3d6f));
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+    color: #fff;
+}
+
+.rk-hero__label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: rgba(255, 255, 255, .72);
+}
+
+.rk-hero__value {
+    font-family: Poppins, Inter, sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    margin-top: 6px;
+    color: #fff;
+}
+
+.rk-hero__hint {
+    margin-top: 4px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, .82);
+    min-height: 15px;
+}
+
+/* Tabs tienda / global */
+.rk-tabs {
+    display: inline-flex;
+    background: var(--gray-light, #f9fafb);
+    border: 1px solid var(--gray-border, #e5e9f0);
+    border-radius: 999px;
+    padding: 3px;
+    margin-bottom: 14px;
+}
+
+.rk-tab {
+    border: 0;
+    background: transparent;
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-family: Inter, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary, #6b7280);
+    cursor: pointer;
+    transition: all .15s;
+}
+
+.rk-tab.is-active {
+    background: var(--navy, #0C2D52);
+    color: #fff;
+}
+
+/* Card / lista */
+.rk-card {
+    background: #fff;
+    border: 1px solid var(--gray-border, #e5e9f0);
+    border-radius: 16px;
+    padding: 8px;
+}
+
+.rk-card__head {
+    font-family: Poppins, Inter, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary, #0f1b2e);
+    padding: 10px 12px 12px;
+}
+
+.rk-loading,
+.rk-empty,
+.rk-error {
+    padding: 28px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-secondary, #6b7280);
+}
+
+.rk-error {
+    color: #b3261e;
+}
+
+/* Filas */
+.rk-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 12px;
+    border-radius: 12px;
+}
+
+.rk-row + .rk-row {
+    border-top: 1px solid var(--gray-border, #e5e9f0);
+}
+
+.rk-row.is-me {
+    background: #fff7e6;
+    border-top-color: transparent;
+}
+
+.rk-row.is-me + .rk-row {
+    border-top-color: transparent;
+}
+
+.rk-row__pos {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--gray-light, #f9fafb);
+    border: 1px solid var(--gray-border, #e5e9f0);
+    font-family: Poppins, Inter, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--navy, #0C2D52);
+}
+
+.rk-row__pos--1 { background: linear-gradient(135deg, #f5c563, #d4a02a); border-color: transparent; color: #4a3400; }
+.rk-row__pos--2 { background: linear-gradient(135deg, #e2e8f0, #b8c3d1); border-color: transparent; color: #2b3644; }
+.rk-row__pos--3 { background: linear-gradient(135deg, #f0c39a, #d99a5b); border-color: transparent; color: #4a2c0d; }
+
+.rk-row__name {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary, #0f1b2e);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rk-row.is-me .rk-row__name {
+    font-weight: 700;
+}
+
+.rk-row__tag {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--gold, #D4A02A);
+}
+
+/* Separación entre el top y la ventana del usuario */
+.rk-gap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 0;
+    font-size: 12px;
+    color: var(--text-secondary, #6b7280);
+}
+
+.rk-gap::before,
+.rk-gap::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--gray-border, #e5e9f0);
+}
+
+.rk-note {
+    margin: 14px 4px 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary, #6b7280);
+}
+
+/* Desktop */
+@media (min-width: 1025px) {
+    .rk-wrap { padding: 28px 32px 48px; }
+    .rk-title { font-size: 26px; }
+    .rk-hero__value { font-size: 32px; }
+    .rk-row__name { font-size: 15px; }
+}

@@ -13,10 +13,17 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+if (!defined('BILLETERA_CATALOG_URL')) {
+    define('BILLETERA_CATALOG_URL', plugin_dir_url(__FILE__));
+}
+
 // Incluir funciones de importación masiva de usuarios
 require_once(plugin_dir_path(__FILE__) . 'includes/bulk-user-import.php');
 require_once(plugin_dir_path(__FILE__) . 'includes/csv-import.php');
 require_once(plugin_dir_path(__FILE__) . 'includes/admin-import-page.php');
+
+// Panel de administración: Catálogo y Comisiones
+require_once(plugin_dir_path(__FILE__) . 'includes/admin-catalog-page.php');
 
 // Crear tablas de catálogo al activar
 register_activation_hook(__FILE__, 'billetera_create_catalog_tables');
@@ -740,6 +747,9 @@ function billetera_ajax_register_sale_v2() {
     if ($result) {
         // Registrar la comisión del jefe de venta de la sucursal (sin bonus 2x)
         billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $user_id, $fecha_datetime);
+
+        // El ranking del mes cambió: invalida la caché
+        billetera_rank_cache_bust();
 
         $monto_mostrado = $monto_total_sol * $bonus_multiplier;
         wp_send_json_success([
@@ -1520,6 +1530,195 @@ function billetera_stats_ranking($user_id) {
     $global_rank = ['rank' => $posg === false ? 0 : $posg + 1, 'total' => count($global_balances)];
 
     return ['tienda' => $tienda_rank, 'global' => $global_rank];
+}
+
+// ============================================================================
+// RANKING CON NOMBRES ("Ranking" - solo nombres, nunca montos)
+// ============================================================================
+
+add_action('wp_ajax_billetera_get_ranking', 'billetera_ajax_get_ranking');
+
+function billetera_ajax_get_ranking() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_get_ranking')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
+    $current_user = wp_get_current_user();
+    if (!array_intersect(['asesor', 'jefe_venta', 'administrator'], (array) $current_user->roles)) {
+        wp_send_json_error(['message' => 'No tienes permiso']);
+    }
+
+    $user_id = get_current_user_id();
+    $meses = [1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'];
+    $now = billetera_stats_local_now();
+
+    wp_send_json_success([
+        'periodo'      => 'mes',
+        'mes_label'    => $meses[intval($now->format('n'))] . ' ' . $now->format('Y'),
+        'tienda_label' => billetera_ranking_tienda_label($user_id),
+        'tienda'       => billetera_ranking_lista($user_id, 'tienda'),
+        'global'       => billetera_ranking_lista($user_id, 'global'),
+    ]);
+}
+
+/**
+ * Invalida las cachés de ranking (se llama al registrar una venta).
+ */
+function billetera_rank_cache_bust() {
+    $v = (int) get_option('billetera_rank_version', 1);
+    update_option('billetera_rank_version', $v + 1, false);
+}
+
+/**
+ * Totales por usuario del mes actual (uid => monto), cacheado.
+ * Nunca se expone al cliente: solo se usa para ordenar.
+ */
+function billetera_ranking_balances_mes() {
+    global $wpdb;
+
+    $key = 'billetera_rank_mes_' . (int) get_option('billetera_rank_version', 1);
+    $bal = get_transient($key);
+    if (is_array($bal)) {
+        return $bal;
+    }
+
+    $v   = $wpdb->prefix . 'billetera_ventas';
+    $now = billetera_stats_local_now();
+    $desde = $now->format('Y-m-01 00:00:00');
+    $hasta = (clone $now)->modify('first day of next month')->format('Y-m-01 00:00:00');
+
+    $rows = $wpdb->get_results($wpdb->prepare("
+        SELECT usuario_id, SUM(monto_comision_sol * bonus_multiplier) AS total
+        FROM $v
+        WHERE creado_en >= %s AND creado_en < %s
+          AND (monto_comision_sol * bonus_multiplier) > 0
+        GROUP BY usuario_id
+    ", $desde, $hasta));
+
+    $bal = [];
+    foreach ($rows as $r) {
+        $bal[intval($r->usuario_id)] = floatval($r->total);
+    }
+
+    set_transient($key, $bal, 90);
+    return $bal;
+}
+
+/**
+ * IDs de usuarios que participan del ranking según el ámbito.
+ */
+function billetera_ranking_scope_ids($user_id, $ambito) {
+    if ($ambito === 'tienda') {
+        $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
+        if (!$tienda_id) {
+            return [];
+        }
+        return array_map('intval', get_users([
+            'meta_key'     => '_tienda_asociada',
+            'meta_value'   => $tienda_id,
+            'fields'       => 'ID',
+            'role__not_in' => ['jefe_venta'],
+        ]));
+    }
+
+    // Global: cada rol compite entre sí. Un asesor solo ve asesores.
+    $user  = get_userdata($user_id);
+    $roles = $user ? (array) $user->roles : [];
+    $roles_scope = in_array('asesor', $roles, true)
+        ? ['asesor']
+        : ['asesor', 'jefe_venta'];
+
+    return array_map('intval', get_users([
+        'role__in' => $roles_scope,
+        'fields'   => 'ID',
+        'number'   => -1,
+    ]));
+}
+
+/**
+ * Nombres (solo display_name) para una lista de IDs ya ordenada.
+ */
+function billetera_ranking_items($ids, $user_id, $offset = 0) {
+    if (empty($ids)) {
+        return [];
+    }
+
+    $users = get_users([
+        'include' => $ids,
+        'fields'  => ['ID', 'display_name'],
+    ]);
+    $nombres = [];
+    foreach ($users as $u) {
+        $nombres[intval($u->ID)] = $u->display_name;
+    }
+
+    $user_id = intval($user_id);
+    $out = [];
+    foreach (array_values($ids) as $i => $id) {
+        $id = intval($id);
+        $out[] = [
+            'pos'    => $offset + $i + 1,
+            'nombre' => $nombres[$id] ?? ('Usuario #' . $id),
+            'es_yo'  => ($id === $user_id),
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Leaderboard de un ámbito: top N + ventana alrededor del usuario.
+ * Devuelve SOLO posición y nombre (sin montos).
+ */
+function billetera_ranking_lista($user_id, $ambito, $top = 10, $ventana = 2) {
+    $balances = billetera_ranking_balances_mes();
+    $ids      = billetera_ranking_scope_ids($user_id, $ambito);
+    $user_id  = intval($user_id);
+
+    $puntajes = [];
+    foreach ($ids as $id) {
+        $puntajes[$id] = $balances[$id] ?? 0.0;
+    }
+    arsort($puntajes, SORT_NUMERIC);
+
+    $posiciones = array_keys($puntajes);
+    $total      = count($posiciones);
+    $mi_pos     = array_search($user_id, $posiciones, true);
+    $mi_rank    = ($mi_pos === false) ? 0 : $mi_pos + 1;
+
+    $slice_top = array_slice($posiciones, 0, $top);
+    $en_top    = in_array($user_id, $slice_top, true);
+
+    $items_ventana = [];
+    if ($mi_pos !== false && !$en_top) {
+        $ini   = max(0, $mi_pos - $ventana);
+        $fin   = min($total - 1, $mi_pos + $ventana);
+        $slice = array_slice($posiciones, $ini, $fin - $ini + 1);
+        $items_ventana = billetera_ranking_items($slice, $user_id, $ini);
+    }
+
+    return [
+        'rank'    => $mi_rank,
+        'total'   => $total,
+        'en_top'  => $en_top,
+        'top'     => billetera_ranking_items($slice_top, $user_id),
+        'ventana' => $items_ventana,
+    ];
+}
+
+/**
+ * Nombre de la tienda del usuario (para el subtítulo).
+ */
+function billetera_ranking_tienda_label($user_id) {
+    $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
+    if (!$tienda_id) {
+        return '';
+    }
+    $tienda = get_post($tienda_id);
+    return $tienda ? $tienda->post_title : '';
 }
 
 // AJAX: Cambiar contraseña

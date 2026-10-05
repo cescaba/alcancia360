@@ -1,0 +1,122 @@
+/* Billetera Catalog - Admin (Catálogo y Comisiones) */
+
+.bc-wrap {
+    --bc-navy: #0C2D52;
+    --bc-navy-light: #1a3d6f;
+    --bc-gold: #D4A02A;
+    --bc-border: #e5e9f0;
+    --bc-bg: #f5f7fb;
+    --bc-text: #0f1b2e;
+    --bc-muted: #6b7280;
+    --bc-danger: #b3261e;
+    max-width: 1180px;
+}
+
+.bc-title {
+    font-weight: 700;
+    color: #0f1b2e;
+}
+
+.bc-desc {
+    color: #6b7280;
+    margin-top: -6px;
+    font-size: 13px;
+}
+
+.bc-card {
+    background: #fff;
+    border: 1px solid #e5e9f0;
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin: 16px 0;
+    box-shadow: 0 1px 2px rgba(15, 27, 46, .04);
+}
+
+.bc-card__title {
+    margin: 0 0 14px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #0f1b2e;
+}
+
+.bc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 18px;
+    align-items: end;
+}
+
+.bc-field { margin: 0; min-width: 0; }
+.bc-field--full { grid-column: 1 / -1; }
+.bc-field--check { grid-column: span 1; }
+.bc-field--actions { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; }
+
+.bc-label {
+    display: block;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #6b7280;
+    margin-bottom: 6px;
+}
+
+.bc-input,
+.bc-select {
+    width: 100%;
+    max-width: none;
+    padding: 8px 11px;
+    border: 1px solid #e5e9f0;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 14px;
+    color: #0f1b2e;
+    box-sizing: border-box;
+    line-height: 1.3;
+    min-height: 38px;
+}
+
+.bc-input:focus,
+.bc-select:focus {
+    border-color: #0C2D52;
+    box-shadow: 0 0 0 2px rgba(12, 45, 82, .12);
+    outline: none;
+}
+
+.bc-inline { display: inline; }
+.bc-link {
+    color: #0C2D52;
+    font-weight: 600;
+    text-decoration: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    font-size: 13px;
+}
+.bc-link:hover { text-decoration: underline; }
+.bc-danger { color: #b3261e; }
+.bc-sep { color: #c3ccd8; margin: 0 6px; }
+
+.bc-table-tools {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+}
+.bc-filter { display: flex; align-items: flex-end; gap: 10px; }
+.bc-filter .bc-select { min-width: 320px; }
+
+.bc-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.bc-mt { margin-top: 16px; }
+
+.bc-wrap .wp-list-table th { font-weight: 600; }
+
+@media (max-width: 960px) {
+    .bc-grid { grid-template-columns: 1fr; }
+    .bc-two-col { grid-template-columns: 1fr; }
+}
