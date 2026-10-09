@@ -21,13 +21,15 @@ if (!defined('BILLETERA_REPORTS_CAP')) {
 }
 
 // ---------------------------------------------------------------------------
-// Capability: solo el rol administrador_hyundai
+// Capability: administrador_hyundai y administrador normal
 // ---------------------------------------------------------------------------
 add_action('admin_init', 'billetera_reports_ensure_cap');
 function billetera_reports_ensure_cap() {
-    $role = get_role('administrador_hyundai');
-    if ($role && !$role->has_cap(BILLETERA_REPORTS_CAP)) {
-        $role->add_cap(BILLETERA_REPORTS_CAP);
+    foreach (['administrador_hyundai', 'administrator'] as $role_name) {
+        $role = get_role($role_name);
+        if ($role && !$role->has_cap(BILLETERA_REPORTS_CAP)) {
+            $role->add_cap(BILLETERA_REPORTS_CAP);
+        }
     }
 }
 
@@ -36,7 +38,7 @@ function billetera_reports_can_access() {
         return false;
     }
     $user = wp_get_current_user();
-    return in_array('administrador_hyundai', (array) $user->roles, true);
+    return (bool) array_intersect(['administrador_hyundai', 'administrator'], (array) $user->roles);
 }
 
 // ---------------------------------------------------------------------------
@@ -209,7 +211,7 @@ function billetera_render_reports_page() {
         return 'S/ ' . number_format(floatval($n), 2, '.', ',');
     };
 
-    billetera_bc_open('Reporte de comisiones', 'Descarga el resumen de comisiones por asesor y subcategoría. Solo el Administrador Hyundai puede acceder.');
+    billetera_bc_open('Reporte de comisiones', 'Descarga el resumen de comisiones por asesor y subcategoría. Solo administradores (Hyundai o administrador normal) pueden acceder.');
     billetera_bc_notices('', '');
     ?>
     <div class="bc-card">
