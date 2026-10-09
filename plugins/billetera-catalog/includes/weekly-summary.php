@@ -37,6 +37,36 @@ function billetera_summary_per_run() {
     return max(1, min($por_corrida, 200));
 }
 
+/**
+ * Máximo de correos por día (0 = sin límite). Sirve para respetar el plan de
+ * Brevo (p. ej. 300/día en el gratuito): si la cola no termina hoy, sigue mañana.
+ */
+function billetera_summary_por_dia() {
+    return max(0, (int) get_option('billetera_summary_por_dia', 0));
+}
+
+/**
+ * Día de la semana del envío automático (0 = domingo .. 6 = sábado).
+ */
+function billetera_summary_seed_dow() {
+    $v = (int) get_option('billetera_summary_seed_dow', 0);
+    return ($v >= 0 && $v <= 6) ? $v : 0;
+}
+
+/**
+ * Hora del envío automático (0..23).
+ */
+function billetera_summary_seed_hour() {
+    $v = (int) get_option('billetera_summary_seed_hour', 0);
+    return ($v >= 0 && $v <= 23) ? $v : 0;
+}
+
+function billetera_summary_dow_nombre($dow) {
+    $dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    $dow = (int) $dow;
+    return $dias[$dow] ?? $dias[0];
+}
+
 function billetera_summary_test_email() {
     $email = get_option('billetera_summary_test_email', '');
     return is_email($email) ? $email : '';
@@ -127,7 +157,7 @@ function billetera_summary_maybe_schedule() {
         wp_schedule_event(time() + 60, 'billetera_summary_4min', 'billetera_summary_worker_hook');
     }
     if (!wp_next_scheduled('billetera_summary_seed_hook')) {
-        wp_schedule_event(billetera_summary_next_sunday_ts(), 'weekly', 'billetera_summary_seed_hook');
+        wp_schedule_event(billetera_summary_next_seed_ts(), 'weekly', 'billetera_summary_seed_hook');
     }
 }
 
@@ -137,17 +167,30 @@ function billetera_summary_unschedule() {
 }
 
 /**
- * Timestamp del próximo domingo 00:00 (hora local del sitio).
+ * Reagenda el encolado semanal según el día/hora configurados.
  */
-function billetera_summary_next_sunday_ts() {
-    $now  = billetera_stats_local_now();
-    $dow  = (int) $now->format('N'); // 1 (lun) .. 7 (dom)
-    $days = (7 - $dow) % 7;
-    if ($days === 0) {
-        $days = 7;
+function billetera_summary_reschedule_seed() {
+    wp_clear_scheduled_hook('billetera_summary_seed_hook');
+    wp_schedule_event(billetera_summary_next_seed_ts(), 'weekly', 'billetera_summary_seed_hook');
+}
+
+/**
+ * Timestamp del próximo día/hora de envío configurados (hora local del sitio).
+ */
+function billetera_summary_next_seed_ts() {
+    $now         = billetera_stats_local_now();
+    $dow         = (int) $now->format('w'); // 0 (dom) .. 6 (sáb)
+    $target_dow  = billetera_summary_seed_dow();
+    $target_hour = billetera_summary_seed_hour();
+
+    $days = ($target_dow - $dow + 7) % 7;
+    $candidate = (clone $now)->modify("+$days days")->setTime($target_hour, 0, 0);
+
+    if ($candidate <= $now) {
+        $candidate->modify('+7 days');
     }
-    $target = (clone $now)->modify("+$days days")->setTime(0, 0, 0);
-    return $target->getTimestamp();
+
+    return $candidate->getTimestamp();
 }
 
 // ============================================================================
@@ -506,8 +549,8 @@ function billetera_summary_process_batch($force = false) {
     }
     set_transient('billetera_summary_lock', 1, 4 * MINUTE_IN_SECONDS);
 
-    // Tope por hora móvil: nunca enviar más de "por_hora" en los últimos 60
-    // minutos, sin importar con qué frecuencia se dispare el cron.
+    // Tope por hora móvil y tope por día: nunca superar "por_hora" en los
+    // últimos 60 min ni "por_dia" en el día calendario local.
     if ($force) {
         $per_run = billetera_summary_per_run();
     } else {
@@ -521,6 +564,20 @@ function billetera_summary_process_batch($force = false) {
             return ['processed' => 0, 'sent' => 0, 'failed' => 0, 'reason' => 'cupo_hora'];
         }
         $per_run = min(billetera_summary_per_run(), $cupo);
+
+        $por_dia = billetera_summary_por_dia();
+        if ($por_dia > 0) {
+            $enviados_hoy = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM $table WHERE status = 'sent' AND sent_at >= %s",
+                billetera_stats_local_now()->format('Y-m-d 00:00:00')
+            ));
+            $cupo_dia = $por_dia - $enviados_hoy;
+            if ($cupo_dia <= 0) {
+                delete_transient('billetera_summary_lock');
+                return ['processed' => 0, 'sent' => 0, 'failed' => 0, 'reason' => 'cupo_dia'];
+            }
+            $per_run = min($per_run, $cupo_dia);
+        }
     }
 
     $rows    = $wpdb->get_results($wpdb->prepare(
@@ -680,11 +737,22 @@ function billetera_render_resumen_page() {
         $action = sanitize_key($_POST['bc_action']);
 
         if ($action === 'save_config') {
+            $prev_dow  = billetera_summary_seed_dow();
+            $prev_hour = billetera_summary_seed_hour();
+
             update_option('billetera_summary_activo', isset($_POST['activo']) ? 1 : 0, false);
             update_option('billetera_summary_por_hora', max(1, intval($_POST['por_hora'] ?? 60)), false);
+            update_option('billetera_summary_por_dia', max(0, intval($_POST['por_dia'] ?? 0)), false);
+            update_option('billetera_summary_seed_dow', max(0, min(6, intval($_POST['seed_dow'] ?? 0))), false);
+            update_option('billetera_summary_seed_hour', max(0, min(23, intval($_POST['seed_hour'] ?? 0))), false);
             update_option('billetera_summary_test_email', sanitize_email(wp_unslash($_POST['test_email'] ?? '')), false);
             update_option('billetera_summary_from_email', sanitize_email(wp_unslash($_POST['from_email'] ?? '')), false);
             update_option('billetera_summary_from_name', sanitize_text_field(wp_unslash($_POST['from_name'] ?? '')), false);
+
+            if (billetera_summary_seed_dow() !== $prev_dow || billetera_summary_seed_hour() !== $prev_hour) {
+                billetera_summary_reschedule_seed();
+            }
+
             $msg = 'Configuración guardada.';
         } elseif ($action === 'seed_now') {
             $res = billetera_summary_seed_queue(true);
@@ -735,6 +803,9 @@ function billetera_render_resumen_page() {
 
     $activo     = billetera_summary_is_active();
     $por_hora   = billetera_summary_por_hora();
+    $por_dia    = billetera_summary_por_dia();
+    $seed_dow   = billetera_summary_seed_dow();
+    $seed_hour  = billetera_summary_seed_hour();
     $test_email = billetera_summary_test_email();
     $from_email = get_option('billetera_summary_from_email', '');
     $from_name  = get_option('billetera_summary_from_name', '');
@@ -773,7 +844,8 @@ function billetera_render_resumen_page() {
                 <?php endif; ?>
             </div>
             <div><strong>Semana a resumir:</strong> <?php echo esc_html($week_label); ?></div>
-            <div><strong>Ritmo:</strong> <?php echo intval($por_hora); ?>/hora (<?php echo intval($per_run); ?> por corrida)</div>
+            <div><strong>Ritmo:</strong> <?php echo intval($por_hora); ?>/hora<?php echo $por_dia > 0 ? ' · ' . intval($por_dia) . '/día' : ''; ?> (<?php echo intval($per_run); ?> por corrida)</div>
+            <div><strong>Envío automático:</strong> <?php echo esc_html(billetera_summary_dow_nombre($seed_dow)); ?> a las <?php echo sprintf('%02d:00', $seed_hour); ?></div>
         </div>
         <p style="margin:14px 0 0;color:#5b6b80;">
             Próximo envío (worker): <?php echo $next_worker ? esc_html(get_date_from_gmt(gmdate('Y-m-d H:i:s', $next_worker), 'Y-m-d H:i')) : '—'; ?> ·
@@ -820,12 +892,33 @@ function billetera_render_resumen_page() {
             <div class="bc-field">
                 <label class="bc-label">
                     <input type="checkbox" name="activo" value="1" <?php checked($activo); ?>>
-                    Enviar automáticamente cada domingo
+                    Enviar automáticamente cada semana
                 </label>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Día del envío</label>
+                <select name="seed_dow" class="bc-input">
+                    <?php for ($d = 0; $d <= 6; $d++): ?>
+                        <option value="<?php echo $d; ?>" <?php selected($seed_dow, $d); ?>><?php echo esc_html(billetera_summary_dow_nombre($d)); ?></option>
+                    <?php endfor; ?>
+                </select>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Hora del envío (0–23)</label>
+                <select name="seed_hour" class="bc-input">
+                    <?php for ($h = 0; $h <= 23; $h++): ?>
+                        <option value="<?php echo $h; ?>" <?php selected($seed_hour, $h); ?>><?php echo sprintf('%02d:00', $h); ?></option>
+                    <?php endfor; ?>
+                </select>
             </div>
             <div class="bc-field">
                 <label class="bc-label">Correos por hora</label>
                 <input type="number" min="1" max="600" name="por_hora" class="bc-input" value="<?php echo intval($por_hora); ?>">
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Máximo por día (0 = sin límite)</label>
+                <input type="number" min="0" max="100000" name="por_dia" class="bc-input" value="<?php echo intval($por_dia); ?>">
+                <p style="margin:6px 0 0;color:#8494a6;font-size:12px;">Ponlo al límite de tu plan de Brevo (ej. 300 en el gratis). Si la cola no termina, sigue al día siguiente.</p>
             </div>
             <div class="bc-field">
                 <label class="bc-label">Correo de prueba (todos los tests llegan aquí)</label>
