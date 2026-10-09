@@ -25,14 +25,20 @@ require_once(plugin_dir_path(__FILE__) . 'includes/admin-import-page.php');
 // Panel de administración: Catálogo y Comisiones
 require_once(plugin_dir_path(__FILE__) . 'includes/admin-catalog-page.php');
 
+// Resumen semanal de comisiones por correo
+require_once(plugin_dir_path(__FILE__) . 'includes/weekly-summary.php');
+
 // Crear tablas de catálogo al activar
 register_activation_hook(__FILE__, 'billetera_create_catalog_tables');
+
+// Desagendar los crons del resumen semanal al desactivar
+register_deactivation_hook(__FILE__, 'billetera_summary_unschedule');
 
 // Migración en caliente: mantiene el esquema sin reactivar el plugin
 add_action('plugins_loaded', 'billetera_maybe_upgrade_schema');
 
 function billetera_maybe_upgrade_schema() {
-    if (get_option('billetera_db_version') === '1.3') {
+    if (get_option('billetera_db_version') === '1.4') {
         return;
     }
 
@@ -53,7 +59,10 @@ function billetera_maybe_upgrade_schema() {
     billetera_migrate_categorias_to_lineas();
     billetera_reset_metas_table();
 
-    update_option('billetera_db_version', '1.3');
+    // --- 1.4: tabla de cola del resumen semanal por correo ---
+    billetera_summary_create_queue_table();
+
+    update_option('billetera_db_version', '1.4');
 }
 
 /**
@@ -429,6 +438,9 @@ function billetera_create_catalog_tables() {
 
     // Tabla de METAS por sucursal x línea x tipo (Venta / Post Venta)
     billetera_create_metas_table();
+
+    // Tabla de cola del resumen semanal por correo
+    billetera_summary_create_queue_table();
 }
 
 function billetera_insert_default_config() {
