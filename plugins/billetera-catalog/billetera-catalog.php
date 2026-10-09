@@ -28,6 +28,9 @@ require_once(plugin_dir_path(__FILE__) . 'includes/admin-catalog-page.php');
 // Resumen semanal de comisiones por correo
 require_once(plugin_dir_path(__FILE__) . 'includes/weekly-summary.php');
 
+// Reporte de comisiones por asesor (solo administrador_hyundai)
+require_once(plugin_dir_path(__FILE__) . 'includes/admin-reports-page.php');
+
 // Crear tablas de catálogo al activar
 register_activation_hook(__FILE__, 'billetera_create_catalog_tables');
 

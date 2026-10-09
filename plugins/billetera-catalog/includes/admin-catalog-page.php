@@ -50,6 +50,11 @@ function billetera_catalog_admin_menu() {
     add_submenu_page('billetera_catalogo', 'Líneas y Marcas', 'Líneas y Marcas', $cap, 'billetera_lineas_admin', 'billetera_render_lineas_page');
     add_submenu_page('billetera_catalogo', 'Configuración', 'Configuración', $cap, 'billetera_config_admin', 'billetera_render_config_page');
     add_submenu_page('billetera_catalogo', 'Resumen semanal', 'Resumen semanal', $cap, 'billetera_resumen_admin', 'billetera_render_resumen_page');
+
+    // Reporte de comisiones: solo el rol administrador_hyundai
+    if (defined('BILLETERA_REPORTS_CAP')) {
+        add_submenu_page('billetera_catalogo', 'Reporte de comisiones', 'Reporte de comisiones', BILLETERA_REPORTS_CAP, 'billetera_reporte_comisiones', 'billetera_render_reports_page');
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -58,7 +63,7 @@ function billetera_catalog_admin_menu() {
 add_action('admin_enqueue_scripts', 'billetera_catalog_admin_assets');
 function billetera_catalog_admin_assets() {
     $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
-    $pages = ['billetera_catalogo', 'billetera_subcategorias', 'billetera_comisiones_admin', 'billetera_metas_admin', 'billetera_lineas_admin', 'billetera_config_admin', 'billetera_resumen_admin'];
+    $pages = ['billetera_catalogo', 'billetera_subcategorias', 'billetera_comisiones_admin', 'billetera_metas_admin', 'billetera_lineas_admin', 'billetera_config_admin', 'billetera_resumen_admin', 'billetera_reporte_comisiones'];
     if (!in_array($page, $pages, true)) {
         return;
     }
