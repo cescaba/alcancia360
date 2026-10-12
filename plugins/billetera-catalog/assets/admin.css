@@ -103,8 +103,11 @@
     justify-content: flex-end;
     margin-bottom: 10px;
 }
-.bc-filter { display: flex; align-items: flex-end; gap: 10px; }
+.bc-filter { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .bc-filter .bc-select { min-width: 320px; }
+.bc-filter__group { display: flex; flex-direction: column; gap: 4px; }
+.bc-filter__group .bc-select { min-width: 220px; max-width: 320px; }
+.bc-pagination .page-numbers { display: inline-block; padding: 4px 8px; margin-left: 2px; text-decoration: none; }
 
 .bc-two-col {
     display: grid;

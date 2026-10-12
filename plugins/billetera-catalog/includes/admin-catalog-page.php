@@ -69,7 +69,7 @@ function billetera_catalog_admin_assets() {
     }
 
     $base = defined('BILLETERA_CATALOG_URL') ? BILLETERA_CATALOG_URL : plugin_dir_url(dirname(__DIR__) . '/billetera-catalog.php');
-    wp_enqueue_style('billetera-catalog-admin', $base . 'assets/admin.css', [], '1.0');
+    wp_enqueue_style('billetera-catalog-admin', $base . 'assets/admin.css', [], '1.1');
     wp_enqueue_script('billetera-catalog-admin', $base . 'assets/admin.js', [], '1.0', true);
 }
 
@@ -527,21 +527,50 @@ function billetera_render_comisiones_page() {
     }
 
     $dealers = billetera_bc_dealers();
-    $filtro_sub = isset($_GET['subcategoria_id']) ? intval($_GET['subcategoria_id']) : 0;
+    $filtro_sub  = isset($_GET['subcategoria_id']) ? intval($_GET['subcategoria_id']) : 0;
+    $filtro_cat  = isset($_GET['categoria_id']) ? intval($_GET['categoria_id']) : 0;
+    $filtro_dist = isset($_GET['distribuidor_id']) ? sanitize_text_field(wp_unslash($_GET['distribuidor_id'])) : '';
 
-    $where = '';
+    $wheres = [];
+    $params = [];
     if ($filtro_sub) {
-        $where = $wpdb->prepare('WHERE co.subcategoria_id = %d', $filtro_sub);
+        $wheres[] = 'co.subcategoria_id = %d';
+        $params[] = $filtro_sub;
     }
-    $rows = $wpdb->get_results("
-        SELECT co.*, s.nombre AS subcategoria, c.nombre AS categoria, l.nombre AS linea
+    if ($filtro_cat) {
+        $wheres[] = 's.categoria_id = %d';
+        $params[] = $filtro_cat;
+    }
+    if ($filtro_dist === 'gen') {
+        $wheres[] = 'co.distribuidor_id IS NULL';
+    } elseif ($filtro_dist !== '' && intval($filtro_dist) > 0) {
+        $wheres[] = 'co.distribuidor_id = %d';
+        $params[] = intval($filtro_dist);
+    }
+    $where_sql = $wheres ? ('WHERE ' . implode(' AND ', $wheres)) : '';
+
+    $from_sql = "
         FROM $table co
         JOIN {$wpdb->prefix}billetera_subcategorias s ON s.id = co.subcategoria_id
         JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
         LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
-        $where
+        $where_sql
+    ";
+
+    $count_sql = "SELECT COUNT(*) $from_sql";
+    $total = (int) ($params ? $wpdb->get_var($wpdb->prepare($count_sql, ...$params)) : $wpdb->get_var($count_sql));
+
+    $per_page    = 30;
+    $total_pages = max(1, (int) ceil($total / $per_page));
+    $paged       = max(1, min($total_pages, isset($_GET['paged']) ? intval($_GET['paged']) : 1));
+    $offset      = ($paged - 1) * $per_page;
+
+    $data_sql = "SELECT co.*, s.nombre AS subcategoria, c.nombre AS categoria, l.nombre AS linea
+        $from_sql
         ORDER BY c.linea_codigo, c.orden_display, s.orden_display, s.nombre, co.rol
-    ");
+        LIMIT %d OFFSET %d";
+    $data_params = array_merge($params, [$per_page, $offset]);
+    $rows = $wpdb->get_results($wpdb->prepare($data_sql, ...$data_params));
 
     billetera_bc_open('Comisiones', 'Define el monto por subcategoría y rol. Déjala como "Genérica (TODOS)" para aplicar a todas las concesionarias.');
     billetera_bc_notices($msg, $err);
@@ -601,14 +630,37 @@ function billetera_render_comisiones_page() {
         <div class="bc-table-tools">
             <form method="get" class="bc-filter">
                 <input type="hidden" name="page" value="billetera_comisiones_admin">
-                <label class="bc-label">Filtrar por subcategoría</label>
-                <select name="subcategoria_id" class="bc-select">
-                    <option value="0">— Todas —</option>
-                    <?php echo billetera_bc_subcategorias_options($filtro_sub); ?>
-                </select>
+                <div class="bc-filter__group">
+                    <label class="bc-label">Categoría</label>
+                    <select name="categoria_id" class="bc-select">
+                        <option value="0">— Todas —</option>
+                        <?php echo billetera_bc_categorias_options($filtro_cat); ?>
+                    </select>
+                </div>
+                <div class="bc-filter__group">
+                    <label class="bc-label">Subcategoría</label>
+                    <select name="subcategoria_id" class="bc-select">
+                        <option value="0">— Todas —</option>
+                        <?php echo billetera_bc_subcategorias_options($filtro_sub); ?>
+                    </select>
+                </div>
+                <div class="bc-filter__group">
+                    <label class="bc-label">Concesionaria</label>
+                    <select name="distribuidor_id" class="bc-select">
+                        <option value="" <?php selected($filtro_dist, ''); ?>>— Todas —</option>
+                        <option value="gen" <?php selected($filtro_dist, 'gen'); ?>>— Genérica (TODOS) —</option>
+                        <?php foreach ($dealers as $d): ?>
+                            <option value="<?php echo intval($d->ID); ?>" <?php selected($filtro_dist, (string) $d->ID); ?>><?php echo esc_html($d->post_title); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <button type="submit" class="button">Filtrar</button>
+                <a class="button" href="<?php echo esc_url(admin_url('admin.php?page=billetera_comisiones_admin')); ?>">Limpiar</a>
             </form>
         </div>
+        <p class="bc-desc" style="margin:0 0 8px;">
+            Mostrando <?php echo $total ? ($offset + 1) : 0; ?>–<?php echo min($offset + $per_page, $total); ?> de <?php echo $total; ?> comisión(es).
+        </p>
         <table class="wp-list-table widefat fixed striped">
             <thead>
                 <tr>
@@ -645,6 +697,27 @@ function billetera_render_comisiones_page() {
                 <?php endforeach; endif; ?>
             </tbody>
         </table>
+        <?php if ($total_pages > 1): ?>
+            <div class="bc-pagination" style="margin-top:14px;text-align:right;">
+                <?php
+                $pag_base = add_query_arg([
+                    'page'            => 'billetera_comisiones_admin',
+                    'categoria_id'    => $filtro_cat,
+                    'subcategoria_id' => $filtro_sub,
+                    'distribuidor_id' => $filtro_dist,
+                ], admin_url('admin.php'));
+                echo paginate_links([
+                    'base'      => $pag_base . '%_%',
+                    'format'    => '&paged=%#%',
+                    'current'   => $paged,
+                    'total'     => $total_pages,
+                    'prev_text' => '«',
+                    'next_text' => '»',
+                    'type'      => 'plain',
+                ]);
+                ?>
+            </div>
+        <?php endif; ?>
     </div>
     <?php
     billetera_bc_close();
