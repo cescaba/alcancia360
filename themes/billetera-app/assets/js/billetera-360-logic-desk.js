@@ -247,13 +247,18 @@
                 if (data.success) {
                     var amount = data.data.amount || 0;
                     var bonus = Number(data.data.bonus_multiplier) || 1;
+                    var bonusCat = data.data.bonus_categoria || '';
+                    var bonusAplicado = Number(data.data.bonus_aplicado) || 0;
                     if (gainAmount) {
                         gainAmount.textContent = '+S/ ' + amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     }
                     var gainBonus = document.getElementById('gain-bonus');
                     if (gainBonus) {
                         if (bonus > 1) {
-                            gainBonus.textContent = 'x2 ¡Bono Prepagados!';
+                            gainBonus.textContent = 'x' + (Math.round(bonus * 100) / 100) + (bonusCat ? ' ¡Bono ' + bonusCat + '!' : ' ¡Bono!');
+                            gainBonus.hidden = false;
+                        } else if (bonusAplicado && bonusCat) {
+                            gainBonus.textContent = '¡Bono ' + bonusCat + '!';
                             gainBonus.hidden = false;
                         } else {
                             gainBonus.textContent = '';
@@ -335,7 +340,7 @@
         }
         items.forEach(function (m, i) {
             var nombre = (m.categoria ? m.categoria : '') + (m.subcategoria ? ' · ' + m.subcategoria : '');
-            var bonus = (Number(m.bonus_multiplier) > 1) ? ' <span class="alc-mov__bonus">x2</span>' : '';
+            var bonus = (Number(m.bonus_multiplier) > 1) ? ' <span class="alc-mov__bonus">' + (Math.round(Number(m.bonus_multiplier) * 100) / 100) + 'x</span>' : '';
             var meta = (m.asesor_nombre || (m.id_value || '')) + ' · ' + timeAgo(new Date(m.created_at));
             var row = document.createElement('div');
             row.className = 'reg-desk__recent-row' + (i % 2 === 1 ? ' reg-desk__recent-row--alt' : '');

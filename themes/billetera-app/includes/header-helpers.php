@@ -202,8 +202,9 @@ function billetera_get_notificaciones($user_id) {
             $texto = 'Venta acreditada: ' . $r->subcategoria
                 . ' (+S/ ' . number_format($monto, 2, '.', ',') . ')';
 
-            if ($r->categoria === 'Prepagados' && floatval($r->bonus_multiplier) > 1) {
-                $texto = '¡Bonus 2x aplicado en ' . $r->subcategoria
+            if (floatval($r->bonus_multiplier) > 1) {
+                $mult_txt = rtrim(rtrim(number_format((float) $r->bonus_multiplier, 2, '.', ''), '0'), '.');
+                $texto = '¡Bonus ' . $mult_txt . 'x aplicado en ' . $r->subcategoria
                     . '! (+S/ ' . number_format($monto, 2, '.', ',') . ')';
             }
 

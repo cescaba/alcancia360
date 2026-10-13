@@ -1185,6 +1185,7 @@ function billetera_render_bonus_page() {
                         'excepcion_dealer_id'    => intval($_POST['excepcion_dealer_id'] ?? 0),
                         'excepcion_usd'          => max(0, floatval($_POST['excepcion_usd'] ?? 0)),
                         'excepcion_jefe_usd'     => max(0, floatval($_POST['excepcion_jefe_usd'] ?? 0)),
+                        'excepcion_modo'         => (isset($_POST['excepcion_modo']) && $_POST['excepcion_modo'] === 'sumar') ? 'sumar' : 'reemplazar',
                         'excepcion_desde_umbral' => isset($_POST['excepcion_desde_umbral']) ? 1 : 0,
                     ];
 
@@ -1324,6 +1325,14 @@ function billetera_render_bonus_page() {
                 <label class="bc-label">Monto fijo USD por unidad (jefe)</label>
                 <input type="number" step="0.01" min="0" name="excepcion_jefe_usd" class="bc-input" value="<?php echo esc_attr($edit['excepcion_jefe_usd'] ?? 0); ?>">
             </div>
+            <div class="bc-field">
+                <label class="bc-label">Modo de la excepción</label>
+                <select name="excepcion_modo" class="bc-select">
+                    <option value="reemplazar" <?php selected($edit['excepcion_modo'] ?? 'reemplazar', 'reemplazar'); ?>>Reemplazar la comisión</option>
+                    <option value="sumar" <?php selected($edit['excepcion_modo'] ?? 'reemplazar', 'sumar'); ?>>Sumar a la comisión</option>
+                </select>
+                <p class="bc-desc" style="margin:6px 0 0;">Reemplazar: la comisión pasa a ser el monto fijo. Sumar: se suma al cálculo (base × multiplicador + monto fijo).</p>
+            </div>
             <div class="bc-field bc-field--check">
                 <label><input type="checkbox" name="excepcion_desde_umbral" value="1" <?php checked($edit['excepcion_desde_umbral'] ?? 1, 1); ?>> La excepción aplica desde el umbral (si no, desde la 1.ª venta)</label>
             </div>
@@ -1361,7 +1370,8 @@ function billetera_render_bonus_page() {
 
                     if (!empty($r['excepcion_dealer_id'])) {
                         $excep  = get_the_title($r['excepcion_dealer_id']) ?: ('#' . intval($r['excepcion_dealer_id']));
-                        $excep .= ' · US$' . number_format((float) $r['excepcion_usd'], 2) . ' / jefe US$' . number_format((float) $r['excepcion_jefe_usd'], 2);
+                        $excep .= ' · ' . ((($r['excepcion_modo'] ?? 'reemplazar') === 'sumar') ? 'suma' : 'reemplaza');
+                        $excep .= ' US$' . number_format((float) $r['excepcion_usd'], 2) . ' / jefe US$' . number_format((float) $r['excepcion_jefe_usd'], 2);
                         $excep .= !empty($r['excepcion_desde_umbral']) ? ' (desde umbral)' : ' (desde 1.ª)';
                     } else {
                         $excep = '—';

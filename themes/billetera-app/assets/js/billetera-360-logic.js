@@ -266,12 +266,17 @@ function handleSubmit() {
             if (data.success) {
                 const amount = data.data.amount || 0;
                 const bonus = Number(data.data.bonus_multiplier) || 1;
+                const bonusCat = data.data.bonus_categoria || '';
+                const bonusAplicado = Number(data.data.bonus_aplicado) || 0;
 
                 gainAmount.textContent = '+S/ ' + amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 const gainBonus = document.getElementById('gain-bonus');
                 if (gainBonus) {
                     if (bonus > 1) {
-                        gainBonus.textContent = 'x2 ¡Bono Prepagados!';
+                        gainBonus.textContent = 'x' + (Math.round(bonus * 100) / 100) + (bonusCat ? ' ¡Bono ' + bonusCat + '!' : ' ¡Bono!');
+                        gainBonus.hidden = false;
+                    } else if (bonusAplicado && bonusCat) {
+                        gainBonus.textContent = '¡Bono ' + bonusCat + '!';
                         gainBonus.hidden = false;
                     } else {
                         gainBonus.textContent = '';

@@ -251,7 +251,7 @@ function buildRow(m, isLatest) {
     if (Number(m.bonus_multiplier) > 1) {
         const b = document.createElement('span');
         b.className = 'alc-mov__bonus';
-        b.textContent = '2x';
+        b.textContent = (Math.round(Number(m.bonus_multiplier) * 100) / 100) + 'x';
         amt.appendChild(b);
     }
 
@@ -292,7 +292,7 @@ function buildDeskRow(m) {
     if (Number(m.bonus_multiplier) > 1) {
         const b = document.createElement('span');
         b.className = 'alc-mov__bonus';
-        b.textContent = '2x';
+        b.textContent = (Math.round(Number(m.bonus_multiplier) * 100) / 100) + 'x';
         amt.appendChild(b);
     }
 

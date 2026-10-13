@@ -701,11 +701,18 @@ function billetera_ajax_register_sale_v2() {
     // Convertir a SOL y multiplicar por cantidad
     $monto_total_sol = billetera_convert_to_sol($comision) * $cantidad;
 
-    // Aplicar reglas de bonificación (Prepagados, Kit360 y su excepción por concesionaria)
-    $regla_bonus      = billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $distribuidor_id, $cantidad);
-    $bonus_multiplier = $regla_bonus['multiplier'];
+    // Aplicar reglas de bonificación (categoría, umbral, multiplicador y excepción)
+    $regla_bonus = billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $distribuidor_id, $cantidad);
     if ($regla_bonus['override_sol'] !== null) {
-        $monto_total_sol = $regla_bonus['override_sol'];
+        // Excepción "reemplazar"
+        $monto_total_sol  = $regla_bonus['override_sol'];
+        $bonus_multiplier = 1.0;
+    } elseif ($regla_bonus['add_sol'] !== null) {
+        // Excepción "sumar": (base × multiplicador) + fijo
+        $monto_total_sol  = ($monto_total_sol * $regla_bonus['multiplier']) + $regla_bonus['add_sol'];
+        $bonus_multiplier = 1.0;
+    } else {
+        $bonus_multiplier = $regla_bonus['multiplier'];
     }
 
     // Guardar venta en nueva tabla
@@ -723,7 +730,7 @@ function billetera_ajax_register_sale_v2() {
 
     if ($result) {
         // Registrar la comisión del jefe de venta de la sucursal (con la misma regla de bonificación)
-        billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $user_id, $fecha_datetime, $regla_bonus['jefe_multiplier'], $regla_bonus['jefe_override_sol']);
+        billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $user_id, $fecha_datetime, $regla_bonus['jefe_multiplier'], $regla_bonus['jefe_override_sol'], $regla_bonus['jefe_add_sol']);
 
         // El ranking del mes cambió: invalida la caché
         billetera_rank_cache_bust();
@@ -735,6 +742,8 @@ function billetera_ajax_register_sale_v2() {
             'id_type_label' => ucfirst($id_type),
             'id_value' => $id_value,
             'bonus_multiplier' => floatval($bonus_multiplier),
+            'bonus_categoria' => $regla_bonus['categoria_nombre'],
+            'bonus_aplicado' => ($regla_bonus['multiplier'] > 1 || !empty($regla_bonus['excepcion'])) ? 1 : 0,
         ]);
     } else {
         wp_send_json_error(['message' => 'Error al registrar venta']);
@@ -872,6 +881,7 @@ function billetera_bonus_seed_reglas() {
         'excepcion_dealer_id'    => 0,
         'excepcion_usd'          => 0,
         'excepcion_jefe_usd'     => 0,
+        'excepcion_modo'         => 'reemplazar',
         'excepcion_desde_umbral' => 1,
     ];
 
@@ -963,10 +973,13 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
     $out = [
         'multiplier'        => 1.0,
         'override_sol'      => null,
+        'add_sol'           => null,
         'jefe_multiplier'   => 1.0,
         'jefe_override_sol' => null,
+        'jefe_add_sol'      => null,
         'regla'             => null,
         'excepcion'         => false,
+        'categoria_nombre'  => null,
     ];
 
     $catrow = $wpdb->get_row($wpdb->prepare("
@@ -984,7 +997,8 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
     if (!$regla) {
         return $out;
     }
-    $out['regla'] = $regla['id'];
+    $out['regla']            = $regla['id'];
+    $out['categoria_nombre'] = $regla['nombre'] ?? $catrow->nombre;
 
     list($cond, $cond_params) = billetera_bonus_cond($regla);
 
@@ -1009,16 +1023,31 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
     $tc            = billetera_get_tipo_cambio();
 
     if ($usa_excepcion && (float) $regla['excepcion_usd'] > 0) {
-        $out['excepcion']         = true;
-        $out['override_sol']      = round((float) $regla['excepcion_usd'] * $tc * $cantidad, 2);
-        $out['jefe_override_sol'] = (!empty($regla['aplica_jefe']) && (float) $regla['excepcion_jefe_usd'] > 0)
-            ? round((float) $regla['excepcion_jefe_usd'] * $tc * $cantidad, 2)
-            : null;
+        $out['excepcion'] = true;
+        $modo       = (($regla['excepcion_modo'] ?? 'reemplazar') === 'sumar') ? 'sumar' : 'reemplazar';
+        $fixed      = round((float) $regla['excepcion_usd'] * $tc * $cantidad, 2);
+        $fixed_jefe = round((float) $regla['excepcion_jefe_usd'] * $tc * $cantidad, 2);
+        $con_jefe   = !empty($regla['aplica_jefe']);
+
+        if ($modo === 'sumar') {
+            // Suma el monto fijo a la comisión (base × multiplicador + fijo)
+            $out['multiplier']      = (float) $regla['multiplicador'];
+            $out['add_sol']         = $fixed;
+            $out['jefe_multiplier'] = $con_jefe ? (float) $regla['multiplicador'] : 1.0;
+            $out['jefe_add_sol']    = ($con_jefe && (float) $regla['excepcion_jefe_usd'] > 0) ? $fixed_jefe : null;
+        } else {
+            // Reemplaza la comisión por el monto fijo
+            $out['override_sol']      = $fixed;
+            $out['jefe_override_sol'] = ($con_jefe && (float) $regla['excepcion_jefe_usd'] > 0) ? $fixed_jefe : null;
+        }
     } elseif ($califica) {
         $out['multiplier']      = (float) $regla['multiplicador'];
         $out['jefe_multiplier'] = !empty($regla['aplica_jefe']) ? (float) $regla['multiplicador'] : 1.0;
     }
 
+    // El retroactivo solo aplica cuando la regla "arranca" en esta venta
+    // (no cuando la excepción está activa desde la 1.ª venta).
+    $retro = $retro && !($es_excepcion && empty($regla['excepcion_desde_umbral']));
     if ($retro && $aplicar_retro && ($califica || $usa_excepcion)) {
         billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc);
     }
@@ -1041,7 +1070,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
     $subcat_in = "(SELECT s.id FROM $sub s JOIN $cat c ON c.id = s.categoria_id WHERE $cond)";
 
     if ($out['override_sol'] !== null) {
-        // Excepción: reemplazar el monto por el fijo (USD * TC * cantidad)
+        // Reemplazar: el monto pasa a ser el fijo (USD * TC * cantidad)
         $usd    = (float) $regla['excepcion_usd'];
         $params = array_merge([$usd * $tc, $user_id], $cond_params, [$mes_inicio, $limite]);
         $wpdb->query($wpdb->prepare("
@@ -1060,6 +1089,33 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
                 SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0
+                WHERE v.asesor_id = %d
+                  AND v.subcategoria_id IN $subcat_in
+                  AND v.creado_en >= %s
+            ", ...$params));
+        }
+    } elseif ($out['add_sol'] !== null) {
+        // Sumar: monto = (base × multiplicador) + fijo
+        $mult   = (float) $out['multiplier'];
+        $usd    = (float) $regla['excepcion_usd'];
+        $params = array_merge([$mult, $usd * $tc, $user_id], $cond_params, [$mes_inicio, $limite]);
+        $wpdb->query($wpdb->prepare("
+            UPDATE $ventas v
+            SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0
+            WHERE v.usuario_id = %d
+              AND v.subcategoria_id IN $subcat_in
+              AND v.creado_en >= %s
+            ORDER BY v.id DESC
+            LIMIT %d
+        ", ...$params));
+
+        if ($out['jefe_add_sol'] !== null) {
+            $mult_j = (float) $out['jefe_multiplier'];
+            $usd_j  = (float) $regla['excepcion_jefe_usd'];
+            $params = array_merge([$mult_j, $usd_j * $tc, $user_id], $cond_params, [$mes_inicio]);
+            $wpdb->query($wpdb->prepare("
+                UPDATE $ventas v
+                SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0
                 WHERE v.asesor_id = %d
                   AND v.subcategoria_id IN $subcat_in
                   AND v.creado_en >= %s
@@ -1091,7 +1147,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
     }
 }
 
-function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $registrante_id = 0, $fecha_datetime = null, $bonus_multiplier = 1.0, $override_sol = null) {
+function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $registrante_id = 0, $fecha_datetime = null, $bonus_multiplier = 1.0, $override_sol = null, $add_sol = null) {
     if (!$fecha_datetime) {
         $fecha_datetime = date('Y-m-d H:i:s');
     }
@@ -1125,14 +1181,22 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
         }
 
         if ($override_sol !== null) {
-            // Excepción: monto fijo (ya incluye cantidad), no depende del catálogo
+            // Reemplazar: monto fijo (ya incluye cantidad), no depende del catálogo
             $monto_jefe = floatval($override_sol);
+            $bm_jefe    = 1.0;
+        } elseif ($add_sol !== null) {
+            // Sumar: (base × multiplicador) + monto fijo
+            $comision   = billetera_find_comision($subcategoria_id, $distribuidor_id, 'jefe_venta');
+            $base       = $comision ? (billetera_convert_to_sol($comision) * $cantidad) : 0.0;
+            $monto_jefe = ($base * floatval($bonus_multiplier)) + floatval($add_sol);
+            $bm_jefe    = 1.0;
         } else {
             $comision = billetera_find_comision($subcategoria_id, $distribuidor_id, 'jefe_venta');
             if (!$comision) {
                 continue;
             }
             $monto_jefe = billetera_convert_to_sol($comision) * $cantidad;
+            $bm_jefe    = floatval($bonus_multiplier);
         }
 
         global $wpdb;
@@ -1145,7 +1209,7 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
             'monto_comision_sol' => $monto_jefe,
             'id_type' => $id_type,
             'id_value' => $id_value,
-            'bonus_multiplier' => floatval($bonus_multiplier),
+            'bonus_multiplier' => $bm_jefe,
             'creado_en' => $fecha_datetime,
         ], ['%d', '%d', '%d', '%d', '%f', '%s', '%s', '%f', '%s']);
     }
@@ -1222,10 +1286,15 @@ function billetera_ajax_get_comision() {
     $monto_total_sol = billetera_convert_to_sol($comision) * $cantidad;
 
     // Aplicar reglas de bonificación (sin retroactivo: solo previsualización)
-    $regla_bonus      = billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $distribuidor_id, $cantidad, false);
-    $bonus_multiplier = $regla_bonus['multiplier'];
+    $regla_bonus = billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $distribuidor_id, $cantidad, false);
     if ($regla_bonus['override_sol'] !== null) {
-        $monto_total_sol = $regla_bonus['override_sol'];
+        $monto_total_sol  = $regla_bonus['override_sol'];
+        $bonus_multiplier = 1.0;
+    } elseif ($regla_bonus['add_sol'] !== null) {
+        $monto_total_sol  = ($monto_total_sol * $regla_bonus['multiplier']) + $regla_bonus['add_sol'];
+        $bonus_multiplier = 1.0;
+    } else {
+        $bonus_multiplier = $regla_bonus['multiplier'];
     }
 
     $monto_mostrado = $monto_total_sol * $bonus_multiplier;
