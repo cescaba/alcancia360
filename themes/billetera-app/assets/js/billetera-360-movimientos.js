@@ -248,10 +248,12 @@ function buildRow(m, isLatest) {
     const amt = document.createElement('div');
     amt.className = 'alc-mov__amt';
     amt.textContent = '+' + fmt(Number(m.amount) || 0);
-    if (Number(m.bonus_multiplier) > 1) {
+    if (Number(m.bonus_multiplier) > 1 || Number(m.bonus_aplicado) === 1) {
         const b = document.createElement('span');
         b.className = 'alc-mov__bonus';
-        b.textContent = (Math.round(Number(m.bonus_multiplier) * 100) / 100) + 'x';
+        b.textContent = (Number(m.bonus_multiplier) > 1)
+            ? (Math.round(Number(m.bonus_multiplier) * 100) / 100) + 'x'
+            : 'Bono';
         amt.appendChild(b);
     }
 
@@ -289,10 +291,12 @@ function buildDeskRow(m) {
     const amt = document.createElement('div');
     amt.className = 'alc-desk__td alc-desk__td--amt';
     amt.textContent = '+' + fmt(Number(m.amount) || 0);
-    if (Number(m.bonus_multiplier) > 1) {
+    if (Number(m.bonus_multiplier) > 1 || Number(m.bonus_aplicado) === 1) {
         const b = document.createElement('span');
         b.className = 'alc-mov__bonus';
-        b.textContent = (Math.round(Number(m.bonus_multiplier) * 100) / 100) + 'x';
+        b.textContent = (Number(m.bonus_multiplier) > 1)
+            ? (Math.round(Number(m.bonus_multiplier) * 100) / 100) + 'x'
+            : 'Bono';
         amt.appendChild(b);
     }
 

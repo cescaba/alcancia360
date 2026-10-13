@@ -160,7 +160,7 @@ function billetera_get_notificaciones($user_id) {
         $ph = implode(',', array_fill(0, count($tienda_ids), '%d'));
 
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT v.creado_en, v.monto_comision_sol, v.bonus_multiplier,
+            "SELECT v.creado_en, v.monto_comision_sol, v.bonus_multiplier, v.bonus_aplicado,
                     s.nombre AS subcategoria, u.display_name AS asesor_nombre
              FROM $ventas_table v
              INNER JOIN $subs_table s ON v.subcategoria_id = s.id
@@ -186,7 +186,7 @@ function billetera_get_notificaciones($user_id) {
 
     if (in_array('asesor', $roles, true)) {
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT v.creado_en, v.monto_comision_sol, v.bonus_multiplier,
+            "SELECT v.creado_en, v.monto_comision_sol, v.bonus_multiplier, v.bonus_aplicado,
                     s.nombre AS subcategoria, c.nombre AS categoria
              FROM $ventas_table v
              INNER JOIN $subs_table s ON v.subcategoria_id = s.id
@@ -202,9 +202,12 @@ function billetera_get_notificaciones($user_id) {
             $texto = 'Venta acreditada: ' . $r->subcategoria
                 . ' (+S/ ' . number_format($monto, 2, '.', ',') . ')';
 
-            if (floatval($r->bonus_multiplier) > 1) {
-                $mult_txt = rtrim(rtrim(number_format((float) $r->bonus_multiplier, 2, '.', ''), '0'), '.');
-                $texto = '¡Bonus ' . $mult_txt . 'x aplicado en ' . $r->subcategoria
+            if (floatval($r->bonus_multiplier) > 1 || !empty($r->bonus_aplicado)) {
+                $mult = (float) $r->bonus_multiplier;
+                $tag  = ($mult > 1)
+                    ? 'Bonus ' . rtrim(rtrim(number_format($mult, 2, '.', ''), '0'), '.') . 'x'
+                    : 'Bonus';
+                $texto = '¡' . $tag . ' aplicado en ' . $r->subcategoria
                     . '! (+S/ ' . number_format($monto, 2, '.', ',') . ')';
             }
 

@@ -41,7 +41,7 @@ register_deactivation_hook(__FILE__, 'billetera_summary_unschedule');
 add_action('plugins_loaded', 'billetera_maybe_upgrade_schema');
 
 function billetera_maybe_upgrade_schema() {
-    if (get_option('billetera_db_version') === '1.4') {
+    if (get_option('billetera_db_version') === '1.5') {
         return;
     }
 
@@ -54,6 +54,13 @@ function billetera_maybe_upgrade_schema() {
         if (!in_array('asesor_id', $column_names)) {
             $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN asesor_id bigint(20)");
         }
+        // --- 1.5: bandera de bonificación aplicada (incluye excepción de monto fijo) ---
+        if (!in_array('bonus_multiplier', $column_names)) {
+            $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN bonus_multiplier decimal(3, 1) DEFAULT 1.0");
+        }
+        if (!in_array('bonus_aplicado', $column_names)) {
+            $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN bonus_aplicado tinyint(1) NOT NULL DEFAULT 0");
+        }
     }
 
     // --- 1.3: líneas (hyu/hcv/gee/jmc) independientes de las marcas ---
@@ -65,7 +72,7 @@ function billetera_maybe_upgrade_schema() {
     // --- 1.4: tabla de cola del resumen semanal por correo ---
     billetera_summary_create_queue_table();
 
-    update_option('billetera_db_version', '1.4');
+    update_option('billetera_db_version', '1.5');
 }
 
 /**
@@ -389,6 +396,7 @@ function billetera_create_catalog_tables() {
             id_type varchar(50),
             id_value varchar(255),
             bonus_multiplier decimal(3, 1) DEFAULT 1.0,
+            bonus_aplicado tinyint(1) NOT NULL DEFAULT 0,
             creado_en datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY usuario_id (usuario_id),
@@ -413,6 +421,10 @@ function billetera_create_catalog_tables() {
 
         if (!in_array('bonus_multiplier', $column_names)) {
             $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN bonus_multiplier decimal(3, 1) DEFAULT 1.0");
+        }
+
+        if (!in_array('bonus_aplicado', $column_names)) {
+            $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN bonus_aplicado tinyint(1) NOT NULL DEFAULT 0");
         }
 
         if (!in_array('asesor_id', $column_names)) {
@@ -714,6 +726,7 @@ function billetera_ajax_register_sale_v2() {
     } else {
         $bonus_multiplier = $regla_bonus['multiplier'];
     }
+    $bonus_aplicado = ($bonus_multiplier > 1 || !empty($regla_bonus['excepcion'])) ? 1 : 0;
 
     // Guardar venta en nueva tabla
     $ventas_table = $wpdb->prefix . 'billetera_ventas';
@@ -725,8 +738,9 @@ function billetera_ajax_register_sale_v2() {
         'id_type' => $id_type,
         'id_value' => $id_value,
         'bonus_multiplier' => $bonus_multiplier,
+        'bonus_aplicado' => $bonus_aplicado,
         'creado_en' => $fecha_datetime,
-    ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f', '%s']);
+    ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f', '%d', '%s']);
 
     if ($result) {
         // Registrar la comisión del jefe de venta de la sucursal (con la misma regla de bonificación)
@@ -1075,7 +1089,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         $params = array_merge([$usd * $tc, $user_id], $cond_params, [$mes_inicio, $limite]);
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
-            SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0
+            SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
             WHERE v.usuario_id = %d
               AND v.subcategoria_id IN $subcat_in
               AND v.creado_en >= %s
@@ -1088,7 +1102,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
             $params = array_merge([$usd_j * $tc, $user_id], $cond_params, [$mes_inicio]);
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
-                SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0
+                SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
                 WHERE v.asesor_id = %d
                   AND v.subcategoria_id IN $subcat_in
                   AND v.creado_en >= %s
@@ -1101,7 +1115,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         $params = array_merge([$mult, $usd * $tc, $user_id], $cond_params, [$mes_inicio, $limite]);
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
-            SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0
+            SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
             WHERE v.usuario_id = %d
               AND v.subcategoria_id IN $subcat_in
               AND v.creado_en >= %s
@@ -1115,7 +1129,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
             $params = array_merge([$mult_j, $usd_j * $tc, $user_id], $cond_params, [$mes_inicio]);
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
-                SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0
+                SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
                 WHERE v.asesor_id = %d
                   AND v.subcategoria_id IN $subcat_in
                   AND v.creado_en >= %s
@@ -1126,7 +1140,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         $params = array_merge([$mult, $user_id], $cond_params, [$mes_inicio, $limite]);
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
-            SET v.bonus_multiplier = %f
+            SET v.bonus_multiplier = %f, v.bonus_aplicado = 1
             WHERE v.usuario_id = %d
               AND v.subcategoria_id IN $subcat_in
               AND v.creado_en >= %s
@@ -1138,7 +1152,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
             $params = array_merge([$out['jefe_multiplier'], $user_id], $cond_params, [$mes_inicio]);
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
-                SET v.bonus_multiplier = %f
+                SET v.bonus_multiplier = %f, v.bonus_aplicado = 1
                 WHERE v.asesor_id = %d
                   AND v.subcategoria_id IN $subcat_in
                   AND v.creado_en >= %s
@@ -1182,21 +1196,24 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
 
         if ($override_sol !== null) {
             // Reemplazar: monto fijo (ya incluye cantidad), no depende del catálogo
-            $monto_jefe = floatval($override_sol);
-            $bm_jefe    = 1.0;
+            $monto_jefe  = floatval($override_sol);
+            $bm_jefe     = 1.0;
+            $bm_aplicado = 1;
         } elseif ($add_sol !== null) {
             // Sumar: (base × multiplicador) + monto fijo
-            $comision   = billetera_find_comision($subcategoria_id, $distribuidor_id, 'jefe_venta');
-            $base       = $comision ? (billetera_convert_to_sol($comision) * $cantidad) : 0.0;
-            $monto_jefe = ($base * floatval($bonus_multiplier)) + floatval($add_sol);
-            $bm_jefe    = 1.0;
+            $comision    = billetera_find_comision($subcategoria_id, $distribuidor_id, 'jefe_venta');
+            $base        = $comision ? (billetera_convert_to_sol($comision) * $cantidad) : 0.0;
+            $monto_jefe  = ($base * floatval($bonus_multiplier)) + floatval($add_sol);
+            $bm_jefe     = 1.0;
+            $bm_aplicado = 1;
         } else {
             $comision = billetera_find_comision($subcategoria_id, $distribuidor_id, 'jefe_venta');
             if (!$comision) {
                 continue;
             }
-            $monto_jefe = billetera_convert_to_sol($comision) * $cantidad;
-            $bm_jefe    = floatval($bonus_multiplier);
+            $monto_jefe  = billetera_convert_to_sol($comision) * $cantidad;
+            $bm_jefe     = floatval($bonus_multiplier);
+            $bm_aplicado = ($bm_jefe > 1) ? 1 : 0;
         }
 
         global $wpdb;
@@ -1210,8 +1227,9 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
             'id_type' => $id_type,
             'id_value' => $id_value,
             'bonus_multiplier' => $bm_jefe,
+            'bonus_aplicado' => $bm_aplicado,
             'creado_en' => $fecha_datetime,
-        ], ['%d', '%d', '%d', '%d', '%f', '%s', '%s', '%f', '%s']);
+        ], ['%d', '%d', '%d', '%d', '%f', '%s', '%s', '%f', '%d', '%s']);
     }
 }
 
@@ -1410,7 +1428,7 @@ function billetera_ajax_get_balance() {
     $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
     $movements = $wpdb->get_results($wpdb->prepare("
-        SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, c.nombre as categoria, u.display_name as asesor_nombre
+        SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, v.bonus_aplicado, c.nombre as categoria, u.display_name as asesor_nombre
         FROM $ventas_table v
         LEFT JOIN $subcategorias_table s ON v.subcategoria_id = s.id
         LEFT JOIN $categorias_table c ON s.categoria_id = c.id
@@ -1462,7 +1480,7 @@ function billetera_ajax_get_all_movements() {
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
 
     $movements = $wpdb->get_results($wpdb->prepare("
-        SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, c.nombre as categoria, u.display_name as asesor_nombre
+        SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, v.bonus_aplicado, c.nombre as categoria, u.display_name as asesor_nombre
         FROM $ventas_table v
         LEFT JOIN $subcategorias_table s ON v.subcategoria_id = s.id
         LEFT JOIN $categorias_table c ON s.categoria_id = c.id
