@@ -887,11 +887,11 @@
         display: inline-block;
         background: #f5c563;
         color: #7a5410;
-        font-size: 9px;
+        font-size: 12px;
         font-weight: 700;
-        padding: 1px 5px;
-        border-radius: 3px;
-        margin-left: 5px;
+        padding: 2px 7px;
+        border-radius: 4px;
+        margin-left: 6px;
         vertical-align: middle;
     }
 
