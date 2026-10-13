@@ -1353,7 +1353,7 @@ function billetera_render_bonus_page() {
                     <option value="reemplazar" <?php selected($edit['excepcion_modo'] ?? 'reemplazar', 'reemplazar'); ?>>Reemplazar la comisión</option>
                     <option value="sumar" <?php selected($edit['excepcion_modo'] ?? 'reemplazar', 'sumar'); ?>>Sumar a la comisión</option>
                 </select>
-                <p class="bc-desc" style="margin:6px 0 0;">Reemplazar: la comisión pasa a ser el monto fijo. Sumar: se suma al cálculo (base × multiplicador + monto fijo).</p>
+                <p class="bc-desc" style="margin:6px 0 0;">Reemplazar: la comisión pasa a ser el monto fijo. Sumar: se suma el monto fijo a la comisión base (la excepción anula el multiplicador).</p>
             </div>
             <div class="bc-field bc-field--check">
                 <label><input type="checkbox" name="excepcion_desde_umbral" value="1" <?php checked($edit['excepcion_desde_umbral'] ?? 1, 1); ?>> La excepción aplica desde el umbral (si no, desde la 1.ª venta)</label>

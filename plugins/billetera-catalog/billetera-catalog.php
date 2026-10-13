@@ -720,7 +720,7 @@ function billetera_ajax_register_sale_v2() {
         $monto_total_sol  = $regla_bonus['override_sol'];
         $bonus_multiplier = 1.0;
     } elseif ($regla_bonus['add_sol'] !== null) {
-        // Excepción "sumar": (base × multiplicador) + fijo
+        // Excepción "sumar": comisión base + fijo (sin multiplicador)
         $monto_total_sol  = ($monto_total_sol * $regla_bonus['multiplier']) + $regla_bonus['add_sol'];
         $bonus_multiplier = 1.0;
     } else {
@@ -1066,14 +1066,15 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
         $con_jefe   = !empty($regla['aplica_jefe']);
 
         if ($modo === 'sumar') {
-            // Suma el monto fijo a la comisión (base × multiplicador + fijo)
-            $out['multiplier'] = (float) $regla['multiplicador'];
+            // Excepción "sumar": la excepción anula el multiplicador, así que el
+            // monto queda como comisión base + monto fijo (base × 1 + fijo).
+            $out['multiplier'] = 1.0;
             $out['add_sol']    = $fixed;
 
-            // El jefe solo recibe el multiplicador si además recibe monto fijo.
+            // El jefe también pierde el multiplicador: recibe su comisión base + su monto fijo.
             // Si su monto fijo es 0, queda con su comisión normal (sin bono).
             $jefe_fijo              = ($con_jefe && (float) $regla['excepcion_jefe_usd'] > 0) ? $fixed_jefe : null;
-            $out['jefe_multiplier'] = ($jefe_fijo !== null) ? (float) $regla['multiplicador'] : 1.0;
+            $out['jefe_multiplier'] = 1.0;
             $out['jefe_add_sol']    = $jefe_fijo;
         } else {
             // Reemplaza la comisión por el monto fijo
@@ -1137,7 +1138,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
             ", ...$params));
         }
     } elseif ($out['add_sol'] !== null) {
-        // Sumar: monto = (base × multiplicador) + fijo
+        // Sumar: monto = base + fijo (la excepción anula el multiplicador)
         $mult   = (float) $out['multiplier'];
         $usd    = (float) $regla['excepcion_usd'];
         $params = array_merge([$mult, $usd * $factor, $user_id], $cond_params, [$mes_inicio, $limite]);
