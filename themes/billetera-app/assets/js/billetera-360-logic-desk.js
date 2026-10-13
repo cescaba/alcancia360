@@ -209,7 +209,7 @@
         fetch(billetera.ajax_url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'action=billetera_get_comision&subcategoria_id=' + subId + '&cantidad=' + cantidad
+            body: 'action=billetera_get_comision&nonce=' + encodeURIComponent(billetera.nonce_get_comision) + '&subcategoria_id=' + subId + '&cantidad=' + cantidad
         })
             .then(function (r) { return r.json(); })
             .then(function (res) {
