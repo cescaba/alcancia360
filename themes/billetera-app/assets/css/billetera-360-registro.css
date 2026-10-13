@@ -884,15 +884,15 @@
     }
 
     .reg-desk__recent-amt .alc-mov__bonus {
-        display: block;
-        width: fit-content;
-        margin: 3px 0 0 auto;
+        display: inline-block;
         background: #f5c563;
         color: #7a5410;
         font-size: 12px;
         font-weight: 700;
         padding: 2px 7px;
         border-radius: 4px;
+        margin-left: 6px;
+        vertical-align: middle;
     }
 
     .reg-desk__recent-empty {
