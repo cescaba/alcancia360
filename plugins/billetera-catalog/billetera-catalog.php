@@ -895,6 +895,7 @@ function billetera_bonus_seed_reglas() {
         'excepcion_dealer_id'    => 0,
         'excepcion_usd'          => 0,
         'excepcion_jefe_usd'     => 0,
+        'excepcion_moneda'       => 'USD',
         'excepcion_modo'         => 'reemplazar',
         'excepcion_desde_umbral' => 1,
     ];
@@ -1059,8 +1060,9 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
     if ($usa_excepcion && (float) $regla['excepcion_usd'] > 0) {
         $out['excepcion'] = true;
         $modo       = (($regla['excepcion_modo'] ?? 'reemplazar') === 'sumar') ? 'sumar' : 'reemplazar';
-        $fixed      = round((float) $regla['excepcion_usd'] * $tc * $cantidad, 2);
-        $fixed_jefe = round((float) $regla['excepcion_jefe_usd'] * $tc * $cantidad, 2);
+        $factor     = (($regla['excepcion_moneda'] ?? 'USD') === 'PEN') ? 1.0 : $tc;
+        $fixed      = round((float) $regla['excepcion_usd'] * $factor * $cantidad, 2);
+        $fixed_jefe = round((float) $regla['excepcion_jefe_usd'] * $factor * $cantidad, 2);
         $con_jefe   = !empty($regla['aplica_jefe']);
 
         if ($modo === 'sumar') {
@@ -1103,10 +1105,12 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
 
     $subcat_in = "(SELECT s.id FROM $sub s JOIN $cat c ON c.id = s.categoria_id WHERE $cond)";
 
+    $factor = (($regla['excepcion_moneda'] ?? 'USD') === 'PEN') ? 1.0 : $tc;
+
     if ($out['override_sol'] !== null) {
         // Reemplazar: el monto pasa a ser el fijo (USD * TC * cantidad)
         $usd    = (float) $regla['excepcion_usd'];
-        $params = array_merge([$usd * $tc, $user_id], $cond_params, [$mes_inicio, $limite]);
+        $params = array_merge([$usd * $factor, $user_id], $cond_params, [$mes_inicio, $limite]);
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
             SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
@@ -1119,7 +1123,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
 
         if ($out['jefe_override_sol'] !== null) {
             $usd_j  = (float) $regla['excepcion_jefe_usd'];
-            $params = array_merge([$usd_j * $tc, $user_id], $cond_params, [$mes_inicio]);
+            $params = array_merge([$usd_j * $factor, $user_id], $cond_params, [$mes_inicio]);
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
                 SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
@@ -1132,7 +1136,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         // Sumar: monto = (base × multiplicador) + fijo
         $mult   = (float) $out['multiplier'];
         $usd    = (float) $regla['excepcion_usd'];
-        $params = array_merge([$mult, $usd * $tc, $user_id], $cond_params, [$mes_inicio, $limite]);
+        $params = array_merge([$mult, $usd * $factor, $user_id], $cond_params, [$mes_inicio, $limite]);
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
             SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
@@ -1146,7 +1150,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         if ($out['jefe_add_sol'] !== null) {
             $mult_j = (float) $out['jefe_multiplier'];
             $usd_j  = (float) $regla['excepcion_jefe_usd'];
-            $params = array_merge([$mult_j, $usd_j * $tc, $user_id], $cond_params, [$mes_inicio]);
+            $params = array_merge([$mult_j, $usd_j * $factor, $user_id], $cond_params, [$mes_inicio]);
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
                 SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1

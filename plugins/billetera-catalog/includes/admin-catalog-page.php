@@ -1189,6 +1189,7 @@ function billetera_render_bonus_page() {
                         'excepcion_dealer_id'    => intval($_POST['excepcion_dealer_id'] ?? 0),
                         'excepcion_usd'          => max(0, floatval($_POST['excepcion_usd'] ?? 0)),
                         'excepcion_jefe_usd'     => max(0, floatval($_POST['excepcion_jefe_usd'] ?? 0)),
+                        'excepcion_moneda'       => (isset($_POST['excepcion_moneda']) && $_POST['excepcion_moneda'] === 'PEN') ? 'PEN' : 'USD',
                         'excepcion_modo'         => (isset($_POST['excepcion_modo']) && $_POST['excepcion_modo'] === 'sumar') ? 'sumar' : 'reemplazar',
                         'excepcion_desde_umbral' => isset($_POST['excepcion_desde_umbral']) ? 1 : 0,
                     ];
@@ -1331,11 +1332,19 @@ function billetera_render_bonus_page() {
                 </select>
             </div>
             <div class="bc-field">
-                <label class="bc-label">Monto fijo USD por unidad (asesor)</label>
+                <label class="bc-label">Moneda del monto fijo</label>
+                <select name="excepcion_moneda" class="bc-select">
+                    <option value="USD" <?php selected($edit['excepcion_moneda'] ?? 'USD', 'USD'); ?>>Dólares (US$)</option>
+                    <option value="PEN" <?php selected($edit['excepcion_moneda'] ?? 'USD', 'PEN'); ?>>Soles (S/)</option>
+                </select>
+                <p class="bc-desc" style="margin:6px 0 0;">Si eliges dólares, se convierte con el tipo de cambio del catálogo.</p>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Monto fijo por unidad (asesor)</label>
                 <input type="number" step="0.01" min="0" name="excepcion_usd" class="bc-input" value="<?php echo esc_attr($edit['excepcion_usd'] ?? 0); ?>">
             </div>
             <div class="bc-field">
-                <label class="bc-label">Monto fijo USD por unidad (jefe)</label>
+                <label class="bc-label">Monto fijo por unidad (jefe)</label>
                 <input type="number" step="0.01" min="0" name="excepcion_jefe_usd" class="bc-input" value="<?php echo esc_attr($edit['excepcion_jefe_usd'] ?? 0); ?>">
             </div>
             <div class="bc-field">
@@ -1382,9 +1391,10 @@ function billetera_render_bonus_page() {
                         : 'Todas las líneas';
 
                     if (!empty($r['excepcion_dealer_id'])) {
+                        $sim    = (($r['excepcion_moneda'] ?? 'USD') === 'PEN') ? 'S/ ' : 'US$';
                         $excep  = get_the_title($r['excepcion_dealer_id']) ?: ('#' . intval($r['excepcion_dealer_id']));
                         $excep .= ' · ' . ((($r['excepcion_modo'] ?? 'reemplazar') === 'sumar') ? 'suma' : 'reemplaza');
-                        $excep .= ' US$' . number_format((float) $r['excepcion_usd'], 2) . ' / jefe US$' . number_format((float) $r['excepcion_jefe_usd'], 2);
+                        $excep .= ' ' . $sim . number_format((float) $r['excepcion_usd'], 2) . ' / jefe ' . $sim . number_format((float) $r['excepcion_jefe_usd'], 2);
                         $excep .= !empty($r['excepcion_desde_umbral']) ? ' (desde umbral)' : ' (desde 1.ª)';
                     } else {
                         $excep = '—';
