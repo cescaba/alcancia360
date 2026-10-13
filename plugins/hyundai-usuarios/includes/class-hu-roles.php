@@ -250,7 +250,6 @@ class HU_Roles {
         $allowed_menus = [
             'users.php',              // Usuarios
             'red_concesionarios',     // Red de Concesionarias
-            'billetera_catalogo',     // Catálogo y Comisiones
             'hc-cursos',              // KPIs Training
         ];
 

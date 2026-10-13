@@ -18,11 +18,15 @@ if (!defined('BILLETERA_CATALOG_CAP')) {
 // ---------------------------------------------------------------------------
 add_action('admin_init', 'billetera_catalog_ensure_cap');
 function billetera_catalog_ensure_cap() {
-    foreach (['administrator', 'administrador_hyundai'] as $role_name) {
-        $role = get_role($role_name);
-        if ($role && !$role->has_cap(BILLETERA_CATALOG_CAP)) {
-            $role->add_cap(BILLETERA_CATALOG_CAP);
-        }
+    // El catálogo y comisiones es solo para el administrador (no administrador_hyundai)
+    $role = get_role('administrator');
+    if ($role && !$role->has_cap(BILLETERA_CATALOG_CAP)) {
+        $role->add_cap(BILLETERA_CATALOG_CAP);
+    }
+
+    $hu = get_role('administrador_hyundai');
+    if ($hu && $hu->has_cap(BILLETERA_CATALOG_CAP)) {
+        $hu->remove_cap(BILLETERA_CATALOG_CAP);
     }
 }
 
