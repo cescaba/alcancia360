@@ -1067,10 +1067,14 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
 
         if ($modo === 'sumar') {
             // Suma el monto fijo a la comisión (base × multiplicador + fijo)
-            $out['multiplier']      = (float) $regla['multiplicador'];
-            $out['add_sol']         = $fixed;
-            $out['jefe_multiplier'] = $con_jefe ? (float) $regla['multiplicador'] : 1.0;
-            $out['jefe_add_sol']    = ($con_jefe && (float) $regla['excepcion_jefe_usd'] > 0) ? $fixed_jefe : null;
+            $out['multiplier'] = (float) $regla['multiplicador'];
+            $out['add_sol']    = $fixed;
+
+            // El jefe solo recibe el multiplicador si además recibe monto fijo.
+            // Si su monto fijo es 0, queda con su comisión normal (sin bono).
+            $jefe_fijo              = ($con_jefe && (float) $regla['excepcion_jefe_usd'] > 0) ? $fixed_jefe : null;
+            $out['jefe_multiplier'] = ($jefe_fijo !== null) ? (float) $regla['multiplicador'] : 1.0;
+            $out['jefe_add_sol']    = $jefe_fijo;
         } else {
             // Reemplaza la comisión por el monto fijo
             $out['override_sol']      = $fixed;
