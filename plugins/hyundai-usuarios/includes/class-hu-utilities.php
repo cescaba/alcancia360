@@ -25,6 +25,27 @@ class HU_Utilities {
 
         // Ocultar mensaje de confirmación de email a administrador_hyundai (muy temprano)
         add_action('admin_init', [$this, 'ocultar_email_confirmation_admin'], 1);
+
+        // Los administradores que entren al frontend van al panel
+        add_action('template_redirect', [$this, 'redirect_admins_to_admin']);
+    }
+
+    /**
+     * Redirige al panel a los administradores (administrator / administrador_hyundai)
+     * que intenten entrar al frontend.
+     */
+    public function redirect_admins_to_admin() {
+        if (is_admin() || wp_doing_ajax() || wp_doing_cron() || (defined('REST_REQUEST') && REST_REQUEST)) {
+            return;
+        }
+        if (!is_user_logged_in()) {
+            return;
+        }
+        $roles = (array) wp_get_current_user()->roles;
+        if (array_intersect(['administrator', 'administrador_hyundai'], $roles)) {
+            wp_safe_redirect(admin_url());
+            exit;
+        }
     }
 
     /**
