@@ -21,15 +21,19 @@ if (!defined('BILLETERA_REPORTS_CAP')) {
 }
 
 // ---------------------------------------------------------------------------
-// Capability: administrador_hyundai y administrador normal
+// Capability: solo el administrador (no administrador_hyundai)
 // ---------------------------------------------------------------------------
 add_action('admin_init', 'billetera_reports_ensure_cap');
 function billetera_reports_ensure_cap() {
-    foreach (['administrador_hyundai', 'administrator'] as $role_name) {
-        $role = get_role($role_name);
-        if ($role && !$role->has_cap(BILLETERA_REPORTS_CAP)) {
-            $role->add_cap(BILLETERA_REPORTS_CAP);
-        }
+    $role = get_role('administrator');
+    if ($role && !$role->has_cap(BILLETERA_REPORTS_CAP)) {
+        $role->add_cap(BILLETERA_REPORTS_CAP);
+    }
+
+    // El reporte es exclusivo del administrador: quitar del administrador_hyundai
+    $hu = get_role('administrador_hyundai');
+    if ($hu && $hu->has_cap(BILLETERA_REPORTS_CAP)) {
+        $hu->remove_cap(BILLETERA_REPORTS_CAP);
     }
 }
 
@@ -38,7 +42,7 @@ function billetera_reports_can_access() {
         return false;
     }
     $user = wp_get_current_user();
-    return (bool) array_intersect(['administrador_hyundai', 'administrator'], (array) $user->roles);
+    return (bool) array_intersect(['administrator'], (array) $user->roles);
 }
 
 // ---------------------------------------------------------------------------

@@ -49,7 +49,8 @@ function billetera_catalog_admin_menu() {
     add_submenu_page('billetera_catalogo', 'Metas / Tarifas', 'Metas / Tarifas', $cap, 'billetera_metas_admin', 'billetera_render_metas_page');
     add_submenu_page('billetera_catalogo', 'Líneas y Marcas', 'Líneas y Marcas', $cap, 'billetera_lineas_admin', 'billetera_render_lineas_page');
     add_submenu_page('billetera_catalogo', 'Configuración', 'Configuración', $cap, 'billetera_config_admin', 'billetera_render_config_page');
-    add_submenu_page('billetera_catalogo', 'Resumen semanal', 'Resumen semanal', $cap, 'billetera_resumen_admin', 'billetera_render_resumen_page');
+    add_submenu_page('billetera_catalogo', 'Resumen semanal', 'Resumen semanal', 'manage_options', 'billetera_resumen_admin', 'billetera_render_resumen_page');
+    add_submenu_page('billetera_catalogo', 'Reglas de bonificación', 'Reglas de bonificación', 'manage_options', 'billetera_bonus_admin', 'billetera_render_bonus_page');
 
     // Reporte de comisiones: solo el rol administrador_hyundai
     if (defined('BILLETERA_REPORTS_CAP')) {
@@ -63,7 +64,7 @@ function billetera_catalog_admin_menu() {
 add_action('admin_enqueue_scripts', 'billetera_catalog_admin_assets');
 function billetera_catalog_admin_assets() {
     $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
-    $pages = ['billetera_catalogo', 'billetera_subcategorias', 'billetera_comisiones_admin', 'billetera_metas_admin', 'billetera_lineas_admin', 'billetera_config_admin', 'billetera_resumen_admin', 'billetera_reporte_comisiones'];
+    $pages = ['billetera_catalogo', 'billetera_subcategorias', 'billetera_comisiones_admin', 'billetera_metas_admin', 'billetera_lineas_admin', 'billetera_config_admin', 'billetera_resumen_admin', 'billetera_reporte_comisiones', 'billetera_bonus_admin'];
     if (!in_array($page, $pages, true)) {
         return;
     }
@@ -1137,6 +1138,138 @@ function billetera_render_config_page() {
             </div>
         </form>
     </div>
+    <?php
+    billetera_bc_close();
+}
+
+// ===========================================================================
+// REGLAS DE BONIFICACIÓN
+// ===========================================================================
+function billetera_render_bonus_page() {
+    if (!current_user_can('manage_options')) {
+        wp_die('Sin permiso');
+    }
+
+    $msg = '';
+    $err = '';
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bc_action']) && sanitize_key($_POST['bc_action']) === 'save_bonus') {
+        check_admin_referer('billetera_catalog');
+
+        // Prepagados
+        update_option('billetera_bonus_prepagados_activo', isset($_POST['prepagados_activo']) ? 1 : 0, false);
+        update_option('billetera_bonus_prepagados_umbral', max(1, intval($_POST['prepagados_umbral'] ?? 6)), false);
+        update_option('billetera_bonus_prepagados_multiplicador', max(1, floatval($_POST['prepagados_multiplicador'] ?? 2)), false);
+        update_option('billetera_bonus_prepagados_jefe', isset($_POST['prepagados_jefe']) ? 1 : 0, false);
+
+        // Kit360
+        update_option('billetera_bonus_kit360_activo', isset($_POST['kit360_activo']) ? 1 : 0, false);
+        update_option('billetera_bonus_kit360_umbral', max(1, intval($_POST['kit360_umbral'] ?? 6)), false);
+        update_option('billetera_bonus_kit360_multiplicador', max(1, floatval($_POST['kit360_multiplicador'] ?? 2)), false);
+        update_option('billetera_bonus_kit360_jefe', isset($_POST['kit360_jefe']) ? 1 : 0, false);
+        update_option('billetera_bonus_kit360_excepcion_dealer', intval($_POST['kit360_excepcion_dealer'] ?? 0), false);
+        update_option('billetera_bonus_kit360_excepcion_usd', max(0, floatval($_POST['kit360_excepcion_usd'] ?? 100)), false);
+        update_option('billetera_bonus_kit360_excepcion_jefe_usd', max(0, floatval($_POST['kit360_excepcion_jefe_usd'] ?? 50)), false);
+        update_option('billetera_bonus_kit360_excepcion_desde_umbral', isset($_POST['kit360_excepcion_desde_umbral']) ? 1 : 0, false);
+
+        $msg = 'Reglas guardadas.';
+    }
+
+    $dealers = billetera_bc_dealers();
+
+    $pre = [
+        'activo' => (int) get_option('billetera_bonus_prepagados_activo', 1),
+        'umbral' => (int) get_option('billetera_bonus_prepagados_umbral', 6),
+        'mult'   => (float) get_option('billetera_bonus_prepagados_multiplicador', 2),
+        'jefe'   => (int) get_option('billetera_bonus_prepagados_jefe', 1),
+    ];
+    $kit = [
+        'activo' => (int) get_option('billetera_bonus_kit360_activo', 1),
+        'umbral' => (int) get_option('billetera_bonus_kit360_umbral', 6),
+        'mult'   => (float) get_option('billetera_bonus_kit360_multiplicador', 2),
+        'jefe'   => (int) get_option('billetera_bonus_kit360_jefe', 1),
+        'dealer' => (int) get_option('billetera_bonus_kit360_excepcion_dealer', 0),
+        'usd'    => (float) get_option('billetera_bonus_kit360_excepcion_usd', 100),
+        'usd_j'  => (float) get_option('billetera_bonus_kit360_excepcion_jefe_usd', 50),
+        'desde'  => (int) get_option('billetera_bonus_kit360_excepcion_desde_umbral', 1),
+    ];
+
+    billetera_bc_open('Reglas de bonificación', 'Multiplicadores por categoría y excepciones por concesionaria. Se aplican al registrar la venta (asesor y jefe).');
+    billetera_bc_notices($msg, $err);
+    ?>
+    <form method="post" class="bc-grid">
+        <?php wp_nonce_field('billetera_catalog'); ?>
+        <input type="hidden" name="bc_action" value="save_bonus">
+
+        <div class="bc-card" style="grid-column:1/-1;">
+            <h2 class="bc-card__title">Prepagados</h2>
+            <div class="bc-grid">
+                <div class="bc-field bc-field--check">
+                    <label><input type="checkbox" name="prepagados_activo" value="1" <?php checked($pre['activo'], 1); ?>> Regla activa</label>
+                </div>
+                <div class="bc-field">
+                    <label class="bc-label">Umbral (ventas del mes)</label>
+                    <input type="number" min="1" name="prepagados_umbral" class="bc-input" value="<?php echo intval($pre['umbral']); ?>">
+                </div>
+                <div class="bc-field">
+                    <label class="bc-label">Multiplicador</label>
+                    <input type="number" step="0.1" min="1" name="prepagados_multiplicador" class="bc-input" value="<?php echo esc_attr($pre['mult']); ?>">
+                </div>
+                <div class="bc-field bc-field--check">
+                    <label><input type="checkbox" name="prepagados_jefe" value="1" <?php checked($pre['jefe'], 1); ?>> Aplica al jefe de venta</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="bc-card" style="grid-column:1/-1;">
+            <h2 class="bc-card__title">Kit360</h2>
+            <div class="bc-grid">
+                <div class="bc-field bc-field--check">
+                    <label><input type="checkbox" name="kit360_activo" value="1" <?php checked($kit['activo'], 1); ?>> Regla activa</label>
+                </div>
+                <div class="bc-field">
+                    <label class="bc-label">Umbral (ventas del mes)</label>
+                    <input type="number" min="1" name="kit360_umbral" class="bc-input" value="<?php echo intval($kit['umbral']); ?>">
+                </div>
+                <div class="bc-field">
+                    <label class="bc-label">Multiplicador</label>
+                    <input type="number" step="0.1" min="1" name="kit360_multiplicador" class="bc-input" value="<?php echo esc_attr($kit['mult']); ?>">
+                </div>
+                <div class="bc-field bc-field--check">
+                    <label><input type="checkbox" name="kit360_jefe" value="1" <?php checked($kit['jefe'], 1); ?>> Aplica al jefe de venta</label>
+                </div>
+
+                <div class="bc-field bc-field--full">
+                    <h3 style="margin:8px 0 0;">Excepción por concesionaria</h3>
+                    <p class="bc-desc" style="margin:4px 0 0;">Para la concesionaria elegida, en vez de multiplicar, la comisión pasa a un monto fijo en USD por unidad.</p>
+                </div>
+                <div class="bc-field">
+                    <label class="bc-label">Concesionaria</label>
+                    <select name="kit360_excepcion_dealer" class="bc-select">
+                        <option value="0">— Ninguna —</option>
+                        <?php foreach ($dealers as $d): ?>
+                            <option value="<?php echo intval($d->ID); ?>" <?php selected($kit['dealer'], $d->ID); ?>><?php echo esc_html($d->post_title); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="bc-field">
+                    <label class="bc-label">Precio fijo USD por unidad (asesor)</label>
+                    <input type="number" step="0.01" min="0" name="kit360_excepcion_usd" class="bc-input" value="<?php echo esc_attr($kit['usd']); ?>">
+                </div>
+                <div class="bc-field">
+                    <label class="bc-label">Precio fijo USD por unidad (jefe)</label>
+                    <input type="number" step="0.01" min="0" name="kit360_excepcion_jefe_usd" class="bc-input" value="<?php echo esc_attr($kit['usd_j']); ?>">
+                </div>
+                <div class="bc-field bc-field--check">
+                    <label><input type="checkbox" name="kit360_excepcion_desde_umbral" value="1" <?php checked($kit['desde'], 1); ?>> La excepción aplica desde el umbral (si lo desmarcas, desde la 1.ª venta)</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="bc-field bc-field--actions" style="grid-column:1/-1;">
+            <button type="submit" class="button button-primary">Guardar reglas</button>
+        </div>
+    </form>
     <?php
     billetera_bc_close();
 }

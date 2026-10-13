@@ -89,11 +89,22 @@ class HU_Utilities {
      * Redirigir suscriptores y gerente fuera del admin
      */
     public function redirigir_suscriptores() {
+        // No interferir con peticiones AJAX (la app usa admin-ajax.php)
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            return;
+        }
+
         $user = wp_get_current_user();
         $roles = (array) $user->roles;
 
-        // Redirigir si es suscriptor o gerente
-        if ((in_array('subscriber', $roles, true) || in_array('gerente', $roles, true)) && !defined('DOING_AJAX')) {
+        // Los administradores siempre pueden entrar
+        if (array_intersect(['administrator', 'administrador_hyundai'], $roles)) {
+            return;
+        }
+
+        // Roles operativos que NO deben entrar al panel de administración
+        $bloqueados = ['subscriber', 'gerente', 'asesor', 'jefe_venta'];
+        if (array_intersect($bloqueados, $roles)) {
             wp_redirect(home_url());
             exit;
         }

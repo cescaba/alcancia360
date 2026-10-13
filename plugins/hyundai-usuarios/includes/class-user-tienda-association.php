@@ -16,6 +16,8 @@ class HU_UserTiendaAssociation {
         add_action('user_register', [$this, 'save_user_tienda_field']);
         add_filter('manage_users_columns', [$this, 'add_users_column']);
         add_filter('manage_users_custom_column', [$this, 'render_users_column'], 10, 3);
+        add_action('restrict_manage_users', [$this, 'render_tienda_filter']);
+        add_filter('pre_get_users', [$this, 'filter_users_by_tienda']);
     }
 
     /**
@@ -156,5 +158,67 @@ class HU_UserTiendaAssociation {
             return '—';
         }
         return $value;
+    }
+
+    /**
+     * Filtro por Sucursal en la lista de usuarios (users.php).
+     */
+    public function render_tienda_filter($which) {
+        if ($which !== 'top' || is_network_admin()) {
+            return;
+        }
+
+        $selected = isset($_GET['tienda_filter']) ? intval($_GET['tienda_filter']) : 0;
+        $tiendas = get_posts([
+            'post_type'   => 'tienda',
+            'numberposts' => -1,
+            'post_status' => 'publish',
+            'orderby'     => 'title',
+            'order'       => 'ASC',
+        ]);
+        ?>
+        <label class="screen-reader-text" for="tienda_filter"><?php esc_html_e('Filtrar por sucursal', 'hyundai-usuarios'); ?></label>
+        <select name="tienda_filter" id="tienda_filter">
+            <option value="0"><?php esc_html_e('Todas las sucursales', 'hyundai-usuarios'); ?></option>
+            <?php foreach ($tiendas as $t): ?>
+                <option value="<?php echo esc_attr($t->ID); ?>" <?php selected($selected, $t->ID); ?>>
+                    <?php
+                    echo esc_html($t->post_title);
+                    $codigo = get_post_meta($t->ID, '_codigo', true);
+                    if ($codigo) {
+                        echo ' (' . esc_html($codigo) . ')';
+                    }
+                    ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <button type="submit" class="button" style="margin-left:6px;"><?php esc_html_e('Filtrar', 'hyundai-usuarios'); ?></button>
+        <?php
+    }
+
+    /**
+     * Aplica el filtro por Sucursal a la consulta de usuarios.
+     */
+    public function filter_users_by_tienda($query) {
+        global $pagenow;
+
+        if (!is_admin() || is_network_admin() || $pagenow !== 'users.php') {
+            return $query;
+        }
+
+        $tienda_id = isset($_GET['tienda_filter']) ? intval($_GET['tienda_filter']) : 0;
+        if ($tienda_id <= 0) {
+            return $query;
+        }
+
+        $meta_query = (array) $query->get('meta_query');
+        $meta_query[] = [
+            'key'     => '_tienda_asociada',
+            'value'   => (string) $tienda_id,
+            'compare' => '=',
+        ];
+        $query->set('meta_query', $meta_query);
+
+        return $query;
     }
 }

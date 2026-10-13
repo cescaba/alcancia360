@@ -15,6 +15,33 @@ class HU_Roles {
         add_action('admin_menu', [$this, 'filter_menu_by_role'], 25);
         add_action('admin_menu', [$this, 'remove_unwanted_menus_for_admin_hyundai'], 99);
         add_action('admin_notices', [$this, 'show_migration_notice']);
+        add_filter('editable_roles', [$this, 'limit_editable_roles']);
+    }
+
+    /**
+     * Roles que el administrador_hyundai puede asignar.
+     */
+    private function allowed_assignable_roles() {
+        return ['asesor', 'jefe_venta', 'gerente', 'administrador_hyundai'];
+    }
+
+    /**
+     * Limita el selector de roles para administrador_hyundai.
+     */
+    public function limit_editable_roles($roles) {
+        $roles_user = (array) wp_get_current_user()->roles;
+
+        if (!in_array('administrador_hyundai', $roles_user, true) || in_array('administrator', $roles_user, true)) {
+            return $roles;
+        }
+
+        $permitidos = $this->allowed_assignable_roles();
+        foreach (array_keys($roles) as $slug) {
+            if (!in_array($slug, $permitidos, true)) {
+                unset($roles[$slug]);
+            }
+        }
+        return $roles;
     }
 
     /**

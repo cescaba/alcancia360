@@ -65,7 +65,8 @@ class HU_DealerTienda {
 
         // Permitir todas las capabilities de posts para ambos administratores
         $post_caps = ['read', 'edit_posts', 'edit_others_posts', 'edit_published_posts',
-                     'publish_posts', 'delete_posts', 'delete_others_posts', 'delete_published_posts'];
+                     'publish_posts', 'delete_posts', 'delete_others_posts', 'delete_published_posts',
+                     'edit_dealers', 'edit_tiendas'];
 
         foreach ($post_caps as $post_cap) {
             $allcaps[$post_cap] = true;
@@ -141,7 +142,7 @@ class HU_DealerTienda {
         add_menu_page(
             'Red de Concesionarias',
             'Red de Concesionarias',
-            'read',
+            'edit_dealers',
             'red_concesionarios',
             '',
             'dashicons-networking',
@@ -152,7 +153,7 @@ class HU_DealerTienda {
             'red_concesionarios',
             'Concesionarias',
             'Concesionarias',
-            'read',
+            'edit_dealers',
             'edit.php?post_type=dealer'
         );
 
@@ -160,7 +161,7 @@ class HU_DealerTienda {
             'red_concesionarios',
             'Sucursales',
             'Sucursales',
-            'read',
+            'edit_tiendas',
             'edit.php?post_type=tienda'
         );
 
