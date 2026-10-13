@@ -1150,126 +1150,249 @@ function billetera_render_bonus_page() {
         wp_die('Sin permiso');
     }
 
+    global $wpdb;
+    $cat_table = $wpdb->prefix . 'billetera_categorias';
     $msg = '';
     $err = '';
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bc_action']) && sanitize_key($_POST['bc_action']) === 'save_bonus') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bc_action'])) {
         check_admin_referer('billetera_catalog');
+        $action = sanitize_key($_POST['bc_action']);
 
-        // Prepagados
-        update_option('billetera_bonus_prepagados_activo', isset($_POST['prepagados_activo']) ? 1 : 0, false);
-        update_option('billetera_bonus_prepagados_umbral', max(1, intval($_POST['prepagados_umbral'] ?? 6)), false);
-        update_option('billetera_bonus_prepagados_multiplicador', max(1, floatval($_POST['prepagados_multiplicador'] ?? 2)), false);
-        update_option('billetera_bonus_prepagados_jefe', isset($_POST['prepagados_jefe']) ? 1 : 0, false);
+        if ($action === 'save_rule') {
+            $categoria_id = intval($_POST['categoria_id'] ?? 0);
+            if ($categoria_id <= 0) {
+                $err = 'Selecciona una categoría.';
+            } else {
+                $catrow = $wpdb->get_row($wpdb->prepare("SELECT id, nombre, slug, linea_codigo FROM $cat_table WHERE id = %d", $categoria_id));
+                if (!$catrow) {
+                    $err = 'Categoría no encontrada.';
+                } else {
+                    $rid    = sanitize_text_field(wp_unslash($_POST['rule_id'] ?? ''));
+                    $ambito = (isset($_POST['ambito']) && $_POST['ambito'] === 'linea') ? 'linea' : 'categoria';
 
-        // Kit360
-        update_option('billetera_bonus_kit360_activo', isset($_POST['kit360_activo']) ? 1 : 0, false);
-        update_option('billetera_bonus_kit360_umbral', max(1, intval($_POST['kit360_umbral'] ?? 6)), false);
-        update_option('billetera_bonus_kit360_multiplicador', max(1, floatval($_POST['kit360_multiplicador'] ?? 2)), false);
-        update_option('billetera_bonus_kit360_jefe', isset($_POST['kit360_jefe']) ? 1 : 0, false);
-        update_option('billetera_bonus_kit360_excepcion_dealer', intval($_POST['kit360_excepcion_dealer'] ?? 0), false);
-        update_option('billetera_bonus_kit360_excepcion_usd', max(0, floatval($_POST['kit360_excepcion_usd'] ?? 100)), false);
-        update_option('billetera_bonus_kit360_excepcion_jefe_usd', max(0, floatval($_POST['kit360_excepcion_jefe_usd'] ?? 50)), false);
-        update_option('billetera_bonus_kit360_excepcion_desde_umbral', isset($_POST['kit360_excepcion_desde_umbral']) ? 1 : 0, false);
+                    $nueva = [
+                        'id'                     => $rid !== '' ? $rid : ('r_' . wp_generate_password(8, false, false)),
+                        'categoria_id'           => intval($catrow->id),
+                        'slug'                   => $catrow->slug,
+                        'nombre'                 => $catrow->nombre,
+                        'linea_codigo'           => $catrow->linea_codigo,
+                        'ambito'                 => $ambito,
+                        'activo'                 => isset($_POST['activo']) ? 1 : 0,
+                        'umbral'                 => max(1, intval($_POST['umbral'] ?? 6)),
+                        'multiplicador'          => max(0, floatval($_POST['multiplicador'] ?? 2)),
+                        'aplica_jefe'            => isset($_POST['aplica_jefe']) ? 1 : 0,
+                        'excepcion_dealer_id'    => intval($_POST['excepcion_dealer_id'] ?? 0),
+                        'excepcion_usd'          => max(0, floatval($_POST['excepcion_usd'] ?? 0)),
+                        'excepcion_jefe_usd'     => max(0, floatval($_POST['excepcion_jefe_usd'] ?? 0)),
+                        'excepcion_desde_umbral' => isset($_POST['excepcion_desde_umbral']) ? 1 : 0,
+                    ];
 
-        $msg = 'Reglas guardadas.';
+                    $reglas    = billetera_bonus_reglas();
+                    $duplicado = false;
+                    foreach ($reglas as $r) {
+                        if ($r['id'] !== $nueva['id']
+                            && intval($r['categoria_id']) === $nueva['categoria_id']
+                            && ($r['ambito'] ?? 'categoria') === $nueva['ambito']) {
+                            $duplicado = true;
+                            break;
+                        }
+                    }
+
+                    if ($duplicado) {
+                        $err = 'Ya existe una regla para esa categoría y ámbito. Edítala o elimínala primero.';
+                    } else {
+                        $found = false;
+                        foreach ($reglas as $i => $r) {
+                            if ($r['id'] === $nueva['id']) {
+                                $reglas[$i] = $nueva;
+                                $found = true;
+                                break;
+                            }
+                        }
+                        if (!$found) {
+                            $reglas[] = $nueva;
+                        }
+                        update_option('billetera_bonus_reglas', $reglas, false);
+                        $msg = $found ? 'Regla actualizada.' : 'Regla creada.';
+                    }
+                }
+            }
+        } elseif ($action === 'delete_rule') {
+            $rid    = sanitize_text_field(wp_unslash($_POST['rule_id'] ?? ''));
+            $reglas = billetera_bonus_reglas();
+            $nuevas = [];
+            foreach ($reglas as $r) {
+                if ($r['id'] !== $rid) {
+                    $nuevas[] = $r;
+                }
+            }
+            update_option('billetera_bonus_reglas', $nuevas, false);
+            $msg = 'Regla eliminada.';
+        }
     }
 
+    $reglas  = billetera_bonus_reglas();
     $dealers = billetera_bc_dealers();
 
-    $pre = [
-        'activo' => (int) get_option('billetera_bonus_prepagados_activo', 1),
-        'umbral' => (int) get_option('billetera_bonus_prepagados_umbral', 6),
-        'mult'   => (float) get_option('billetera_bonus_prepagados_multiplicador', 2),
-        'jefe'   => (int) get_option('billetera_bonus_prepagados_jefe', 1),
-    ];
-    $kit = [
-        'activo' => (int) get_option('billetera_bonus_kit360_activo', 1),
-        'umbral' => (int) get_option('billetera_bonus_kit360_umbral', 6),
-        'mult'   => (float) get_option('billetera_bonus_kit360_multiplicador', 2),
-        'jefe'   => (int) get_option('billetera_bonus_kit360_jefe', 1),
-        'dealer' => (int) get_option('billetera_bonus_kit360_excepcion_dealer', 0),
-        'usd'    => (float) get_option('billetera_bonus_kit360_excepcion_usd', 100),
-        'usd_j'  => (float) get_option('billetera_bonus_kit360_excepcion_jefe_usd', 50),
-        'desde'  => (int) get_option('billetera_bonus_kit360_excepcion_desde_umbral', 1),
-    ];
+    $lineas_map = [];
+    foreach (billetera_bc_lineas() as $l) {
+        $lineas_map[$l->codigo] = $l->nombre;
+    }
 
-    billetera_bc_open('Reglas de bonificación', 'Multiplicadores por categoría y excepciones por concesionaria. Se aplican al registrar la venta (asesor y jefe).');
+    $edit = null;
+    if (isset($_GET['edit'])) {
+        $rid = sanitize_text_field(wp_unslash($_GET['edit']));
+        foreach ($reglas as $r) {
+            if ($r['id'] === $rid) {
+                $edit = $r;
+                break;
+            }
+        }
+    }
+
+    $ambito_sel = $edit['ambito'] ?? 'categoria';
+    $cat_sel    = intval($edit['categoria_id'] ?? 0);
+
+    billetera_bc_open('Reglas de bonificación', 'Crea reglas por categoría: umbral de ventas del mes, multiplicador y excepción opcional por concesionaria. Se aplican al registrar la venta (asesor y jefe).');
     billetera_bc_notices($msg, $err);
     ?>
-    <form method="post" class="bc-grid">
-        <?php wp_nonce_field('billetera_catalog'); ?>
-        <input type="hidden" name="bc_action" value="save_bonus">
+    <div class="bc-card">
+        <h2 class="bc-card__title"><?php echo $edit ? 'Editar regla' : 'Nueva regla'; ?></h2>
+        <form method="post" class="bc-grid">
+            <?php wp_nonce_field('billetera_catalog'); ?>
+            <input type="hidden" name="bc_action" value="save_rule">
+            <input type="hidden" name="rule_id" value="<?php echo esc_attr($edit['id'] ?? ''); ?>">
 
-        <div class="bc-card" style="grid-column:1/-1;">
-            <h2 class="bc-card__title">Prepagados</h2>
-            <div class="bc-grid">
-                <div class="bc-field bc-field--check">
-                    <label><input type="checkbox" name="prepagados_activo" value="1" <?php checked($pre['activo'], 1); ?>> Regla activa</label>
-                </div>
-                <div class="bc-field">
-                    <label class="bc-label">Umbral (ventas del mes)</label>
-                    <input type="number" min="1" name="prepagados_umbral" class="bc-input" value="<?php echo intval($pre['umbral']); ?>">
-                </div>
-                <div class="bc-field">
-                    <label class="bc-label">Multiplicador</label>
-                    <input type="number" step="0.1" min="1" name="prepagados_multiplicador" class="bc-input" value="<?php echo esc_attr($pre['mult']); ?>">
-                </div>
-                <div class="bc-field bc-field--check">
-                    <label><input type="checkbox" name="prepagados_jefe" value="1" <?php checked($pre['jefe'], 1); ?>> Aplica al jefe de venta</label>
-                </div>
+            <div class="bc-field bc-field--full">
+                <label class="bc-label">Categoría *</label>
+                <select name="categoria_id" class="bc-select" required>
+                    <option value="">— Selecciona una categoría —</option>
+                    <?php echo billetera_bc_categorias_options($cat_sel); ?>
+                </select>
+                <p class="bc-desc" style="margin:6px 0 0;">Categoría del catálogo a la que se aplicará la bonificación.</p>
             </div>
-        </div>
 
-        <div class="bc-card" style="grid-column:1/-1;">
-            <h2 class="bc-card__title">Kit360</h2>
-            <div class="bc-grid">
-                <div class="bc-field bc-field--check">
-                    <label><input type="checkbox" name="kit360_activo" value="1" <?php checked($kit['activo'], 1); ?>> Regla activa</label>
-                </div>
-                <div class="bc-field">
-                    <label class="bc-label">Umbral (ventas del mes)</label>
-                    <input type="number" min="1" name="kit360_umbral" class="bc-input" value="<?php echo intval($kit['umbral']); ?>">
-                </div>
-                <div class="bc-field">
-                    <label class="bc-label">Multiplicador</label>
-                    <input type="number" step="0.1" min="1" name="kit360_multiplicador" class="bc-input" value="<?php echo esc_attr($kit['mult']); ?>">
-                </div>
-                <div class="bc-field bc-field--check">
-                    <label><input type="checkbox" name="kit360_jefe" value="1" <?php checked($kit['jefe'], 1); ?>> Aplica al jefe de venta</label>
-                </div>
-
-                <div class="bc-field bc-field--full">
-                    <h3 style="margin:8px 0 0;">Excepción por concesionaria</h3>
-                    <p class="bc-desc" style="margin:4px 0 0;">Para la concesionaria elegida, en vez de multiplicar, la comisión pasa a un monto fijo en USD por unidad.</p>
-                </div>
-                <div class="bc-field">
-                    <label class="bc-label">Concesionaria</label>
-                    <select name="kit360_excepcion_dealer" class="bc-select">
-                        <option value="0">— Ninguna —</option>
-                        <?php foreach ($dealers as $d): ?>
-                            <option value="<?php echo intval($d->ID); ?>" <?php selected($kit['dealer'], $d->ID); ?>><?php echo esc_html($d->post_title); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="bc-field">
-                    <label class="bc-label">Precio fijo USD por unidad (asesor)</label>
-                    <input type="number" step="0.01" min="0" name="kit360_excepcion_usd" class="bc-input" value="<?php echo esc_attr($kit['usd']); ?>">
-                </div>
-                <div class="bc-field">
-                    <label class="bc-label">Precio fijo USD por unidad (jefe)</label>
-                    <input type="number" step="0.01" min="0" name="kit360_excepcion_jefe_usd" class="bc-input" value="<?php echo esc_attr($kit['usd_j']); ?>">
-                </div>
-                <div class="bc-field bc-field--check">
-                    <label><input type="checkbox" name="kit360_excepcion_desde_umbral" value="1" <?php checked($kit['desde'], 1); ?>> La excepción aplica desde el umbral (si lo desmarcas, desde la 1.ª venta)</label>
-                </div>
+            <div class="bc-field">
+                <label class="bc-label">Ámbito</label>
+                <select name="ambito" class="bc-select">
+                    <option value="categoria" <?php selected($ambito_sel, 'categoria'); ?>>Toda la categoría (todas las líneas)</option>
+                    <option value="linea" <?php selected($ambito_sel, 'linea'); ?>>Solo la línea de la categoría elegida</option>
+                </select>
+                <p class="bc-desc" style="margin:6px 0 0;">"Toda la categoría" aplica a Hyundai/JMC/Geely; "Solo la línea" solo a la categoría de esa línea.</p>
             </div>
-        </div>
 
-        <div class="bc-field bc-field--actions" style="grid-column:1/-1;">
-            <button type="submit" class="button button-primary">Guardar reglas</button>
-        </div>
-    </form>
+            <div class="bc-field">
+                <label class="bc-label">Umbral (ventas del mes)</label>
+                <input type="number" min="1" name="umbral" class="bc-input" value="<?php echo intval($edit['umbral'] ?? 6); ?>">
+                <p class="bc-desc" style="margin:6px 0 0;">Desde esta venta del mes se activa la regla (y se ajustan las anteriores).</p>
+            </div>
+
+            <div class="bc-field">
+                <label class="bc-label">Multiplicador</label>
+                <input type="number" step="0.1" min="0" name="multiplicador" class="bc-input" value="<?php echo esc_attr($edit['multiplicador'] ?? 2); ?>">
+                <p class="bc-desc" style="margin:6px 0 0;">Ej. 2 = comisión ×2.</p>
+            </div>
+
+            <div class="bc-field bc-field--check">
+                <label><input type="checkbox" name="aplica_jefe" value="1" <?php checked($edit['aplica_jefe'] ?? 1, 1); ?>> Aplica al jefe de venta</label>
+            </div>
+
+            <div class="bc-field bc-field--check">
+                <label><input type="checkbox" name="activo" value="1" <?php checked($edit['activo'] ?? 1, 1); ?>> Regla activa</label>
+            </div>
+
+            <div class="bc-field bc-field--full">
+                <h3 style="margin:10px 0 0;">Excepción por concesionaria (opcional)</h3>
+                <p class="bc-desc" style="margin:4px 0 0;">Para la concesionaria elegida, en vez de multiplicar, la comisión pasa a un monto fijo en USD por unidad.</p>
+            </div>
+
+            <div class="bc-field">
+                <label class="bc-label">Concesionaria</label>
+                <select name="excepcion_dealer_id" class="bc-select">
+                    <option value="0">— Ninguna —</option>
+                    <?php foreach ($dealers as $d): ?>
+                        <option value="<?php echo intval($d->ID); ?>" <?php selected($edit['excepcion_dealer_id'] ?? 0, $d->ID); ?>><?php echo esc_html($d->post_title); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Monto fijo USD por unidad (asesor)</label>
+                <input type="number" step="0.01" min="0" name="excepcion_usd" class="bc-input" value="<?php echo esc_attr($edit['excepcion_usd'] ?? 0); ?>">
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Monto fijo USD por unidad (jefe)</label>
+                <input type="number" step="0.01" min="0" name="excepcion_jefe_usd" class="bc-input" value="<?php echo esc_attr($edit['excepcion_jefe_usd'] ?? 0); ?>">
+            </div>
+            <div class="bc-field bc-field--check">
+                <label><input type="checkbox" name="excepcion_desde_umbral" value="1" <?php checked($edit['excepcion_desde_umbral'] ?? 1, 1); ?>> La excepción aplica desde el umbral (si no, desde la 1.ª venta)</label>
+            </div>
+
+            <div class="bc-field bc-field--actions">
+                <button type="submit" class="button button-primary"><?php echo $edit ? 'Guardar cambios' : 'Crear regla'; ?></button>
+                <?php if ($edit): ?><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=billetera_bonus_admin')); ?>">Cancelar</a><?php endif; ?>
+            </div>
+        </form>
+    </div>
+
+    <div class="bc-card">
+        <h2 class="bc-card__title">Reglas configuradas</h2>
+        <?php if (!$reglas): ?>
+            <p>Aún no hay reglas. Crea la primera arriba.</p>
+        <?php else: ?>
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th>Categoría</th>
+                    <th>Ámbito</th>
+                    <th style="width:80px;">Umbral</th>
+                    <th style="width:110px;">Multiplicador</th>
+                    <th style="width:70px;">Jefe</th>
+                    <th>Excepción</th>
+                    <th style="width:80px;">Estado</th>
+                    <th style="width:150px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($reglas as $r):
+                    $ambito_txt = (($r['ambito'] ?? 'categoria') === 'linea')
+                        ? 'Solo ' . ($lineas_map[$r['linea_codigo'] ?? ''] ?? ($r['linea_codigo'] ?? '—'))
+                        : 'Todas las líneas';
+
+                    if (!empty($r['excepcion_dealer_id'])) {
+                        $excep  = get_the_title($r['excepcion_dealer_id']) ?: ('#' . intval($r['excepcion_dealer_id']));
+                        $excep .= ' · US$' . number_format((float) $r['excepcion_usd'], 2) . ' / jefe US$' . number_format((float) $r['excepcion_jefe_usd'], 2);
+                        $excep .= !empty($r['excepcion_desde_umbral']) ? ' (desde umbral)' : ' (desde 1.ª)';
+                    } else {
+                        $excep = '—';
+                    }
+
+                    $mult_txt = rtrim(rtrim(number_format((float) $r['multiplicador'], 2, '.', ''), '0'), '.');
+                ?>
+                    <tr>
+                        <td><strong><?php echo esc_html($r['nombre'] ?? $r['slug']); ?></strong></td>
+                        <td><?php echo esc_html($ambito_txt); ?></td>
+                        <td><?php echo intval($r['umbral']); ?></td>
+                        <td>×<?php echo esc_html($mult_txt); ?></td>
+                        <td><?php echo !empty($r['aplica_jefe']) ? 'Sí' : 'No'; ?></td>
+                        <td><?php echo esc_html($excep); ?></td>
+                        <td><?php echo !empty($r['activo']) ? '<span style="color:#146C43;">Activa</span>' : '<span style="color:#b3352a;">Inactiva</span>'; ?></td>
+                        <td>
+                            <a class="bc-link" href="<?php echo esc_url(add_query_arg(['page' => 'billetera_bonus_admin', 'edit' => $r['id']], admin_url('admin.php'))); ?>">Editar</a>
+                            <span class="bc-sep">|</span>
+                            <form method="post" class="bc-inline" onsubmit="return confirm('¿Eliminar esta regla?');">
+                                <?php wp_nonce_field('billetera_catalog'); ?>
+                                <input type="hidden" name="bc_action" value="delete_rule">
+                                <input type="hidden" name="rule_id" value="<?php echo esc_attr($r['id']); ?>">
+                                <button type="submit" class="bc-link bc-danger">Eliminar</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php endif; ?>
+    </div>
     <?php
     billetera_bc_close();
 }

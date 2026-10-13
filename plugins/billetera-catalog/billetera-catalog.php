@@ -839,31 +839,64 @@ function billetera_convert_to_sol($comision) {
 
 // ============================================================================
 // REGLAS DE BONIFICACIÓN (configurables desde el admin)
-// Prepagados: x2 desde el umbral. Kit360: x2 desde el umbral, con excepción
-// por concesionaria (monto fijo en USD por unidad, distinto para el jefe).
+// Cada regla elige una categoría (toda la categoría o solo una línea), un
+// umbral, un multiplicador y una excepción opcional por concesionaria
+// (monto fijo en USD por unidad, para el asesor y para el jefe).
 // ============================================================================
 
 /**
- * Configuración de las reglas. Todo editable desde "Reglas de bonificación".
+ * Lee las reglas de bonificación (opción). Siembra las reglas por defecto la 1.ª vez.
  */
 function billetera_bonus_reglas() {
-    return [
-        'prepagados' => [
-            'label'                  => 'Prepagados',
-            'match'                  => 'prepagados',
-            'activo'                 => (int) get_option('billetera_bonus_prepagados_activo', 1),
-            'umbral'                 => max(1, (int) get_option('billetera_bonus_prepagados_umbral', 6)),
-            'multiplicador'          => (float) get_option('billetera_bonus_prepagados_multiplicador', 2),
-            'aplica_jefe'            => (int) get_option('billetera_bonus_prepagados_jefe', 1),
-            'excepcion_dealer_id'    => 0,
-            'excepcion_usd'          => 0.0,
-            'excepcion_jefe_usd'     => 0.0,
-            'excepcion_desde_umbral' => 1,
-        ],
-        'kit360' => [
-            'label'                  => 'Kit360',
-            'match'                  => 'kit360',
-            'activo'                 => (int) get_option('billetera_bonus_kit360_activo', 1),
+    $reglas = get_option('billetera_bonus_reglas', null);
+    if ($reglas === null) {
+        $reglas = billetera_bonus_seed_reglas();
+    }
+    return is_array($reglas) ? $reglas : [];
+}
+
+/**
+ * Reglas por defecto (Prepagados y Kit360) para no perder la config actual.
+ */
+function billetera_bonus_seed_reglas() {
+    global $wpdb;
+    $cat    = $wpdb->prefix . 'billetera_categorias';
+    $reglas = [];
+
+    $base = [
+        'ambito'                 => 'categoria',
+        'activo'                 => 1,
+        'umbral'                 => 6,
+        'multiplicador'          => 2,
+        'aplica_jefe'            => 1,
+        'excepcion_dealer_id'    => 0,
+        'excepcion_usd'          => 0,
+        'excepcion_jefe_usd'     => 0,
+        'excepcion_desde_umbral' => 1,
+    ];
+
+    $pre = $wpdb->get_row("SELECT id, nombre, slug, linea_codigo FROM $cat WHERE LOWER(slug) = 'prepagados' OR LOWER(nombre) = 'prepagados' ORDER BY id ASC LIMIT 1");
+    if ($pre) {
+        $reglas[] = array_merge($base, [
+            'id'            => 'r_prepagados',
+            'categoria_id'  => intval($pre->id),
+            'slug'          => $pre->slug,
+            'nombre'        => $pre->nombre,
+            'linea_codigo'  => $pre->linea_codigo,
+            'umbral'        => max(1, (int) get_option('billetera_bonus_prepagados_umbral', 6)),
+            'multiplicador' => (float) get_option('billetera_bonus_prepagados_multiplicador', 2),
+            'aplica_jefe'   => (int) get_option('billetera_bonus_prepagados_jefe', 1),
+        ]);
+    }
+
+    $kit = $wpdb->get_row("SELECT id, nombre, slug, linea_codigo FROM $cat WHERE LOWER(slug) = 'kit360' OR LOWER(nombre) = 'kit360' ORDER BY id ASC LIMIT 1");
+    if ($kit) {
+        $reglas[] = array_merge($base, [
+            'id'                     => 'r_kit360',
+            'categoria_id'           => intval($kit->id),
+            'slug'                   => $kit->slug,
+            'nombre'                 => $kit->nombre,
+            'linea_codigo'           => $kit->linea_codigo,
             'umbral'                 => max(1, (int) get_option('billetera_bonus_kit360_umbral', 6)),
             'multiplicador'          => (float) get_option('billetera_bonus_kit360_multiplicador', 2),
             'aplica_jefe'            => (int) get_option('billetera_bonus_kit360_jefe', 1),
@@ -871,8 +904,46 @@ function billetera_bonus_reglas() {
             'excepcion_usd'          => (float) get_option('billetera_bonus_kit360_excepcion_usd', 100),
             'excepcion_jefe_usd'     => (float) get_option('billetera_bonus_kit360_excepcion_jefe_usd', 50),
             'excepcion_desde_umbral' => (int) get_option('billetera_bonus_kit360_excepcion_desde_umbral', 1),
-        ],
-    ];
+        ]);
+    }
+
+    update_option('billetera_bonus_reglas', $reglas, false);
+    return $reglas;
+}
+
+/**
+ * Busca la regla activa que aplica a una categoría según su ámbito.
+ */
+function billetera_bonus_find_regla($categoria_id, $slug) {
+    $categoria_id = intval($categoria_id);
+    $slug         = strtolower((string) $slug);
+
+    foreach (billetera_bonus_reglas() as $r) {
+        if (empty($r['activo'])) {
+            continue;
+        }
+        $ambito = $r['ambito'] ?? 'categoria';
+        if ($ambito === 'linea') {
+            if (intval($r['categoria_id']) === $categoria_id) {
+                return $r;
+            }
+        } elseif (strtolower($r['slug'] ?? '') === $slug) {
+            return $r;
+        }
+    }
+    return null;
+}
+
+/**
+ * Condición SQL de categoría para una regla: [sql, params].
+ * 'categoria' = todas las líneas (por slug); 'linea' = solo esa categoría.
+ */
+function billetera_bonus_cond($regla) {
+    if (($regla['ambito'] ?? 'categoria') === 'linea') {
+        return ['c.id = %d', [intval($regla['categoria_id'])]];
+    }
+    $m = strtolower($regla['slug'] ?? '');
+    return ['(LOWER(c.slug) = %s OR LOWER(c.nombre) = %s)', [$m, $m]];
 }
 
 /**
@@ -898,60 +969,54 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
         'excepcion'         => false,
     ];
 
-    $cat_slug = $wpdb->get_var($wpdb->prepare("
-        SELECT LOWER(c.slug)
+    $catrow = $wpdb->get_row($wpdb->prepare("
+        SELECT c.id, c.slug, c.nombre
         FROM $sub s
         JOIN $cat c ON c.id = s.categoria_id
         WHERE s.id = %d
     ", $subcategoria_id));
 
-    if (!$cat_slug) {
+    if (!$catrow) {
         return $out;
     }
 
-    $reglas = billetera_bonus_reglas();
-    $regla  = null;
-    $key    = '';
-    foreach ($reglas as $k => $r) {
-        if ($r['activo'] && $r['match'] === $cat_slug) {
-            $regla = $r;
-            $key   = $k;
-            break;
-        }
-    }
+    $regla = billetera_bonus_find_regla($catrow->id, $catrow->slug);
     if (!$regla) {
         return $out;
     }
-    $out['regla'] = $key;
+    $out['regla'] = $regla['id'];
+
+    list($cond, $cond_params) = billetera_bonus_cond($regla);
 
     $mes_inicio = billetera_stats_local_now()->format('Y-m-01 00:00:00');
-    $count = (int) $wpdb->get_var($wpdb->prepare("
+    $params     = array_merge([$user_id], $cond_params, [$mes_inicio]);
+    $count      = (int) $wpdb->get_var($wpdb->prepare("
         SELECT COUNT(v.id)
         FROM $ventas v
         JOIN $sub s ON v.subcategoria_id = s.id
         JOIN $cat c ON s.categoria_id = c.id
         WHERE v.usuario_id = %d
-          AND (LOWER(c.slug) = %s OR LOWER(c.nombre) = %s)
+          AND $cond
           AND v.creado_en >= %s
-    ", $user_id, $regla['match'], $regla['match'], $mes_inicio));
+    ", ...$params));
 
-    $umbral   = (int) $regla['umbral'];
+    $umbral   = max(1, (int) $regla['umbral']);
     $califica = ($count >= $umbral - 1);
     $retro    = ($count === $umbral - 1);
 
-    $es_excepcion  = ($regla['excepcion_dealer_id'] > 0 && intval($dealer_id) === intval($regla['excepcion_dealer_id']));
-    $usa_excepcion = $es_excepcion && ($regla['excepcion_desde_umbral'] ? $califica : true);
+    $es_excepcion  = (intval($regla['excepcion_dealer_id']) > 0 && intval($dealer_id) === intval($regla['excepcion_dealer_id']));
+    $usa_excepcion = $es_excepcion && (!empty($regla['excepcion_desde_umbral']) ? $califica : true);
     $tc            = billetera_get_tipo_cambio();
 
-    if ($usa_excepcion && $regla['excepcion_usd'] > 0) {
+    if ($usa_excepcion && (float) $regla['excepcion_usd'] > 0) {
         $out['excepcion']         = true;
-        $out['override_sol']      = round($regla['excepcion_usd'] * $tc * $cantidad, 2);
-        $out['jefe_override_sol'] = ($regla['aplica_jefe'] && $regla['excepcion_jefe_usd'] > 0)
-            ? round($regla['excepcion_jefe_usd'] * $tc * $cantidad, 2)
+        $out['override_sol']      = round((float) $regla['excepcion_usd'] * $tc * $cantidad, 2);
+        $out['jefe_override_sol'] = (!empty($regla['aplica_jefe']) && (float) $regla['excepcion_jefe_usd'] > 0)
+            ? round((float) $regla['excepcion_jefe_usd'] * $tc * $cantidad, 2)
             : null;
     } elseif ($califica) {
         $out['multiplier']      = (float) $regla['multiplicador'];
-        $out['jefe_multiplier'] = $regla['aplica_jefe'] ? (float) $regla['multiplicador'] : 1.0;
+        $out['jefe_multiplier'] = !empty($regla['aplica_jefe']) ? (float) $regla['multiplicador'] : 1.0;
     }
 
     if ($retro && $aplicar_retro && ($califica || $usa_excepcion)) {
@@ -971,13 +1036,14 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
     $cat    = $wpdb->prefix . 'billetera_categorias';
 
     $limite = max(1, (int) $regla['umbral'] - 1);
-    $match  = $regla['match'];
+    list($cond, $cond_params) = billetera_bonus_cond($regla);
 
-    $subcat_in = "(SELECT s.id FROM $sub s JOIN $cat c ON c.id = s.categoria_id WHERE LOWER(c.slug) = %s OR LOWER(c.nombre) = %s)";
+    $subcat_in = "(SELECT s.id FROM $sub s JOIN $cat c ON c.id = s.categoria_id WHERE $cond)";
 
     if ($out['override_sol'] !== null) {
         // Excepción: reemplazar el monto por el fijo (USD * TC * cantidad)
-        $usd = (float) $regla['excepcion_usd'];
+        $usd    = (float) $regla['excepcion_usd'];
+        $params = array_merge([$usd * $tc, $user_id], $cond_params, [$mes_inicio, $limite]);
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
             SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0
@@ -986,20 +1052,22 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
               AND v.creado_en >= %s
             ORDER BY v.id DESC
             LIMIT %d
-        ", $usd * $tc, $user_id, $match, $match, $mes_inicio, $limite));
+        ", ...$params));
 
         if ($out['jefe_override_sol'] !== null) {
-            $usd_j = (float) $regla['excepcion_jefe_usd'];
+            $usd_j  = (float) $regla['excepcion_jefe_usd'];
+            $params = array_merge([$usd_j * $tc, $user_id], $cond_params, [$mes_inicio]);
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
                 SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0
                 WHERE v.asesor_id = %d
                   AND v.subcategoria_id IN $subcat_in
                   AND v.creado_en >= %s
-            ", $usd_j * $tc, $user_id, $match, $match, $mes_inicio));
+            ", ...$params));
         }
     } else {
-        $mult = (float) $out['multiplier'];
+        $mult   = (float) $out['multiplier'];
+        $params = array_merge([$mult, $user_id], $cond_params, [$mes_inicio, $limite]);
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
             SET v.bonus_multiplier = %f
@@ -1008,16 +1076,17 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
               AND v.creado_en >= %s
             ORDER BY v.id DESC
             LIMIT %d
-        ", $mult, $user_id, $match, $match, $mes_inicio, $limite));
+        ", ...$params));
 
         if ($out['jefe_multiplier'] > 1.0) {
+            $params = array_merge([$out['jefe_multiplier'], $user_id], $cond_params, [$mes_inicio]);
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
                 SET v.bonus_multiplier = %f
                 WHERE v.asesor_id = %d
                   AND v.subcategoria_id IN $subcat_in
                   AND v.creado_en >= %s
-            ", $out['jefe_multiplier'], $user_id, $match, $match, $mes_inicio));
+            ", ...$params));
         }
     }
 }
