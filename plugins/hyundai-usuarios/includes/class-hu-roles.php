@@ -67,9 +67,27 @@ class HU_Roles {
      * Quita la vista "Administrador" del listado para administrador_hyundai.
      */
     public function hide_admin_role_view($views) {
-        if ($this->current_is_admin_hu_only()) {
-            unset($views['administrator']);
+        if (!$this->current_is_admin_hu_only()) {
+            return $views;
         }
+
+        // Quita la pestaña "Administrador"
+        unset($views['administrator']);
+
+        // Ajusta el contador de "Todos" para no contar a los administradores
+        if (isset($views['all']) && is_string($views['all'])) {
+            $counts = count_users();
+            $total  = isset($counts['total_users']) ? (int) $counts['total_users'] : 0;
+            $admins = isset($counts['avail_roles']['administrator']) ? (int) $counts['avail_roles']['administrator'] : 0;
+            $nuevo  = max(0, $total - $admins);
+
+            $views['all'] = preg_replace(
+                '/<span class="count">\([^)]*\)<\/span>/',
+                '<span class="count">(' . number_format_i18n($nuevo) . ')</span>',
+                $views['all']
+            );
+        }
+
         return $views;
     }
 
