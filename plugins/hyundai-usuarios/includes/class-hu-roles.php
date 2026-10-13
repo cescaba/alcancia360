@@ -16,6 +16,61 @@ class HU_Roles {
         add_action('admin_menu', [$this, 'remove_unwanted_menus_for_admin_hyundai'], 99);
         add_action('admin_notices', [$this, 'show_migration_notice']);
         add_filter('editable_roles', [$this, 'limit_editable_roles']);
+        add_filter('map_meta_cap', [$this, 'block_admin_user_actions'], 10, 4);
+        add_action('pre_get_users', [$this, 'hide_admins_from_admin_hu']);
+        add_filter('views_users', [$this, 'hide_admin_role_view']);
+    }
+
+    /**
+     * ¿El usuario actual es administrador_hyundai (y no administrador)?
+     */
+    private function current_is_admin_hu_only() {
+        $roles = (array) wp_get_current_user()->roles;
+        return in_array('administrador_hyundai', $roles, true) && !in_array('administrator', $roles, true);
+    }
+
+    /**
+     * Impide que administrador_hyundai edite/elimine a un administrador.
+     */
+    public function block_admin_user_actions($caps, $cap, $user_id, $args) {
+        $bloqueadas = ['delete_user', 'edit_user', 'remove_user', 'promote_user'];
+        if (!in_array($cap, $bloqueadas, true) || empty($args[0])) {
+            return $caps;
+        }
+        if (!$this->current_is_admin_hu_only()) {
+            return $caps;
+        }
+        $target = get_userdata(intval($args[0]));
+        if ($target && in_array('administrator', (array) $target->roles, true)) {
+            $caps[] = 'do_not_allow';
+        }
+        return $caps;
+    }
+
+    /**
+     * Oculta a los administradores del listado de usuarios para administrador_hyundai.
+     */
+    public function hide_admins_from_admin_hu($query) {
+        global $pagenow;
+        if (!is_admin() || is_network_admin() || $pagenow !== 'users.php') {
+            return;
+        }
+        if (!$this->current_is_admin_hu_only()) {
+            return;
+        }
+        $roles   = (array) $query->get('role__not_in');
+        $roles[] = 'administrator';
+        $query->set('role__not_in', array_values(array_unique($roles)));
+    }
+
+    /**
+     * Quita la vista "Administrador" del listado para administrador_hyundai.
+     */
+    public function hide_admin_role_view($views) {
+        if ($this->current_is_admin_hu_only()) {
+            unset($views['administrator']);
+        }
+        return $views;
     }
 
     /**
