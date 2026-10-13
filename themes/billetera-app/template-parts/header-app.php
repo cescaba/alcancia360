@@ -77,10 +77,12 @@ ob_start();
             <span>Historial de comisiones</span>
         </a>
 
+        <?php if (BILLETERA_SHOW_DESEMPENO): ?>
         <a class="app-header__menu-item" href="<?php echo esc_url($url_stats); ?>">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
             <span>Mi desempeño</span>
         </a>
+        <?php endif; ?>
 
         <a class="app-header__menu-item" href="<?php echo esc_url($url_ranking); ?>">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/></svg>
@@ -192,10 +194,12 @@ $user_menu_html = ob_get_clean();
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9c0-8 14-8 14 0"></path><rect x="2" y="9" width="20" height="11" rx="1"></rect><path d="M16 14h2"></path></svg>
             <span>Mi alcancía</span>
         </a>
+        <?php if (BILLETERA_SHOW_DESEMPENO): ?>
         <a class="app-sidebar__link<?php echo $nav_stats_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_stats); ?>">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>
             <span>Mi desempeño</span>
         </a>
+        <?php endif; ?>
         <a class="app-sidebar__link<?php echo $nav_ranking_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_ranking); ?>">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"></path></svg>
             <span>Ranking</span>

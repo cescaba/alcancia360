@@ -15,6 +15,16 @@ if (!array_intersect($allowed_roles, $current_user->roles)) {
     wp_die('Acceso restringido. Solo administradores, asesores y jefes de venta pueden acceder.');
 }
 
+// "Mi desempeño" oculta por el momento: redirige a la vista principal.
+if (!defined('BILLETERA_SHOW_DESEMPENO') || !BILLETERA_SHOW_DESEMPENO) {
+    $destino = billetera_get_template_url('page-billetera-360-movimientos.php');
+    if (!$destino || $destino === '#') {
+        $destino = home_url('/');
+    }
+    wp_safe_redirect($destino);
+    exit;
+}
+
 $meses = array('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre');
 $mes_label = $meses[intval(current_time('n')) - 1] . ' ' . current_time('Y');
 ?>

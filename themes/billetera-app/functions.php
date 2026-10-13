@@ -8,6 +8,15 @@ add_theme_support('title-tag');
 add_theme_support('post-thumbnails');
 add_theme_support('custom-logo');
 
+/**
+ * Interruptor de vistas del frontend.
+ * "Mi desempeño" está oculta por el momento: poner BILLETERA_SHOW_DESEMPENO
+ * en true (o definirlo antes) para volver a mostrarla.
+ */
+if (!defined('BILLETERA_SHOW_DESEMPENO')) {
+    define('BILLETERA_SHOW_DESEMPENO', false);
+}
+
 // Registrar estilos y scripts
 function billetera_scripts() {
     wp_enqueue_style('billetera-style', get_stylesheet_uri());
