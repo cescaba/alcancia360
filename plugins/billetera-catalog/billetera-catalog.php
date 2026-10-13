@@ -937,25 +937,45 @@ function billetera_bonus_seed_reglas() {
 
 /**
  * Busca la regla activa que aplica a una categoría según su ámbito.
+ *
+ * Prioridad:
+ *   1. Regla de ámbito "linea" cuya categoría coincide exactamente.
+ *   2. Regla de ámbito "categoria" cuya categoría coincide exactamente.
+ *   3. Regla de ámbito "categoria" que coincide por slug (se toma la última,
+ *      es decir la más reciente, para que una regla nueva no quede
+ *      ensombrecida por una regla por defecto con el mismo slug).
  */
 function billetera_bonus_find_regla($categoria_id, $slug) {
     $categoria_id = intval($categoria_id);
     $slug         = strtolower((string) $slug);
 
+    $exact_cat = null;
+    $by_slug   = null;
+
     foreach (billetera_bonus_reglas() as $r) {
         if (empty($r['activo'])) {
             continue;
         }
+        $rid    = intval($r['categoria_id'] ?? 0);
         $ambito = $r['ambito'] ?? 'categoria';
+
         if ($ambito === 'linea') {
-            if (intval($r['categoria_id']) === $categoria_id) {
+            // La regla de línea exacta es la más específica: gana de inmediato.
+            if ($rid === $categoria_id) {
                 return $r;
             }
-        } elseif (strtolower($r['slug'] ?? '') === $slug) {
-            return $r;
+            continue;
+        }
+
+        if (strtolower($r['slug'] ?? '') === $slug) {
+            if ($rid === $categoria_id && $exact_cat === null) {
+                $exact_cat = $r;
+            }
+            $by_slug = $r; // nos quedamos con la última coincidencia
         }
     }
-    return null;
+
+    return $exact_cat !== null ? $exact_cat : $by_slug;
 }
 
 /**

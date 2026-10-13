@@ -1196,9 +1196,18 @@ function billetera_render_bonus_page() {
                     $reglas    = billetera_bonus_reglas();
                     $duplicado = false;
                     foreach ($reglas as $r) {
-                        if ($r['id'] !== $nueva['id']
-                            && intval($r['categoria_id']) === $nueva['categoria_id']
-                            && ($r['ambito'] ?? 'categoria') === $nueva['ambito']) {
+                        if ($r['id'] === $nueva['id']) {
+                            continue;
+                        }
+                        $r_ambito     = $r['ambito'] ?? 'categoria';
+                        $misma_cat    = intval($r['categoria_id']) === $nueva['categoria_id'];
+                        $mismo_ambito = $r_ambito === $nueva['ambito'];
+                        // Para "toda la categoría" también es duplicado si ya hay
+                        // otra regla con el mismo slug (aplica a todas las líneas).
+                        $mismo_slug   = ($nueva['ambito'] === 'categoria')
+                            && (strtolower($r['slug'] ?? '') === strtolower($nueva['slug']));
+
+                        if (($misma_cat && $mismo_ambito) || $mismo_slug) {
                             $duplicado = true;
                             break;
                         }
