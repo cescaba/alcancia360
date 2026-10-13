@@ -167,7 +167,7 @@ function billetera_get_notificaciones($user_id) {
              INNER JOIN {$wpdb->users} u ON v.usuario_id = u.ID
              INNER JOIN {$wpdb->usermeta} um ON um.user_id = v.usuario_id AND um.meta_key = '_tienda_asociada'
              WHERE um.meta_value IN ($ph)
-             ORDER BY v.creado_en DESC
+             ORDER BY v.creado_en DESC, v.id DESC
              LIMIT 5",
             ...$tienda_ids
         ));
@@ -192,7 +192,7 @@ function billetera_get_notificaciones($user_id) {
              INNER JOIN $subs_table s ON v.subcategoria_id = s.id
              INNER JOIN $categorias_table c ON s.categoria_id = c.id
              WHERE v.usuario_id = %d
-             ORDER BY v.creado_en DESC
+             ORDER BY v.creado_en DESC, v.id DESC
              LIMIT 5",
             $user_id
         ));

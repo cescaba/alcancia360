@@ -1459,7 +1459,7 @@ function billetera_ajax_get_balance() {
         LEFT JOIN {$wpdb->users} u ON v.asesor_id = u.ID
         WHERE v.usuario_id = %d
         AND (v.monto_comision_sol * v.bonus_multiplier) > 0
-        ORDER BY v.creado_en DESC
+        ORDER BY v.creado_en DESC, v.id DESC
         LIMIT 10
     ", $user_id));
 
@@ -1511,7 +1511,7 @@ function billetera_ajax_get_all_movements() {
         LEFT JOIN {$wpdb->users} u ON v.asesor_id = u.ID
         WHERE v.usuario_id = %d
         AND (v.monto_comision_sol * v.bonus_multiplier) > 0
-        ORDER BY v.creado_en DESC
+        ORDER BY v.creado_en DESC, v.id DESC
     ", $user_id));
 
     wp_send_json_success(['movements' => $movements]);
