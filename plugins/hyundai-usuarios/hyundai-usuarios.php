@@ -19,6 +19,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-dealer-tienda.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-user-tienda-association.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-hu-utilities.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-hu-user-ingreso.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-hu-admin-notices.php';
 
 // Instanciar las clases
 new HU_Roles();
@@ -26,6 +27,7 @@ new HU_DealerTienda();
 new HU_UserTiendaAssociation();
 new HU_Utilities();
 new HU_User_Ingreso();
+new HU_Admin_Notices();
 
 // Activación: crear roles
 register_activation_hook(__FILE__, function() {
