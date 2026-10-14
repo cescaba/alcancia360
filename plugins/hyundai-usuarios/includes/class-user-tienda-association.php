@@ -18,6 +18,18 @@ class HU_UserTiendaAssociation {
         add_filter('manage_users_custom_column', [$this, 'render_users_column'], 10, 3);
         add_action('restrict_manage_users', [$this, 'render_tienda_filter']);
         add_filter('pre_get_users', [$this, 'filter_users_by_tienda']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_styles']);
+    }
+
+    /**
+     * Carga el CSS de admin en la lista de usuarios (users.php).
+     */
+    public function enqueue_admin_styles() {
+        $screen = get_current_screen();
+        if (!$screen || $screen->id !== 'users') {
+            return;
+        }
+        wp_enqueue_style('hu-admin', HU_PLUGIN_URL . 'assets/admin.css', [], '1.0');
     }
 
     /**

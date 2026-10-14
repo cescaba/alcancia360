@@ -173,3 +173,22 @@
 @media (max-width: 782px) {
     .hu-grid { grid-template-columns: 1fr; }
 }
+
+/* ===== Usuarios (users.php) ===== */
+
+/* El botón "Cambiar" junto al select "Cambiar perfil a…" */
+.tablenav .actions:has(#new_role),
+.tablenav .actions:has(#new_role2) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.tablenav .actions #new_role,
+.tablenav .actions #new_role2,
+.tablenav .actions #changeit,
+.tablenav .actions #changeit2 {
+    margin: 0;
+    vertical-align: middle;
+}
