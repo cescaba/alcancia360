@@ -14,6 +14,16 @@ $allowed_roles = array('asesor', 'administrator', 'jefe_venta');
 if (!array_intersect($allowed_roles, $current_user->roles)) {
     wp_die('Acceso restringido. Solo administradores, asesores y jefes de venta pueden acceder.');
 }
+
+// "Ranking" oculta por el momento: redirige a la vista principal.
+if (!defined('BILLETERA_SHOW_RANKING') || !BILLETERA_SHOW_RANKING) {
+    $destino = billetera_get_template_url('page-billetera-360-movimientos.php');
+    if (!$destino || $destino === '#') {
+        $destino = home_url('/');
+    }
+    wp_safe_redirect($destino);
+    exit;
+}
 ?>
 
 <!DOCTYPE html>

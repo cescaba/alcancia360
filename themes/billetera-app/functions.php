@@ -17,6 +17,14 @@ if (!defined('BILLETERA_SHOW_DESEMPENO')) {
     define('BILLETERA_SHOW_DESEMPENO', false);
 }
 
+/**
+ * "Ranking" está oculta por el momento: poner BILLETERA_SHOW_RANKING
+ * en true (o definirlo antes) para volver a mostrarla.
+ */
+if (!defined('BILLETERA_SHOW_RANKING')) {
+    define('BILLETERA_SHOW_RANKING', false);
+}
+
 // Registrar estilos y scripts
 function billetera_scripts() {
     wp_enqueue_style('billetera-style', get_stylesheet_uri());

@@ -33,8 +33,10 @@ $tab_ranking_active  = ($current_slug === 'page-billetera-360-ranking.php');
         <span>Desempeño</span>
     </a>
     <?php endif; ?>
+    <?php if (BILLETERA_SHOW_RANKING): ?>
     <a class="bottom-tabbar__tab<?php echo $tab_ranking_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_ranking); ?>">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"></path></svg>
         <span>Ranking</span>
     </a>
+    <?php endif; ?>
 </nav>
