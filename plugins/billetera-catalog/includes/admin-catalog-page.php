@@ -1200,7 +1200,8 @@ function billetera_render_bonus_page() {
                         'banner_desde'           => preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['banner_desde'] ?? '') ? $_POST['banner_desde'] : '',
                         'banner_hasta'           => preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['banner_hasta'] ?? '') ? $_POST['banner_hasta'] : '',
                         'banner_cta'             => sanitize_text_field(wp_unslash($_POST['banner_cta'] ?? 'VER BASES')),
-                        'banner_tiendas'         => array_values(array_unique(array_map('intval', (array) ($_POST['banner_tiendas'] ?? [])))),
+                        'banner_alcance'         => 'global',
+                        'banner_tiendas'         => [],
                     ];
 
                     $reglas    = billetera_bonus_reglas();
@@ -1369,8 +1370,8 @@ function billetera_render_bonus_page() {
             </div>
 
             <div class="bc-field bc-field--full">
-                <h3 style="margin:10px 0 0;">Banner de campaña en Mi desempeño (opcional)</h3>
-                <p class="bc-desc" style="margin:4px 0 0;">Se muestra en la parte superior de Mi desempeño solo mientras esté vigente y aplique a la tienda del asesor. Vacío = no se muestra.</p>
+                <h3 style="margin:10px 0 0;">Vigencia y banner de campaña (opcional)</h3>
+                <p class="bc-desc" style="margin:4px 0 0;">La vigencia apaga el bono y el banner. El bono solo aplica a ventas con fecha dentro del rango y el banner solo se muestra mientras esté vigente.</p>
             </div>
 
             <div class="bc-field bc-field--check">
@@ -1394,33 +1395,18 @@ function billetera_render_bonus_page() {
                 <input type="text" name="banner_bajada" class="bc-input" maxlength="140" value="<?php echo esc_attr($edit['banner_bajada'] ?? ''); ?>" placeholder="Cada venta de 5+ mpps suma S/ 350 en lugar de S/ 175. Válido en tu tienda.">
             </div>
             <div class="bc-field">
-                <label class="bc-label">Vigente desde</label>
+                <label class="bc-label">Vigente desde (bono + banner)</label>
                 <input type="date" name="banner_desde" class="bc-input" value="<?php echo esc_attr($edit['banner_desde'] ?? ''); ?>">
-                <p class="bc-desc" style="margin:6px 0 0;">Vacío = sin inicio.</p>
+                <p class="bc-desc" style="margin:6px 0 0;">Vacío = sin inicio. Ventas anteriores no bonifican.</p>
             </div>
             <div class="bc-field">
-                <label class="bc-label">Vigente hasta</label>
+                <label class="bc-label">Vigente hasta (bono + banner)</label>
                 <input type="date" name="banner_hasta" class="bc-input" value="<?php echo esc_attr($edit['banner_hasta'] ?? ''); ?>">
-                <p class="bc-desc" style="margin:6px 0 0;">Vacío = sin fin.</p>
+                <p class="bc-desc" style="margin:6px 0 0;">Vacío = sin fin. Después de esta fecha el bono se desactiva.</p>
             </div>
             <div class="bc-field">
                 <label class="bc-label">Texto del botón</label>
                 <input type="text" name="banner_cta" class="bc-input" maxlength="20" value="<?php echo esc_attr($edit['banner_cta'] ?? 'VER BASES'); ?>">
-            </div>
-            <div class="bc-field bc-field--full">
-                <label class="bc-label">Alcance</label>
-                <p class="bc-desc" style="margin:4px 0 6px;">Sin marcar = global (todas las tiendas). Marca tiendas para limitar la campaña.</p>
-                <div style="display:flex;flex-wrap:wrap;gap:6px 18px;max-height:150px;overflow:auto;border:1px solid #dcdcde;padding:8px 10px;background:#fff;">
-                    <?php
-                    $banner_tiendas_sel = array_map('intval', (array) ($edit['banner_tiendas'] ?? []));
-                    foreach (billetera_bc_tiendas() as $t):
-                    ?>
-                        <label style="display:flex;gap:6px;align-items:center;font-weight:400;">
-                            <input type="checkbox" name="banner_tiendas[]" value="<?php echo intval($t->ID); ?>" <?php checked(in_array(intval($t->ID), $banner_tiendas_sel, true)); ?>>
-                            <?php echo esc_html($t->post_title); ?>
-                        </label>
-                    <?php endforeach; ?>
-                </div>
             </div>
 
             <div class="bc-field bc-field--actions">
@@ -1469,10 +1455,18 @@ function billetera_render_bonus_page() {
 
                     if (!empty($r['banner_activo']) && trim((string) ($r['banner_titulo'] ?? '')) !== '') {
                         $vig = trim(trim((string) ($r['banner_desde'] ?? ''), '-') . ' → ' . trim((string) ($r['banner_hasta'] ?? ''), '-'), ' →');
-                        $alc = !empty($r['banner_tiendas']) ? count($r['banner_tiendas']) . ' tiendas' : 'Global';
-                        $banner_txt = 'Sí' . ($vig !== '' ? ' · ' . $vig : '') . ' · ' . $alc;
+                        $hoy_txt = current_time('Y-m-d');
+                        $vig_estado = '';
+                        if (!empty($r['banner_desde']) && $hoy_txt < $r['banner_desde']) {
+                            $vig_estado = ' · programado';
+                        } elseif (!empty($r['banner_hasta']) && $hoy_txt > $r['banner_hasta']) {
+                            $vig_estado = ' · vencido';
+                        }
+                        $banner_txt = 'Sí' . ($vig !== '' ? ' · ' . $vig : '') . $vig_estado;
+                        $banner_title = $vig !== '' ? $vig : 'Sin vigencia limitada';
                     } else {
                         $banner_txt = '—';
+                        $banner_title = '';
                     }
                 ?>
                     <tr>
@@ -1482,7 +1476,7 @@ function billetera_render_bonus_page() {
                         <td>×<?php echo esc_html($mult_txt); ?></td>
                         <td><?php echo !empty($r['aplica_jefe']) ? 'Sí' : 'No'; ?></td>
                         <td><?php echo esc_html($excep); ?></td>
-                        <td><?php echo esc_html($banner_txt); ?></td>
+                        <td><span title="<?php echo esc_attr($banner_title); ?>"><?php echo esc_html($banner_txt); ?></span></td>
                         <td><?php echo !empty($r['activo']) ? '<span style="color:#146C43;">Activa</span>' : '<span style="color:#b3352a;">Inactiva</span>'; ?></td>
                         <td>
                             <a class="bc-link" href="<?php echo esc_url(add_query_arg(['page' => 'billetera_bonus_admin', 'edit' => $r['id']], admin_url('admin.php'))); ?>">Editar</a>

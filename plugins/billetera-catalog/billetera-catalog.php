@@ -714,7 +714,7 @@ function billetera_ajax_register_sale_v2() {
     $monto_total_sol = billetera_convert_to_sol($comision) * $cantidad;
 
     // Aplicar reglas de bonificación (categoría, umbral, multiplicador y excepción)
-    $regla_bonus = billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $distribuidor_id, $cantidad);
+    $regla_bonus = billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $distribuidor_id, $cantidad, true, $fecha_datetime);
     if ($regla_bonus['override_sol'] !== null) {
         // Excepción "reemplazar"
         $monto_total_sol  = $regla_bonus['override_sol'];
@@ -937,6 +937,26 @@ function billetera_bonus_seed_reglas() {
 }
 
 /**
+ * Vigencia de campaña (reusa fechas del banner): fuera de [desde,hasta]
+ * el bono no aplica. Vacío = sin límite.
+ */
+function billetera_regla_vigente_en($regla, $fecha_ymd) {
+    $fecha = substr((string) $fecha_ymd, 0, 10);
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+        return true;
+    }
+    $desde = (string) ($regla['banner_desde'] ?? '');
+    $hasta = (string) ($regla['banner_hasta'] ?? '');
+    if ($desde !== '' && $fecha < $desde) {
+        return false;
+    }
+    if ($hasta !== '' && $fecha > $hasta) {
+        return false;
+    }
+    return true;
+}
+
+/**
  * Busca la regla activa que aplica a una categoría según su ámbito.
  *
  * Prioridad:
@@ -946,15 +966,22 @@ function billetera_bonus_seed_reglas() {
  *      es decir la más reciente, para que una regla nueva no quede
  *      ensombrecida por una regla por defecto con el mismo slug).
  */
-function billetera_bonus_find_regla($categoria_id, $slug) {
+
+function billetera_bonus_find_regla($categoria_id, $slug, $fecha_ymd = null) {
     $categoria_id = intval($categoria_id);
     $slug         = strtolower((string) $slug);
+    if ($fecha_ymd === null) {
+        $fecha_ymd = billetera_stats_local_now()->format('Y-m-d');
+    }
 
     $exact_cat = null;
     $by_slug   = null;
 
     foreach (billetera_bonus_reglas() as $r) {
         if (empty($r['activo'])) {
+            continue;
+        }
+        if (!billetera_regla_vigente_en($r, $fecha_ymd)) {
             continue;
         }
         $rid    = intval($r['categoria_id'] ?? 0);
@@ -999,7 +1026,7 @@ function billetera_bonus_cond($regla) {
  *   multiplier, override_sol (asesor) y jefe_multiplier, jefe_override_sol.
  *   override_sol reemplaza el monto base; si es null se usa el del catálogo.
  */
-function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $cantidad, $aplicar_retro = true) {
+function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $cantidad, $aplicar_retro = true, $fecha_datetime = null) {
     global $wpdb;
     $ventas = $wpdb->prefix . 'billetera_ventas';
     $sub    = $wpdb->prefix . 'billetera_subcategorias';
@@ -1028,7 +1055,8 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
         return $out;
     }
 
-    $regla = billetera_bonus_find_regla($catrow->id, $catrow->slug);
+    $fecha_ymd = $fecha_datetime ? substr((string) $fecha_datetime, 0, 10) : billetera_stats_local_now()->format('Y-m-d');
+    $regla = billetera_bonus_find_regla($catrow->id, $catrow->slug, $fecha_ymd);
     if (!$regla) {
         return $out;
     }
@@ -1037,8 +1065,14 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
 
     list($cond, $cond_params) = billetera_bonus_cond($regla);
 
-    $mes_inicio = billetera_stats_local_now()->format('Y-m-01 00:00:00');
-    $params     = array_merge([$user_id], $cond_params, [$mes_inicio]);
+    $mes_inicio = substr($fecha_ymd, 0, 7) . '-01 00:00:00';
+    // El conteo del umbral solo suma ventas dentro de la vigencia.
+    $desde_vig = '';
+    if (!empty($regla['banner_desde'])) {
+        $desde_vig = (string) $regla['banner_desde'] . ' 00:00:00';
+    }
+    $inicio = $desde_vig !== '' && $desde_vig > $mes_inicio ? $desde_vig : $mes_inicio;
+    $params     = array_merge([$user_id], $cond_params, [$inicio]);
     $count      = (int) $wpdb->get_var($wpdb->prepare("
         SELECT COUNT(v.id)
         FROM $ventas v
@@ -1108,6 +1142,15 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
     $limite = max(1, (int) $regla['umbral'] - 1);
     list($cond, $cond_params) = billetera_bonus_cond($regla);
 
+    // No tocar ventas anteriores a la vigencia.
+    $inicio = (string) $mes_inicio;
+    if (!empty($regla['banner_desde'])) {
+        $desde_dt = (string) $regla['banner_desde'] . ' 00:00:00';
+        if ($desde_dt > $inicio) {
+            $inicio = $desde_dt;
+        }
+    }
+
     $subcat_in = "(SELECT s.id FROM $sub s JOIN $cat c ON c.id = s.categoria_id WHERE $cond)";
 
     $factor = (($regla['excepcion_moneda'] ?? 'USD') === 'PEN') ? 1.0 : $tc;
@@ -1115,7 +1158,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
     if ($out['override_sol'] !== null) {
         // Reemplazar: el monto pasa a ser el fijo (USD * TC * cantidad)
         $usd    = (float) $regla['excepcion_usd'];
-        $params = array_merge([$usd * $factor, $user_id], $cond_params, [$mes_inicio, $limite]);
+        $params = array_merge([$usd * $factor, $user_id], $cond_params, [$inicio, $limite]);
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
             SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
@@ -1128,7 +1171,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
 
         if ($out['jefe_override_sol'] !== null) {
             $usd_j  = (float) $regla['excepcion_jefe_usd'];
-            $params = array_merge([$usd_j * $factor, $user_id], $cond_params, [$mes_inicio]);
+            $params = array_merge([$usd_j * $factor, $user_id], $cond_params, [$inicio]);
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
                 SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
@@ -1141,7 +1184,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         // Sumar: monto = base + fijo (la excepción anula el multiplicador)
         $mult   = (float) $out['multiplier'];
         $usd    = (float) $regla['excepcion_usd'];
-        $params = array_merge([$mult, $usd * $factor, $user_id], $cond_params, [$mes_inicio, $limite]);
+        $params = array_merge([$mult, $usd * $factor, $user_id], $cond_params, [$inicio, $limite]);
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
             SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
@@ -1155,7 +1198,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         if ($out['jefe_add_sol'] !== null) {
             $mult_j = (float) $out['jefe_multiplier'];
             $usd_j  = (float) $regla['excepcion_jefe_usd'];
-            $params = array_merge([$mult_j, $usd_j * $factor, $user_id], $cond_params, [$mes_inicio]);
+            $params = array_merge([$mult_j, $usd_j * $factor, $user_id], $cond_params, [$inicio]);
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
                 SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
@@ -1166,7 +1209,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         }
     } else {
         $mult   = (float) $out['multiplier'];
-        $params = array_merge([$mult, $user_id], $cond_params, [$mes_inicio, $limite]);
+        $params = array_merge([$mult, $user_id], $cond_params, [$inicio, $limite]);
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
             SET v.bonus_multiplier = %f, v.bonus_aplicado = 1
@@ -1178,7 +1221,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         ", ...$params));
 
         if ($out['jefe_multiplier'] > 1.0) {
-            $params = array_merge([$out['jefe_multiplier'], $user_id], $cond_params, [$mes_inicio]);
+            $params = array_merge([$out['jefe_multiplier'], $user_id], $cond_params, [$inicio]);
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
                 SET v.bonus_multiplier = %f, v.bonus_aplicado = 1
@@ -1551,6 +1594,19 @@ function billetera_campana_ventas_mes($user_id, $regla) {
     $now   = billetera_stats_local_now();
     $desde = $now->format('Y-m-01 00:00:00');
     $hasta = (clone $now)->modify('first day of next month')->format('Y-m-01 00:00:00');
+    // El conteo cuadra con el bono: solo dentro de la vigencia.
+    if (!empty($regla['banner_desde'])) {
+        $d = (string) $regla['banner_desde'] . ' 00:00:00';
+        if ($d > $desde) {
+            $desde = $d;
+        }
+    }
+    if (!empty($regla['banner_hasta'])) {
+        $h = (new DateTime((string) $regla['banner_hasta'] . ' 00:00:00'))->modify('+1 day')->format('Y-m-d 00:00:00');
+        if ($h < $hasta) {
+            $hasta = $h;
+        }
+    }
 
     list($cond_sql, $cond_params) = billetera_bonus_cond($regla);
     $params = array_merge([intval($user_id), $desde, $hasta], $cond_params);
@@ -1565,12 +1621,11 @@ function billetera_campana_ventas_mes($user_id, $regla) {
 }
 
 /**
- * Campañas vigentes para un usuario (asesor): reglas con banner activo,
- * dentro de vigencia y con alcance global o a su tienda.
+ * Campañas vigentes para un usuario (asesor): reglas con banner activo
+ * dentro de vigencia. Sin segmentación por tienda: global para todos.
  */
 function billetera_campanas_para_usuario($user_id) {
     $user_id   = intval($user_id);
-    $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
     $hoy       = billetera_stats_local_now()->format('Y-m-d');
 
     $out = [];
@@ -1587,11 +1642,6 @@ function billetera_campanas_para_usuario($user_id) {
             continue;
         }
         if ($hasta !== '' && $hoy > $hasta) {
-            continue;
-        }
-        $alcance = array_map('intval', (array) ($r['banner_tiendas'] ?? []));
-        // Alcance vacío = global (todas las tiendas).
-        if (!empty($alcance) && !in_array($tienda_id, $alcance, true)) {
             continue;
         }
         $out[] = [
