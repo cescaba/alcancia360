@@ -50,7 +50,7 @@ function billetera_catalog_admin_menu() {
     add_submenu_page('billetera_catalogo', 'Categorías', 'Categorías', $cap, 'billetera_catalogo', 'billetera_render_categorias_page');
     add_submenu_page('billetera_catalogo', 'Subcategorías', 'Subcategorías', $cap, 'billetera_subcategorias', 'billetera_render_subcategorias_page');
     add_submenu_page('billetera_catalogo', 'Comisiones', 'Comisiones', $cap, 'billetera_comisiones_admin', 'billetera_render_comisiones_page');
-    add_submenu_page('billetera_catalogo', 'Metas / Tarifas', 'Metas / Tarifas', $cap, 'billetera_metas_admin', 'billetera_render_metas_page');
+    add_submenu_page('billetera_catalogo', 'Metas potenciales', 'Metas potenciales', $cap, 'billetera_metas_admin', 'billetera_render_metas_page');
     add_submenu_page('billetera_catalogo', 'Líneas y Marcas', 'Líneas y Marcas', $cap, 'billetera_lineas_admin', 'billetera_render_lineas_page');
     add_submenu_page('billetera_catalogo', 'Configuración', 'Configuración', $cap, 'billetera_config_admin', 'billetera_render_config_page');
     add_submenu_page('billetera_catalogo', 'Resumen semanal', 'Resumen semanal', 'manage_options', 'billetera_resumen_admin', 'billetera_render_resumen_page');
@@ -791,7 +791,7 @@ function billetera_render_metas_page() {
         ORDER BY m.tienda_id, m.linea_codigo, m.tipo
     ");
 
-    billetera_bc_open('Metas / Tarifas', 'Meta mensual por sucursal, línea y tipo. Es la base para el avance y la proyección del asesor.');
+    billetera_bc_open('Metas potenciales', 'Meta mensual por sucursal, línea y tipo. Es la base para el avance y la proyección del asesor.');
     billetera_bc_notices($msg, $err);
     ?>
     <div class="bc-card">
@@ -1192,6 +1192,15 @@ function billetera_render_bonus_page() {
                         'excepcion_moneda'       => (isset($_POST['excepcion_moneda']) && $_POST['excepcion_moneda'] === 'PEN') ? 'PEN' : 'USD',
                         'excepcion_modo'         => (isset($_POST['excepcion_modo']) && $_POST['excepcion_modo'] === 'sumar') ? 'sumar' : 'reemplazar',
                         'excepcion_desde_umbral' => isset($_POST['excepcion_desde_umbral']) ? 1 : 0,
+                        'banner_activo'          => isset($_POST['banner_activo']) ? 1 : 0,
+                        'banner_orden'           => max(0, intval($_POST['banner_orden'] ?? 0)),
+                        'banner_etiqueta'        => sanitize_text_field(wp_unslash($_POST['banner_etiqueta'] ?? 'CAMPAÑA · EVENTO')),
+                        'banner_titulo'          => sanitize_text_field(wp_unslash($_POST['banner_titulo'] ?? '')),
+                        'banner_bajada'          => sanitize_text_field(wp_unslash($_POST['banner_bajada'] ?? '')),
+                        'banner_desde'           => preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['banner_desde'] ?? '') ? $_POST['banner_desde'] : '',
+                        'banner_hasta'           => preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['banner_hasta'] ?? '') ? $_POST['banner_hasta'] : '',
+                        'banner_cta'             => sanitize_text_field(wp_unslash($_POST['banner_cta'] ?? 'VER BASES')),
+                        'banner_tiendas'         => array_values(array_unique(array_map('intval', (array) ($_POST['banner_tiendas'] ?? [])))),
                     ];
 
                     $reglas    = billetera_bonus_reglas();
@@ -1359,6 +1368,61 @@ function billetera_render_bonus_page() {
                 <label><input type="checkbox" name="excepcion_desde_umbral" value="1" <?php checked($edit['excepcion_desde_umbral'] ?? 1, 1); ?>> La excepción aplica desde el umbral (si no, desde la 1.ª venta)</label>
             </div>
 
+            <div class="bc-field bc-field--full">
+                <h3 style="margin:10px 0 0;">Banner de campaña en Mi desempeño (opcional)</h3>
+                <p class="bc-desc" style="margin:4px 0 0;">Se muestra en la parte superior de Mi desempeño solo mientras esté vigente y aplique a la tienda del asesor. Vacío = no se muestra.</p>
+            </div>
+
+            <div class="bc-field bc-field--check">
+                <label><input type="checkbox" name="banner_activo" value="1" <?php checked($edit['banner_activo'] ?? 0, 1); ?>> Mostrar banner de esta campaña</label>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Orden</label>
+                <input type="number" min="0" name="banner_orden" class="bc-input" value="<?php echo intval($edit['banner_orden'] ?? 0); ?>">
+                <p class="bc-desc" style="margin:6px 0 0;">Si hay varias vigentes, se ordenan de menor a mayor.</p>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Etiqueta</label>
+                <input type="text" name="banner_etiqueta" class="bc-input" maxlength="30" value="<?php echo esc_attr($edit['banner_etiqueta'] ?? 'CAMPAÑA · EVENTO'); ?>">
+            </div>
+            <div class="bc-field bc-field--full">
+                <label class="bc-label">Título *</label>
+                <input type="text" name="banner_titulo" class="bc-input" maxlength="90" value="<?php echo esc_attr($edit['banner_titulo'] ?? ''); ?>" placeholder="Octubre Prepagados: duplica tu comisión en planes 5+ mpps">
+            </div>
+            <div class="bc-field bc-field--full">
+                <label class="bc-label">Bajada</label>
+                <input type="text" name="banner_bajada" class="bc-input" maxlength="140" value="<?php echo esc_attr($edit['banner_bajada'] ?? ''); ?>" placeholder="Cada venta de 5+ mpps suma S/ 350 en lugar de S/ 175. Válido en tu tienda.">
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Vigente desde</label>
+                <input type="date" name="banner_desde" class="bc-input" value="<?php echo esc_attr($edit['banner_desde'] ?? ''); ?>">
+                <p class="bc-desc" style="margin:6px 0 0;">Vacío = sin inicio.</p>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Vigente hasta</label>
+                <input type="date" name="banner_hasta" class="bc-input" value="<?php echo esc_attr($edit['banner_hasta'] ?? ''); ?>">
+                <p class="bc-desc" style="margin:6px 0 0;">Vacío = sin fin.</p>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Texto del botón</label>
+                <input type="text" name="banner_cta" class="bc-input" maxlength="20" value="<?php echo esc_attr($edit['banner_cta'] ?? 'VER BASES'); ?>">
+            </div>
+            <div class="bc-field bc-field--full">
+                <label class="bc-label">Alcance</label>
+                <p class="bc-desc" style="margin:4px 0 6px;">Sin marcar = global (todas las tiendas). Marca tiendas para limitar la campaña.</p>
+                <div style="display:flex;flex-wrap:wrap;gap:6px 18px;max-height:150px;overflow:auto;border:1px solid #dcdcde;padding:8px 10px;background:#fff;">
+                    <?php
+                    $banner_tiendas_sel = array_map('intval', (array) ($edit['banner_tiendas'] ?? []));
+                    foreach (billetera_bc_tiendas() as $t):
+                    ?>
+                        <label style="display:flex;gap:6px;align-items:center;font-weight:400;">
+                            <input type="checkbox" name="banner_tiendas[]" value="<?php echo intval($t->ID); ?>" <?php checked(in_array(intval($t->ID), $banner_tiendas_sel, true)); ?>>
+                            <?php echo esc_html($t->post_title); ?>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
             <div class="bc-field bc-field--actions">
                 <button type="submit" class="button button-primary"><?php echo $edit ? 'Guardar cambios' : 'Crear regla'; ?></button>
                 <?php if ($edit): ?><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=billetera_bonus_admin')); ?>">Cancelar</a><?php endif; ?>
@@ -1380,6 +1444,7 @@ function billetera_render_bonus_page() {
                     <th style="width:110px;">Multiplicador</th>
                     <th style="width:70px;">Jefe</th>
                     <th>Excepción</th>
+                    <th>Banner</th>
                     <th style="width:80px;">Estado</th>
                     <th style="width:150px;">Acciones</th>
                 </tr>
@@ -1401,6 +1466,14 @@ function billetera_render_bonus_page() {
                     }
 
                     $mult_txt = rtrim(rtrim(number_format((float) $r['multiplicador'], 2, '.', ''), '0'), '.');
+
+                    if (!empty($r['banner_activo']) && trim((string) ($r['banner_titulo'] ?? '')) !== '') {
+                        $vig = trim(trim((string) ($r['banner_desde'] ?? ''), '-') . ' → ' . trim((string) ($r['banner_hasta'] ?? ''), '-'), ' →');
+                        $alc = !empty($r['banner_tiendas']) ? count($r['banner_tiendas']) . ' tiendas' : 'Global';
+                        $banner_txt = 'Sí' . ($vig !== '' ? ' · ' . $vig : '') . ' · ' . $alc;
+                    } else {
+                        $banner_txt = '—';
+                    }
                 ?>
                     <tr>
                         <td><strong><?php echo esc_html($r['nombre'] ?? $r['slug']); ?></strong></td>
@@ -1409,6 +1482,7 @@ function billetera_render_bonus_page() {
                         <td>×<?php echo esc_html($mult_txt); ?></td>
                         <td><?php echo !empty($r['aplica_jefe']) ? 'Sí' : 'No'; ?></td>
                         <td><?php echo esc_html($excep); ?></td>
+                        <td><?php echo esc_html($banner_txt); ?></td>
                         <td><?php echo !empty($r['activo']) ? '<span style="color:#146C43;">Activa</span>' : '<span style="color:#b3352a;">Inactiva</span>'; ?></td>
                         <td>
                             <a class="bc-link" href="<?php echo esc_url(add_query_arg(['page' => 'billetera_bonus_admin', 'edit' => $r['id']], admin_url('admin.php'))); ?>">Editar</a>

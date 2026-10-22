@@ -1353,6 +1353,14 @@ function billetera_ajax_get_comision() {
 }
 
 // AJAX: Obtener saldo y movimientos del usuario
+// Nota contable: los asesores ven también las ventas con comisión 0.
+// Los jefes mantienen el filtro > 0 para no alterar su vista.
+function billetera_usuario_incluye_ceros($user_id) {
+    $u = get_userdata($user_id);
+    $roles = $u ? (array) $u->roles : [];
+    return in_array('asesor', $roles, true);
+}
+
 add_action('wp_ajax_billetera_get_balance', 'billetera_ajax_get_balance');
 
 function billetera_ajax_get_balance() {
@@ -1456,6 +1464,7 @@ function billetera_ajax_get_balance() {
     // Últimos movimientos
     $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
+    $filtro_ceros = billetera_usuario_incluye_ceros($user_id) ? "" : "AND (v.monto_comision_sol * v.bonus_multiplier) > 0";
     $movements = $wpdb->get_results($wpdb->prepare("
         SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, v.bonus_aplicado, c.nombre as categoria, u.display_name as asesor_nombre
         FROM $ventas_table v
@@ -1463,7 +1472,7 @@ function billetera_ajax_get_balance() {
         LEFT JOIN $categorias_table c ON s.categoria_id = c.id
         LEFT JOIN {$wpdb->users} u ON v.asesor_id = u.ID
         WHERE v.usuario_id = %d
-        AND (v.monto_comision_sol * v.bonus_multiplier) > 0
+        $filtro_ceros
         ORDER BY v.creado_en DESC, v.id DESC
         LIMIT 10
     ", $user_id));
@@ -1508,6 +1517,8 @@ function billetera_ajax_get_all_movements() {
     $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
 
+    $filtro_ceros = billetera_usuario_incluye_ceros($user_id) ? "" : "AND (v.monto_comision_sol * v.bonus_multiplier) > 0";
+
     $movements = $wpdb->get_results($wpdb->prepare("
         SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, v.bonus_aplicado, c.nombre as categoria, u.display_name as asesor_nombre
         FROM $ventas_table v
@@ -1515,11 +1526,96 @@ function billetera_ajax_get_all_movements() {
         LEFT JOIN $categorias_table c ON s.categoria_id = c.id
         LEFT JOIN {$wpdb->users} u ON v.asesor_id = u.ID
         WHERE v.usuario_id = %d
-        AND (v.monto_comision_sol * v.bonus_multiplier) > 0
+        $filtro_ceros
         ORDER BY v.creado_en DESC, v.id DESC
     ", $user_id));
 
     wp_send_json_success(['movements' => $movements]);
+}
+
+// ============================================================================
+// BANNERS DE CAMPAÑA (enlazados a reglas de bonificación, editables en admin)
+// Se muestran en "Mi desempeño". Sin montos sensibles: solo textos del admin
+// + conteo de ventas del mes en el ámbito de la regla.
+// ============================================================================
+
+/**
+ * Ventas del mes actual del usuario dentro del ámbito de una regla.
+ */
+function billetera_campana_ventas_mes($user_id, $regla) {
+    global $wpdb;
+    $ventas = $wpdb->prefix . 'billetera_ventas';
+    $sub    = $wpdb->prefix . 'billetera_subcategorias';
+    $cat    = $wpdb->prefix . 'billetera_categorias';
+
+    $now   = billetera_stats_local_now();
+    $desde = $now->format('Y-m-01 00:00:00');
+    $hasta = (clone $now)->modify('first day of next month')->format('Y-m-01 00:00:00');
+
+    list($cond_sql, $cond_params) = billetera_bonus_cond($regla);
+    $params = array_merge([intval($user_id), $desde, $hasta], $cond_params);
+
+    return intval($wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $ventas v
+         JOIN $sub s ON s.id = v.subcategoria_id
+         JOIN $cat c ON c.id = s.categoria_id
+         WHERE v.usuario_id = %d AND v.creado_en >= %s AND v.creado_en < %s AND ($cond_sql)",
+        ...$params
+    )));
+}
+
+/**
+ * Campañas vigentes para un usuario (asesor): reglas con banner activo,
+ * dentro de vigencia y con alcance global o a su tienda.
+ */
+function billetera_campanas_para_usuario($user_id) {
+    $user_id   = intval($user_id);
+    $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
+    $hoy       = billetera_stats_local_now()->format('Y-m-d');
+
+    $out = [];
+    foreach (billetera_bonus_reglas() as $r) {
+        if (empty($r['activo']) || empty($r['banner_activo'])) {
+            continue;
+        }
+        if (trim((string) ($r['banner_titulo'] ?? '')) === '') {
+            continue;
+        }
+        $desde = (string) ($r['banner_desde'] ?? '');
+        $hasta = (string) ($r['banner_hasta'] ?? '');
+        if ($desde !== '' && $hoy < $desde) {
+            continue;
+        }
+        if ($hasta !== '' && $hoy > $hasta) {
+            continue;
+        }
+        $alcance = array_map('intval', (array) ($r['banner_tiendas'] ?? []));
+        // Alcance vacío = global (todas las tiendas).
+        if (!empty($alcance) && !in_array($tienda_id, $alcance, true)) {
+            continue;
+        }
+        $out[] = [
+            'id'       => (string) ($r['id'] ?? ''),
+            'etiqueta' => trim((string) ($r['banner_etiqueta'] ?? '')) !== '' ? (string) $r['banner_etiqueta'] : 'CAMPAÑA · EVENTO',
+            'titulo'   => (string) $r['banner_titulo'],
+            'bajada'   => (string) ($r['banner_bajada'] ?? ''),
+            'desde'    => $desde,
+            'hasta'    => $hasta,
+            'cta'      => trim((string) ($r['banner_cta'] ?? '')) !== '' ? (string) $r['banner_cta'] : 'VER BASES',
+            'umbral'   => intval($r['umbral'] ?? 0),
+            'ventas'   => billetera_campana_ventas_mes($user_id, $r),
+            'orden'    => intval($r['banner_orden'] ?? 0),
+        ];
+    }
+
+    usort($out, function ($a, $b) {
+        if ($a['orden'] !== $b['orden']) {
+            return $a['orden'] <=> $b['orden'];
+        }
+        return strcmp($a['titulo'], $b['titulo']);
+    });
+
+    return $out;
 }
 
 // ============================================================================
@@ -1541,7 +1637,10 @@ function billetera_ajax_get_mi_stats() {
     $user_id = get_current_user_id();
     $current_user = wp_get_current_user();
 
-    if (!array_intersect(['asesor', 'jefe_venta', 'administrator'], (array) $current_user->roles)) {
+    if (!defined('BILLETERA_SHOW_DESEMPENO') || !BILLETERA_SHOW_DESEMPENO) {
+        wp_send_json_error(['message' => 'Mi desempeño desactivado']);
+    }
+    if (!array_intersect(['asesor', 'administrator'], (array) $current_user->roles)) {
         wp_send_json_error(['message' => 'No tienes permiso']);
     }
 
@@ -1550,18 +1649,59 @@ function billetera_ajax_get_mi_stats() {
         $periodo = 'mes';
     }
 
-    $resumen = billetera_stats_resumen_usuario($user_id);
+    // Base navegable para el stepper (‹ ›): mes YYYY-MM o año YYYY.
+    // Por defecto, mes/año actual. No se admiten bases futuras.
+    $now = billetera_stats_local_now();
+    $base = clone $now;
+    if ($periodo === 'mes') {
+        $mes_param = isset($_POST['mes']) ? sanitize_text_field(wp_unslash($_POST['mes'])) : '';
+        if (preg_match('/^(\d{4})-(\d{2})$/', $mes_param, $m)) {
+            try {
+                $cand = new DateTime(sprintf('%04d-%02d-01 00:00:00', $m[1], $m[2]), wp_timezone());
+                if ($cand <= $now) {
+                    $base = $cand;
+                }
+            } catch (Exception $e) {
+            }
+        }
+    } elseif ($periodo === 'ano') {
+        $ano_param = isset($_POST['ano']) ? sanitize_text_field(wp_unslash($_POST['ano'])) : '';
+        if (preg_match('/^(\d{4})$/', $ano_param, $m)) {
+            try {
+                $cand = new DateTime(sprintf('%04d-01-01 00:00:00', $m[1]), wp_timezone());
+                if ($cand <= $now) {
+                    $base = $cand;
+                }
+            } catch (Exception $e) {
+            }
+        }
+    }
+
+    $meses_es = [1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'];
+    $base_label = ($periodo === 'ano')
+        ? $base->format('Y')
+        : $meses_es[intval($base->format('n'))] . ' ' . $base->format('Y');
+
+    $resumen = billetera_stats_resumen_usuario($user_id, $base);
     $racha   = function_exists('billetera_get_racha') ? intval(billetera_get_racha($user_id)) : 0;
+
+    $meses_n = isset($_POST['meses']) ? max(2, min(12, intval($_POST['meses']))) : 12;
 
     wp_send_json_success([
         'periodo'          => $periodo,
+        'base_mes'         => $base->format('Y-m'),
+        'base_ano'         => $base->format('Y'),
+        'base_label'       => $base_label,
+        'es_actual'        => ($base->format('Y-m') === $now->format('Y-m')),
         'resumen'          => $resumen,
-        'tendencia'        => billetera_stats_tendencia_usuario($user_id, 6),
-        'por_categoria'    => billetera_stats_desglose($user_id, $periodo, 'categoria'),
-        'por_subcategoria' => billetera_stats_desglose($user_id, $periodo, 'subcategoria'),
-        'por_linea'        => billetera_stats_desglose($user_id, $periodo, 'linea'),
+        'tendencia'        => billetera_stats_tendencia_usuario($user_id, $meses_n, $base),
+        'por_categoria'    => billetera_stats_desglose($user_id, $periodo, 'categoria', $base),
+        'por_subcategoria' => billetera_stats_desglose($user_id, $periodo, 'subcategoria', $base),
+        'por_linea'        => billetera_stats_desglose($user_id, $periodo, 'linea', $base),
+        'para_meta'        => billetera_stats_para_meta($user_id, $periodo, $base, floatval($resumen['faltan'] ?? 0)),
         'ranking'          => billetera_stats_ranking($user_id),
         'racha'            => $racha,
+        'campanas'         => billetera_campanas_para_usuario($user_id),
     ]);
 }
 
@@ -1579,18 +1719,23 @@ function billetera_stats_local_now() {
 }
 
 /**
- * Rango de fechas [desde, hasta) como texto de fecha local, según el periodo.
- * Devuelve null en los extremos abiertos (histórico).
+ * Rango de fechas [desde, hasta) como texto de fecha local, según el periodo
+ * y una base opcional (para el stepper ‹ ›). Devuelve null en histórico.
  */
-function billetera_stats_rango($periodo) {
+function billetera_stats_rango($periodo, $base = null) {
     $now = billetera_stats_local_now();
+    if (!($base instanceof DateTime)) {
+        $base = $now;
+    }
 
-    $mes_inicio = (clone $now)->modify('first day of this month')->setTime(0, 0, 0);
-    $mes_fin    = (clone $now)->modify('first day of next month')->setTime(0, 0, 0);
+    $mes_inicio = (clone $base)->modify('first day of this month')->setTime(0, 0, 0);
+    $mes_fin    = (clone $base)->modify('first day of next month')->setTime(0, 0, 0);
 
     if ($periodo === 'ano') {
-        $ano_inicio = (clone $now)->setDate((int) $now->format('Y'), 1, 1)->setTime(0, 0, 0);
-        return [$ano_inicio->format('Y-m-d H:i:s'), $mes_fin->format('Y-m-d H:i:s')];
+        $ano_inicio = (clone $base)->setDate((int) $base->format('Y'), 1, 1)->setTime(0, 0, 0);
+        // Año en curso: hasta hoy (fin del mes actual). Año pasado: año completo.
+        $hasta = ($base->format('Y') === $now->format('Y')) ? $mes_fin : (clone $ano_inicio)->modify('+1 year');
+        return [$ano_inicio->format('Y-m-d H:i:s'), $hasta->format('Y-m-d H:i:s')];
     }
     if ($periodo === 'historico') {
         return [null, null];
@@ -1602,31 +1747,39 @@ function billetera_stats_rango($periodo) {
  * Resumen: comisión mes actual/anterior/año/histórico, ventas, unidades,
  * ticket promedio, meta, avance, faltante y proyección de cierre.
  */
-function billetera_stats_resumen_usuario($user_id) {
+function billetera_stats_resumen_usuario($user_id, $base = null) {
     global $wpdb;
     $v = $wpdb->prefix . 'billetera_ventas';
 
-    $now        = billetera_stats_local_now();
-    $mes_inicio = $now->format('Y-m-01 00:00:00');
-    $mes_fin    = (clone $now)->modify('first day of next month')->format('Y-m-01 00:00:00');
-    $mes_prev   = (clone $now)->modify('first day of last month')->format('Y-m-01 00:00:00');
-    $ano_inicio = $now->format('Y-01-01 00:00:00');
+    $now = billetera_stats_local_now();
+    if (!($base instanceof DateTime)) {
+        $base = $now;
+    }
+    $es_mes_actual = ($base->format('Y-m') === $now->format('Y-m'));
+
+    $mes_inicio = $base->format('Y-m-01 00:00:00');
+    $mes_fin    = (clone $base)->modify('first day of next month')->format('Y-m-01 00:00:00');
+    $mes_prev   = (clone $base)->modify('first day of last month')->format('Y-m-01 00:00:00');
+    $ano_inicio = $base->format('Y-01-01 00:00:00');
+    $ano_fin    = (clone $base)->setDate((int) $base->format('Y') + 1, 1, 1)->setTime(0, 0, 0)->format('Y-m-d H:i:s');
+
+    $filtro_ceros = billetera_usuario_incluye_ceros($user_id) ? "" : "AND (monto_comision_sol * bonus_multiplier) > 0";
 
     $row = $wpdb->get_row($wpdb->prepare("
         SELECT
             SUM(CASE WHEN creado_en >= %s AND creado_en < %s THEN monto_comision_sol * bonus_multiplier ELSE 0 END) AS mes_actual,
             SUM(CASE WHEN creado_en >= %s AND creado_en < %s THEN monto_comision_sol * bonus_multiplier ELSE 0 END) AS mes_anterior,
-            SUM(CASE WHEN creado_en >= %s THEN monto_comision_sol * bonus_multiplier ELSE 0 END) AS acumulado_ano,
+            SUM(CASE WHEN creado_en >= %s AND creado_en < %s THEN monto_comision_sol * bonus_multiplier ELSE 0 END) AS acumulado_ano,
             SUM(monto_comision_sol * bonus_multiplier) AS historico,
             SUM(CASE WHEN creado_en >= %s AND creado_en < %s THEN 1 ELSE 0 END) AS ventas_mes,
             SUM(CASE WHEN creado_en >= %s AND creado_en < %s THEN cantidad ELSE 0 END) AS unidades_mes,
             COUNT(*) AS ventas_historicas
         FROM $v
-        WHERE usuario_id = %d AND (monto_comision_sol * bonus_multiplier) > 0
+        WHERE usuario_id = %d $filtro_ceros
     ",
         $mes_inicio, $mes_fin,
         $mes_prev, $mes_inicio,
-        $ano_inicio,
+        $ano_inicio, $ano_fin,
         $mes_inicio, $mes_fin,
         $mes_inicio, $mes_fin,
         $user_id
@@ -1641,12 +1794,13 @@ function billetera_stats_resumen_usuario($user_id) {
     $fill = $meta > 0 ? round(($mes_actual / $meta) * 100, 1) : 0;
 
     // Proyección sobre días laborables (lun–sáb), consistente con la racha.
-    $dia_actual  = intval($now->format('j'));
-    $anio_actual = intval($now->format('Y'));
-    $mes_num     = intval($now->format('n'));
+    // Mes cerrado (stepper): sin proyección, se muestra lo real.
+    $dia_actual  = $es_mes_actual ? intval($now->format('j')) : 31;
+    $anio_actual = intval($base->format('Y'));
+    $mes_num     = intval($base->format('n'));
     list($lab_trans, $lab_total) = billetera_stats_dias_laborables_mes($anio_actual, $mes_num, $dia_actual);
     $lab_trans  = max($lab_trans, 1);
-    $proyeccion = round($mes_actual / $lab_trans * $lab_total, 2);
+    $proyeccion = $es_mes_actual ? round($mes_actual / $lab_trans * $lab_total, 2) : round($mes_actual, 2);
 
     $var_mes = $mes_anterior > 0 ? round((($mes_actual - $mes_anterior) / $mes_anterior) * 100, 1) : null;
 
@@ -1697,17 +1851,21 @@ function billetera_stats_dias_laborables_mes($year, $month, $hasta_dia = null) {
 }
 
 /**
- * Tendencia de los últimos N meses (rellena meses sin ventas con 0).
+ * Tendencia de los últimos N meses hasta la base (rellena meses sin ventas con 0).
  */
-function billetera_stats_tendencia_usuario($user_id, $meses = 6) {
+function billetera_stats_tendencia_usuario($user_id, $meses = 6, $base = null) {
     global $wpdb;
     $v = $wpdb->prefix . 'billetera_ventas';
 
     $meses = max(1, intval($meses));
     $now   = billetera_stats_local_now();
-    $desde = (clone $now)->modify('-' . ($meses - 1) . ' months')->format('Y-m-01 00:00:00');
+    if (!($base instanceof DateTime)) {
+        $base = $now;
+    }
+    $desde = (clone $base)->modify('-' . ($meses - 1) . ' months')->format('Y-m-01 00:00:00');
 
-    $offset = (int) $now->format('P'); // ej. -05:00
+    $offset = (int) $base->format('P'); // ej. -05:00
+    $filtro_ceros = billetera_usuario_incluye_ceros($user_id) ? "" : "AND (monto_comision_sol * bonus_multiplier) > 0";
     $rows = $wpdb->get_results($wpdb->prepare("
         SELECT DATE_FORMAT(DATE_ADD(creado_en, INTERVAL %d MINUTE), '%%Y-%%m') AS mes,
                SUM(monto_comision_sol * bonus_multiplier) AS total,
@@ -1715,7 +1873,7 @@ function billetera_stats_tendencia_usuario($user_id, $meses = 6) {
         FROM $v
         WHERE usuario_id = %d
           AND creado_en >= %s
-          AND (monto_comision_sol * bonus_multiplier) > 0
+          $filtro_ceros
         GROUP BY mes
         ORDER BY mes ASC
     ", $offset * 60, $user_id, $desde));
@@ -1728,7 +1886,7 @@ function billetera_stats_tendencia_usuario($user_id, $meses = 6) {
 
     $out = [];
     for ($i = $meses - 1; $i >= 0; $i--) {
-        $ts  = (clone $now)->modify("-$i months");
+        $ts  = (clone $base)->modify("-$i months");
         $key = $ts->format('Y-m');
         $r   = $map[$key] ?? null;
         $out[] = [
@@ -1743,18 +1901,18 @@ function billetera_stats_tendencia_usuario($user_id, $meses = 6) {
 }
 
 /**
- * Desglose por categoría, subcategoría o línea para el periodo.
+ * Desglose por categoría, subcategoría o línea para el periodo (y base).
  */
-function billetera_stats_desglose($user_id, $periodo, $tipo) {
+function billetera_stats_desglose($user_id, $periodo, $tipo, $base = null) {
     global $wpdb;
     $v   = $wpdb->prefix . 'billetera_ventas';
     $sub = $wpdb->prefix . 'billetera_subcategorias';
     $cat = $wpdb->prefix . 'billetera_categorias';
     $lin = $wpdb->prefix . 'billetera_lineas';
 
-    list($desde, $hasta) = billetera_stats_rango($periodo);
+    list($desde, $hasta) = billetera_stats_rango($periodo, $base);
 
-    $where  = "v.usuario_id = %d AND (v.monto_comision_sol * v.bonus_multiplier) > 0";
+    $where  = billetera_usuario_incluye_ceros($user_id) ? "v.usuario_id = %d" : "v.usuario_id = %d AND (v.monto_comision_sol * v.bonus_multiplier) > 0";
     $params = [$user_id];
     if ($desde !== null) {
         $where   .= " AND v.creado_en >= %s";
@@ -1802,6 +1960,72 @@ function billetera_stats_desglose($user_id, $periodo, $tipo) {
         ];
     }
     return $out;
+}
+
+/**
+ * "Para llegar a tu meta": por subcategoría, comisión unitaria promedio según
+ * los registros del periodo (sin aplicar bonos) y ventas necesarias para
+ * cubrir lo que falta. Ordenado por camino más corto. Referencial.
+ */
+function billetera_stats_para_meta($user_id, $periodo, $base, $faltan) {
+    if ($faltan <= 0) {
+        return ['alcanzada' => true, 'filas' => []];
+    }
+    global $wpdb;
+    $v   = $wpdb->prefix . 'billetera_ventas';
+    $sub = $wpdb->prefix . 'billetera_subcategorias';
+    $cat = $wpdb->prefix . 'billetera_categorias';
+
+    list($desde, $hasta) = billetera_stats_rango($periodo, $base);
+
+    $where  = "v.usuario_id = %d";
+    $params = [intval($user_id)];
+    if ($desde !== null) {
+        $where   .= " AND v.creado_en >= %s";
+        $params[] = $desde;
+    }
+    if ($hasta !== null) {
+        $where   .= " AND v.creado_en < %s";
+        $params[] = $hasta;
+    }
+
+    $rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT s.nombre AS sub, c.nombre AS cat,
+                SUM(v.monto_comision_sol) AS monto, SUM(v.cantidad) AS cant, COUNT(*) AS ventas
+         FROM $v v
+         JOIN $sub s ON s.id = v.subcategoria_id
+         JOIN $cat c ON c.id = s.categoria_id
+         WHERE $where
+         GROUP BY s.id, s.nombre, c.nombre
+         HAVING cant > 0 AND monto > 0
+         ORDER BY monto DESC
+         LIMIT 40",
+        ...$params
+    ));
+
+    $filas = [];
+    foreach ((array) $rows as $r) {
+        $unit = floatval($r->monto) / max(1, intval($r->cant));
+        if ($unit <= 0) {
+            continue;
+        }
+        $filas[] = [
+            'cat'        => (string) $r->cat,
+            'sub'        => (string) $r->sub,
+            'unit'       => round($unit, 2),
+            'ventas'     => intval($r->ventas),
+            'necesarias' => (int) ceil($faltan / $unit),
+        ];
+    }
+
+    usort($filas, function ($a, $b) {
+        if ($a['necesarias'] !== $b['necesarias']) {
+            return $a['necesarias'] <=> $b['necesarias'];
+        }
+        return $b['unit'] <=> $a['unit'];
+    });
+
+    return ['alcanzada' => false, 'filas' => array_slice($filas, 0, 8)];
 }
 
 /**
@@ -1878,7 +2102,10 @@ function billetera_ajax_get_ranking() {
     }
 
     $current_user = wp_get_current_user();
-    if (!array_intersect(['asesor', 'jefe_venta', 'administrator'], (array) $current_user->roles)) {
+    if (!defined('BILLETERA_SHOW_RANKING') || !BILLETERA_SHOW_RANKING) {
+        wp_send_json_error(['message' => 'Ranking desactivado']);
+    }
+    if (!array_intersect(['asesor', 'administrator'], (array) $current_user->roles)) {
         wp_send_json_error(['message' => 'No tienes permiso']);
     }
 
@@ -1886,12 +2113,32 @@ function billetera_ajax_get_ranking() {
     $meses = [1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'];
     $now = billetera_stats_local_now();
 
+    // Mes solicitado (YYYY-MM) para "Ver mes anterior". Por defecto, mes actual.
+    $mes_param = isset($_POST['mes']) ? sanitize_text_field(wp_unslash($_POST['mes'])) : '';
+    if (!preg_match('/^\d{4}-\d{2}$/', $mes_param)) {
+        $mes_param = $now->format('Y-m');
+    }
+    try {
+        $tz = wp_timezone();
+        $base = new DateTime($mes_param . '-01 00:00:00', $tz);
+    } catch (Exception $e) {
+        $base = (clone $now)->setDate((int) $now->format('Y'), (int) $now->format('m'), 1)->setTime(0, 0, 0);
+        $mes_param = $base->format('Y-m');
+    }
+    $desde = $base->format('Y-m-01 00:00:00');
+    $hasta = (clone $base)->modify('first day of next month')->format('Y-m-01 00:00:00');
+    $es_actual = ($base->format('Y-m') === $now->format('Y-m'));
+    $mes_ant = (clone $base)->modify('first day of last month')->format('Y-m');
+
     wp_send_json_success([
         'periodo'      => 'mes',
-        'mes_label'    => $meses[intval($now->format('n'))] . ' ' . $now->format('Y'),
+        'mes'          => $base->format('Y-m'),
+        'mes_label'    => $meses[intval($base->format('n'))] . ' ' . $base->format('Y'),
+        'mes_anterior' => $mes_ant,
+        'es_actual'    => $es_actual,
         'tienda_label' => billetera_ranking_tienda_label($user_id),
-        'tienda'       => billetera_ranking_lista($user_id, 'tienda'),
-        'global'       => billetera_ranking_lista($user_id, 'global'),
+        'tienda'       => billetera_ranking_lista($user_id, 'tienda', 10, 2, $desde, $hasta),
+        'global'       => billetera_ranking_lista($user_id, 'global', 10, 2, $desde, $hasta),
     ]);
 }
 
@@ -1904,37 +2151,57 @@ function billetera_rank_cache_bust() {
 }
 
 /**
- * Totales por usuario del mes actual (uid => monto), cacheado.
- * Nunca se expone al cliente: solo se usa para ordenar.
+ * Stats de ranking por mes: ventas (conteo), total (solo desempate interno,
+ * nunca se expone) y última venta. Ordena por N° de ventas.
+ * Cacheado por versión + mes.
  */
-function billetera_ranking_balances_mes() {
+function billetera_ranking_stats_mes($desde = null, $hasta = null) {
     global $wpdb;
 
-    $key = 'billetera_rank_mes_' . (int) get_option('billetera_rank_version', 1);
-    $bal = get_transient($key);
-    if (is_array($bal)) {
-        return $bal;
+    if ($desde === null || $hasta === null) {
+        $now = billetera_stats_local_now();
+        $desde = $now->format('Y-m-01 00:00:00');
+        $hasta = (clone $now)->modify('first day of next month')->format('Y-m-01 00:00:00');
     }
 
-    $v   = $wpdb->prefix . 'billetera_ventas';
-    $now = billetera_stats_local_now();
-    $desde = $now->format('Y-m-01 00:00:00');
-    $hasta = (clone $now)->modify('first day of next month')->format('Y-m-01 00:00:00');
+    $key = 'billetera_rank_stats_' . (int) get_option('billetera_rank_version', 1) . '_' . md5($desde . '|' . $hasta);
+    $cached = get_transient($key);
+    if (is_array($cached)) {
+        return $cached;
+    }
 
+    $v = $wpdb->prefix . 'billetera_ventas';
     $rows = $wpdb->get_results($wpdb->prepare("
-        SELECT usuario_id, SUM(monto_comision_sol * bonus_multiplier) AS total
+        SELECT usuario_id, COUNT(*) AS ventas, SUM(monto_comision_sol * bonus_multiplier) AS total, MAX(creado_en) AS ultima
         FROM $v
         WHERE creado_en >= %s AND creado_en < %s
-          AND (monto_comision_sol * bonus_multiplier) > 0
         GROUP BY usuario_id
     ", $desde, $hasta));
 
-    $bal = [];
-    foreach ($rows as $r) {
-        $bal[intval($r->usuario_id)] = floatval($r->total);
+    $stats = [];
+    foreach ((array) $rows as $r) {
+        $stats[intval($r->usuario_id)] = [
+            'ventas' => intval($r->ventas),
+            'total'  => floatval($r->total),
+            'ultima' => $r->ultima ? (string) $r->ultima : null,
+        ];
     }
 
-    set_transient($key, $bal, 90);
+    set_transient($key, $stats, 90);
+    return $stats;
+}
+
+/**
+ * Totales por usuario del mes actual (uid => monto), cacheado.
+ * Nunca se expone al cliente: solo se usa para ordenar.
+ * (Compat: ahora deriva de las stats por ventas.)
+ */
+function billetera_ranking_balances_mes() {
+    $stats = billetera_ranking_stats_mes();
+    $bal = [];
+    foreach ($stats as $uid => $s) {
+        $bal[intval($uid)] = floatval($s['total']);
+    }
     return $bal;
 }
 
@@ -1971,8 +2238,11 @@ function billetera_ranking_scope_ids($user_id, $ambito) {
 
 /**
  * Nombres (solo display_name) para una lista de IDs ya ordenada.
+ * $stats: mapa uid => ['ventas'=>int,'total'=>float,'ultima'=>?string] para
+ * enriquecer sin exponer montos (solo ventas + última venta).
+ * $pos_map: mapa uid => pos (ranking con empates). Si se omite, secuencial.
  */
-function billetera_ranking_items($ids, $user_id, $offset = 0) {
+function billetera_ranking_items($ids, $user_id, $offset = 0, $stats = [], $pos_map = []) {
     if (empty($ids)) {
         return [];
     }
@@ -1990,10 +2260,13 @@ function billetera_ranking_items($ids, $user_id, $offset = 0) {
     $out = [];
     foreach (array_values($ids) as $i => $id) {
         $id = intval($id);
+        $s = $stats[$id] ?? ['ventas' => 0, 'total' => 0.0, 'ultima' => null];
         $out[] = [
-            'pos'    => $offset + $i + 1,
+            'pos'    => isset($pos_map[$id]) ? intval($pos_map[$id]) : ($offset + $i + 1),
             'nombre' => $nombres[$id] ?? ('Usuario #' . $id),
             'es_yo'  => ($id === $user_id),
+            'ventas' => intval($s['ventas'] ?? 0),
+            'ultima' => $s['ultima'] ?? null,
         ];
     }
     return $out;
@@ -2001,41 +2274,101 @@ function billetera_ranking_items($ids, $user_id, $offset = 0) {
 
 /**
  * Leaderboard de un ámbito: top N + ventana alrededor del usuario.
- * Devuelve SOLO posición y nombre (sin montos).
+ * Ordena por N° de ventas del mes (empates comparten posición).
+ * Devuelve SOLO posición, nombre, ventas y última venta (sin montos).
  */
-function billetera_ranking_lista($user_id, $ambito, $top = 10, $ventana = 2) {
-    $balances = billetera_ranking_balances_mes();
+function billetera_ranking_lista($user_id, $ambito, $top = 10, $ventana = 2, $desde = null, $hasta = null) {
+    $stats = billetera_ranking_stats_mes($desde, $hasta);
     $ids      = billetera_ranking_scope_ids($user_id, $ambito);
     $user_id  = intval($user_id);
 
-    $puntajes = [];
-    foreach ($ids as $id) {
-        $puntajes[$id] = $balances[$id] ?? 0.0;
+    // Orden: ventas DESC, total DESC (desempate interno), ID ASC.
+    $orden = $ids;
+    usort($orden, function ($a, $b) use ($stats) {
+        $va = $stats[$a]['ventas'] ?? 0;
+        $vb = $stats[$b]['ventas'] ?? 0;
+        if ($va !== $vb) {
+            return $vb <=> $va;
+        }
+        $ta = $stats[$a]['total'] ?? 0.0;
+        $tb = $stats[$b]['total'] ?? 0.0;
+        if ($ta !== $tb) {
+            return $tb <=> $ta;
+        }
+        return $a <=> $b;
+    });
+
+    // Posición con empates (1 + N estrictamente delante por ventas).
+    $pos_map = [];
+    $pos_actual = 0;
+    $ventas_prev = null;
+    $delante = 0;
+    foreach ($orden as $id) {
+        $vv = $stats[$id]['ventas'] ?? 0;
+        if ($ventas_prev === null || $vv !== $ventas_prev) {
+            $pos_actual = $delante + 1;
+            $ventas_prev = $vv;
+        }
+        $pos_map[$id] = $pos_actual;
+        $delante++;
     }
-    arsort($puntajes, SORT_NUMERIC);
 
-    $posiciones = array_keys($puntajes);
-    $total      = count($posiciones);
-    $mi_pos     = array_search($user_id, $posiciones, true);
-    $mi_rank    = ($mi_pos === false) ? 0 : $mi_pos + 1;
+    $total      = count($orden);
+    $mi_rank    = $pos_map[$user_id] ?? 0;
+    $mi_ventas  = $stats[$user_id]['ventas'] ?? 0;
+    $mi_ultima  = $stats[$user_id]['ultima'] ?? null;
 
-    $slice_top = array_slice($posiciones, 0, $top);
-    $en_top    = in_array($user_id, $slice_top, true);
+    $ventas_lider = 0;
+    $ventas_segundo = 0;
+    if (!empty($orden)) {
+        $ventas_lider = $stats[$orden[0]]['ventas'] ?? 0;
+        foreach ($orden as $id) {
+            if (($pos_map[$id] ?? 1) > 1) {
+                $ventas_segundo = $stats[$id]['ventas'] ?? 0;
+                break;
+            }
+        }
+        if ($total === 1) {
+            $ventas_segundo = 0;
+        }
+    }
+
+    // Con / sin ventas.
+    $con_ventas = 0;
+    foreach ($orden as $id) {
+        if (($stats[$id]['ventas'] ?? 0) > 0) {
+            $con_ventas++;
+        }
+    }
+
+    $slice_top = array_slice($orden, 0, $top);
+    // ¿Estoy en el top visible?
+    $en_top = in_array($user_id, $slice_top, true);
 
     $items_ventana = [];
-    if ($mi_pos !== false && !$en_top) {
-        $ini   = max(0, $mi_pos - $ventana);
-        $fin   = min($total - 1, $mi_pos + $ventana);
-        $slice = array_slice($posiciones, $ini, $fin - $ini + 1);
-        $items_ventana = billetera_ranking_items($slice, $user_id, $ini);
+    $mi_idx = array_search($user_id, $orden, true);
+    if ($mi_idx !== false && !$en_top) {
+        $ini   = max(0, $mi_idx - $ventana);
+        $fin   = min($total - 1, $mi_idx + $ventana);
+        $slice = array_slice($orden, $ini, $fin - $ini + 1);
+        $items_ventana = billetera_ranking_items($slice, $user_id, $ini, $stats, $pos_map);
     }
 
     return [
-        'rank'    => $mi_rank,
-        'total'   => $total,
-        'en_top'  => $en_top,
-        'top'     => billetera_ranking_items($slice_top, $user_id),
-        'ventana' => $items_ventana,
+        'rank'           => $mi_rank,
+        'total'          => $total,
+        'mi_ventas'      => intval($mi_ventas),
+        'mi_ultima'      => $mi_ultima,
+        'ventas_lider'   => intval($ventas_lider),
+        'ventas_segundo' => intval($ventas_segundo),
+        'ventaja'        => ($mi_rank === 1) ? max(0, intval($mi_ventas) - intval($ventas_segundo)) : 0,
+        'faltan'         => ($mi_rank > 1) ? max(0, intval($ventas_lider) - intval($mi_ventas)) : 0,
+        'con_ventas'     => intval($con_ventas),
+        'sin_ventas'     => intval($total - $con_ventas),
+        'en_top'         => $en_top,
+        'top'            => billetera_ranking_items($slice_top, $user_id, 0, $stats, $pos_map),
+        'ventana'        => $items_ventana,
+        'todos'          => billetera_ranking_items($orden, $user_id, 0, $stats, $pos_map),
     ];
 }
 

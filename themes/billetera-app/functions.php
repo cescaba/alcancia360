@@ -10,19 +10,21 @@ add_theme_support('custom-logo');
 
 /**
  * Interruptor de vistas del frontend.
- * "Mi desempeño" está oculta por el momento: poner BILLETERA_SHOW_DESEMPENO
- * en true (o definirlo antes) para volver a mostrarla.
+ * "Mi desempeño" visible para asesores. Interruptor maestro: poner
+ * BILLETERA_SHOW_DESEMPENO en false (o definirlo antes) para ocultarla
+ * a todos, incluidos asesores.
  */
 if (!defined('BILLETERA_SHOW_DESEMPENO')) {
-    define('BILLETERA_SHOW_DESEMPENO', false);
+    define('BILLETERA_SHOW_DESEMPENO', true);
 }
 
 /**
- * "Ranking" está oculta por el momento: poner BILLETERA_SHOW_RANKING
- * en true (o definirlo antes) para volver a mostrarla.
+ * "Ranking" visible para asesores. Interruptor maestro: poner
+ * BILLETERA_SHOW_RANKING en false (o definirlo antes) para ocultarla
+ * a todos, incluidos asesores.
  */
 if (!defined('BILLETERA_SHOW_RANKING')) {
-    define('BILLETERA_SHOW_RANKING', false);
+    define('BILLETERA_SHOW_RANKING', true);
 }
 
 // Registrar estilos y scripts
