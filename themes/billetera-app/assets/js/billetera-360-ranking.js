@@ -1,4 +1,4 @@
-// Mi alcancia 360 - Ranking v3 (solo nombres, orden por N° ventas)
+// Mi alcancia 360 - Ranking v3 (solo nombres, orden por monto, gap en % ciego)
 (function () {
     'use strict';
 
@@ -278,51 +278,66 @@
     function renderKpis() {
         var t = data.tienda || {};
         var g = data.global || {};
+        var s = scopeActual();
 
         setText('kpi-tienda', (t.rank ? '#' + t.rank + ' / ' + t.total : '—'));
         setText('kpi-global', (g.rank ? '#' + g.rank + ' / ' + g.total : '—'));
 
-        var ultimaTxt = haceTexto(t.mi_ultima);
+        var ultimaTxt = haceTexto(t.mi_ultima || g.mi_ultima);
         // Spec: "hace 2 días" en mayúsculas de número? Solo texto.
         setText('kpi-ultima', ultimaTxt === '—' ? '—' : ultimaTxt);
 
+        // El gap sigue al ámbito activo (pestaña Mi tienda / Global).
+        var esGlobal = (ambito === 'global');
+        var sufijo = esGlobal ? ' · Global' : ' · Tienda';
         var vLabel = document.getElementById('kpi-ventaja-label');
-        if ((t.rank || 0) === 1) {
-            var v = Number(t.ventaja) || 0;
-            setText('kpi-ventaja', '+ ' + v + (v === 1 ? ' venta' : ' ventas'));
-            if (vLabel) vLabel.textContent = 'Ventaja sobre el #2';
+        if ((s.rank || 0) === 1) {
+            if (s.ventaja_pct === null || s.ventaja_pct === undefined) {
+                setText('kpi-ventaja', 'Líder');
+                if (vLabel) vLabel.textContent = esGlobal ? 'Eres #1 global' : 'Eres #1 de tu tienda';
+            } else {
+                var vp = Number(s.ventaja_pct) || 0;
+                setText('kpi-ventaja', '+ ' + vp + ' %');
+                if (vLabel) vLabel.textContent = 'Ventaja sobre el #2' + sufijo;
+            }
         } else {
-            var f = Number(t.faltan) || 0;
-            setText('kpi-ventaja', (t.rank ? f + (f === 1 ? ' venta' : ' ventas') : '—'));
-            if (vLabel) vLabel.textContent = t.rank ? 'Te faltan para el #1' : 'Ventaja sobre el #2';
+            var p = Number(s.pct_lider) || 0;
+            setText('kpi-ventaja', (s.rank ? p + ' %' : '—'));
+            if (vLabel) vLabel.textContent = s.rank ? 'De lo del #1' + sufijo : 'Ventaja sobre el #2';
         }
 
-        setText('kpi-ventas', String(Number(t.mi_ventas) || 0));
+        setText('kpi-ventas', String(Number(t.mi_ventas !== undefined ? t.mi_ventas : s.mi_ventas) || 0));
     }
 
     function renderMe() {
         var t = data.tienda || {};
         var g = data.global || {};
-        var rank = Number(t.rank) || 0;
+        // El panel sigue a la pestaña activa: principal = ámbito visto, secundario = el otro.
+        var esGlobal = (ambito === 'global');
+        var s = esGlobal ? g : t;
+        var otro = esGlobal ? t : g;
+        var rank = Number(s.rank) || 0;
 
+        setText('rk-me-main-label', esGlobal ? 'Tu puesto global' : 'Tu puesto');
         setText('rk-me-pos', rank ? '#' + rank : '—');
-        setText('rk-me-total', 'de ' + (t.total || 0));
-        setText('rk-me-global', (g.rank ? '#' + g.rank + ' / ' + g.total : '—'));
+        setText('rk-me-total', 'de ' + (s.total || 0));
+        setText('rk-me-sub-label', esGlobal ? 'Tienda' : 'Global');
+        setText('rk-me-global', (otro.rank ? '#' + otro.rank + ' / ' + otro.total : '—'));
         setText('rk-me-tienda', (data.tienda_label || '—').toUpperCase());
 
         var crown = document.getElementById('rk-me-crown');
         var cap = document.getElementById('rk-me-crown-cap');
         var mesU = mesUpper(data.mes_label);
         if (crown) {
-            // Insignia solo para top 3; si no, se oculta toda la caja.
+            // Insignia solo para top 3 del ámbito visible; si no, se oculta toda la caja.
             crown.style.display = (rank >= 1 && rank <= 3) ? '' : 'none';
         }
         if (rank >= 1 && rank <= 3) {
             paintCrown(rank);
         }
         if (cap) {
-            if (rank === 1) cap.textContent = 'Líder de tu tienda en ' + mesU;
-            else if (rank >= 2 && rank <= 3) cap.textContent = 'Top ' + rank + ' de tu tienda en ' + mesU;
+            if (rank === 1) cap.textContent = esGlobal ? 'Líder global en ' + mesU : 'Líder de tu tienda en ' + mesU;
+            else if (rank >= 2 && rank <= 3) cap.textContent = esGlobal ? 'Top ' + rank + ' global en ' + mesU : 'Top ' + rank + ' de tu tienda en ' + mesU;
         }
     }
 
@@ -485,7 +500,7 @@
             pos.textContent = String(p);
         } else {
             pos.className = 'rk-pos rk-pos--tie';
-            pos.textContent = '=';
+            pos.textContent = String(p || '—');
         }
         posWrap.appendChild(pos);
         row.appendChild(posWrap);
@@ -560,6 +575,8 @@
             btn.classList.add('is-active');
             ambito = btn.dataset.ambito;
             expandido = false;
+            renderKpis();
+            renderMe();
             renderList();
         });
     }

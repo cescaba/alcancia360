@@ -115,16 +115,16 @@ if (!array_intersect(array('asesor', 'administrator'), $roles_ranking)) {
                         <div class="rk-me__body">
                             <div class="rk-me__row">
                                 <div>
-                                    <div class="rk-me__label">Tu puesto</div>
+                                    <div class="rk-me__label" id="rk-me-main-label">Tu puesto</div>
                                     <div class="rk-me__puesto"><span id="rk-me-pos">—</span> <small id="rk-me-total">de 0</small></div>
                                 </div>
                                 <div class="rk-me__global">
-                                    <div class="rk-me__label">Global</div>
+                                    <div class="rk-me__label" id="rk-me-sub-label">Global</div>
                                     <div class="rk-me__global-val" id="rk-me-global">—</div>
                                 </div>
                             </div>
                             <div class="rk-me__tienda" id="rk-me-tienda">—</div>
-                            <p class="rk-me__note">Se ordena por número de ventas registradas en el mes y se reinicia el día 1. Por privacidad, no se muestran montos ni comisiones de ningún asesor.</p>
+                            <p class="rk-me__note">Se ordena por comisiones del mes y se reinicia el día 1. Por privacidad, no se muestran montos ni comisiones de ningún asesor.</p>
                         </div>
                     </aside>
 

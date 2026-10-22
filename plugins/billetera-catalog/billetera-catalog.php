@@ -2201,9 +2201,8 @@ function billetera_rank_cache_bust() {
 }
 
 /**
- * Stats de ranking por mes: ventas (conteo), total (solo desempate interno,
- * nunca se expone) y última venta. Ordena por N° de ventas.
- * Cacheado por versión + mes.
+ * Stats de ranking por mes: ventas (conteo, columna pública), total (monto para
+ * ordenar, nunca se expone) y última venta. Cacheado por versión + mes.
  */
 function billetera_ranking_stats_mes($desde = null, $hasta = null) {
     global $wpdb;
@@ -2324,40 +2323,43 @@ function billetera_ranking_items($ids, $user_id, $offset = 0, $stats = [], $pos_
 
 /**
  * Leaderboard de un ámbito: top N + ventana alrededor del usuario.
- * Ordena por N° de ventas del mes (empates comparten posición).
+ * Ordena por MONTO de comisiones del mes (total DESC, empates comparten posición).
+ * Desempate visible: N° de ventas DESC, luego ID ASC.
  * Devuelve SOLO posición, nombre, ventas y última venta (sin montos).
+ * La distancia al #1 se expone como porcentaje ciego (pct_lider / ventaja_pct),
+ * nunca como soles, para no filtrar montos del líder.
  */
 function billetera_ranking_lista($user_id, $ambito, $top = 10, $ventana = 2, $desde = null, $hasta = null) {
     $stats = billetera_ranking_stats_mes($desde, $hasta);
     $ids      = billetera_ranking_scope_ids($user_id, $ambito);
     $user_id  = intval($user_id);
 
-    // Orden: ventas DESC, total DESC (desempate interno), ID ASC.
+    // Orden: MONTO total DESC, ventas DESC (desempate visible), ID ASC.
     $orden = $ids;
     usort($orden, function ($a, $b) use ($stats) {
-        $va = $stats[$a]['ventas'] ?? 0;
-        $vb = $stats[$b]['ventas'] ?? 0;
-        if ($va !== $vb) {
-            return $vb <=> $va;
-        }
-        $ta = $stats[$a]['total'] ?? 0.0;
-        $tb = $stats[$b]['total'] ?? 0.0;
+        $ta = round(floatval($stats[$a]['total'] ?? 0.0), 2);
+        $tb = round(floatval($stats[$b]['total'] ?? 0.0), 2);
         if ($ta !== $tb) {
             return $tb <=> $ta;
+        }
+        $va = intval($stats[$a]['ventas'] ?? 0);
+        $vb = intval($stats[$b]['ventas'] ?? 0);
+        if ($va !== $vb) {
+            return $vb <=> $va;
         }
         return $a <=> $b;
     });
 
-    // Posición con empates (1 + N estrictamente delante por ventas).
+    // Posición con empates (1 + N estrictamente delante por MONTO redondeado a 2 decimales).
     $pos_map = [];
     $pos_actual = 0;
-    $ventas_prev = null;
+    $total_prev = null;
     $delante = 0;
     foreach ($orden as $id) {
-        $vv = $stats[$id]['ventas'] ?? 0;
-        if ($ventas_prev === null || $vv !== $ventas_prev) {
+        $tt = round(floatval($stats[$id]['total'] ?? 0.0), 2);
+        if ($total_prev === null || $tt !== $total_prev) {
             $pos_actual = $delante + 1;
-            $ventas_prev = $vv;
+            $total_prev = $tt;
         }
         $pos_map[$id] = $pos_actual;
         $delante++;
@@ -2367,7 +2369,37 @@ function billetera_ranking_lista($user_id, $ambito, $top = 10, $ventana = 2, $de
     $mi_rank    = $pos_map[$user_id] ?? 0;
     $mi_ventas  = $stats[$user_id]['ventas'] ?? 0;
     $mi_ultima  = $stats[$user_id]['ultima'] ?? null;
+    $mi_total   = round(floatval($stats[$user_id]['total'] ?? 0.0), 2);
 
+    // Montos internos (NO se exponen): líder y segundo por posición.
+    $lider_total = 0.0;
+    $segundo_total = 0.0;
+    if (!empty($orden)) {
+        $lider_total = round(floatval($stats[$orden[0]]['total'] ?? 0.0), 2);
+        foreach ($orden as $id) {
+            if (($pos_map[$id] ?? 1) > 1) {
+                $segundo_total = round(floatval($stats[$id]['total'] ?? 0.0), 2);
+                break;
+            }
+        }
+        if ($total === 1) {
+            $segundo_total = 0.0;
+        }
+    }
+
+    // Porcentaje ciego (sin soles): cuánto del líder tengo / cuánto supero al #2.
+    $pct_lider = 0;
+    if ($lider_total > 0 && $mi_total > 0) {
+        $pct_lider = (int) max(0, min(100, round($mi_total / $lider_total * 100)));
+    } elseif ($mi_rank === 1) {
+        $pct_lider = 100;
+    }
+    $ventaja_pct = null;
+    if ($mi_rank === 1 && $mi_total > 0 && $segundo_total > 0) {
+        $ventaja_pct = (int) max(0, round(($mi_total - $segundo_total) / $segundo_total * 100));
+    }
+
+    // Referencias de conteo (públicas, la columna Ventas sigue visible).
     $ventas_lider = 0;
     $ventas_segundo = 0;
     if (!empty($orden)) {
@@ -2409,10 +2441,13 @@ function billetera_ranking_lista($user_id, $ambito, $top = 10, $ventana = 2, $de
         'total'          => $total,
         'mi_ventas'      => intval($mi_ventas),
         'mi_ultima'      => $mi_ultima,
+        // Conteo de ventas (columna pública). El gap oficial es pct_* (ciego, sin soles).
         'ventas_lider'   => intval($ventas_lider),
         'ventas_segundo' => intval($ventas_segundo),
         'ventaja'        => ($mi_rank === 1) ? max(0, intval($mi_ventas) - intval($ventas_segundo)) : 0,
         'faltan'         => ($mi_rank > 1) ? max(0, intval($ventas_lider) - intval($mi_ventas)) : 0,
+        'pct_lider'      => intval($pct_lider),
+        'ventaja_pct'    => $ventaja_pct === null ? null : intval($ventaja_pct),
         'con_ventas'     => intval($con_ventas),
         'sin_ventas'     => intval($total - $con_ventas),
         'en_top'         => $en_top,
