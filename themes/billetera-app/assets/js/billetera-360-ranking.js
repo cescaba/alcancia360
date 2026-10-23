@@ -422,7 +422,9 @@
         });
 
         var sinTotal = Number(scope.sin_ventas) || 0;
-        if (sin.length || (!expandido && sinTotal > 0 && visibles.length >= LIMITE)) {
+        // Separador "Sin ventas / empatados" solo en vista expandida (Ver todos).
+        // En colapsado se muestra el top 10 plano para no alargar la lista.
+        if (expandido && sin.length) {
             // Separador "sin ventas"
             var mesU = mesUpper(data.mes_label);
             var posEmpate = null;
@@ -443,22 +445,31 @@
             els.list.appendChild(makeRow(r, (con.length + i) % 2 === 1));
         });
 
-        // Si hay ventana (usuario fuera del top y no expandido), mostrarla al final.
-        if (!expandido && !scope.en_top && (scope.ventana || []).length) {
+        // Si hay ventana (usuario fuera del top y no expandido), mostrar SOLO su
+        // fila al final: top 10 + 1 fila extra con su puesto (#11, #21, ...).
+        // Antes se mostraba la ventana completa (±2), lo que duplicaba filas
+        // del top (ej. puesto 11 repetía 9 y 10) y contaba mal el footer.
+        var extraFila = 0;
+        if (!expandido && !scope.en_top) {
             var yaIncluido = visibles.some(function (r) { return r.es_yo; });
             if (!yaIncluido) {
-                var gap = document.createElement('div');
-                gap.className = 'rk-sep';
-                var gl = document.createElement('span');
-                gl.textContent = 'Tu posición';
-                var gr = document.createElement('span');
-                gr.textContent = '';
-                gap.appendChild(gl);
-                gap.appendChild(gr);
-                els.list.appendChild(gap);
-                scope.ventana.forEach(function (r, i) {
-                    els.list.appendChild(makeRow(r, i % 2 === 1));
-                });
+                var miFila = null;
+                for (var k = 0; k < todos.length; k++) {
+                    if (todos[k].es_yo) { miFila = todos[k]; break; }
+                }
+                if (miFila) {
+                    var gap = document.createElement('div');
+                    gap.className = 'rk-sep';
+                    var gl = document.createElement('span');
+                    gl.textContent = 'Tu posición';
+                    var gr = document.createElement('span');
+                    gr.textContent = '';
+                    gap.appendChild(gl);
+                    gap.appendChild(gr);
+                    els.list.appendChild(gap);
+                    els.list.appendChild(makeRow(miFila, false));
+                    extraFila = 1;
+                }
             }
         }
 
@@ -466,10 +477,11 @@
         if (els.foot) {
             if (total > LIMITE) {
                 els.foot.hidden = false;
+                var mostrados = visibles.length + extraFila;
                 if (els.mostrando) {
                     els.mostrando.textContent = expandido
                         ? 'Mostrando ' + total + ' de ' + total + ' asesores'
-                        : 'Mostrando ' + visibles.length + ' de ' + total + ' asesores';
+                        : 'Mostrando ' + mostrados + ' de ' + total + ' asesores';
                 }
                 if (els.verTodos) {
                     els.verTodos.textContent = expandido ? 'Ver menos' : 'Ver los ' + total;
