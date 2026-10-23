@@ -166,6 +166,7 @@
     function render() {
         if (!data) return;
         setText('rk-mes', data.mes_label || '');
+        setText('rk-store-nombre', (data.tienda_label || '—').toUpperCase());
         renderMesSelector();
         renderKpis();
         renderMe();
@@ -484,7 +485,7 @@
                         : 'Mostrando ' + mostrados + ' de ' + total + ' asesores';
                 }
                 if (els.verTodos) {
-                    els.verTodos.textContent = expandido ? 'Ver menos' : 'Ver los ' + total;
+                    els.verTodos.textContent = expandido ? 'Ver menos' : 'Ver los ' + total + ' asesores';
                     els.verTodos.hidden = false;
                 }
             } else {
@@ -507,9 +508,14 @@
         posWrap.className = 'rk-row__pos';
         var pos = document.createElement('span');
         var p = Number(r.pos) || 0;
-        if (p >= 1 && p <= 3 && Number(r.ventas) > 0) {
+        var nv0 = Number(r.ventas) || 0;
+        if (p >= 1 && p <= 3 && nv0 > 0) {
             pos.className = 'rk-pos rk-pos--' + p;
             pos.textContent = String(p);
+        } else if (nv0 <= 0) {
+            // Sin ventas: van empatados (el separador indica el #), se muestra "=".
+            pos.className = 'rk-pos rk-pos--tie';
+            pos.textContent = '=';
         } else {
             pos.className = 'rk-pos rk-pos--tie';
             pos.textContent = String(p || '—');
@@ -533,6 +539,7 @@
         var nv = Number(r.ventas) || 0;
         v.className = 'rk-row__ventas' + (nv <= 0 ? ' rk-row__ventas--zero' : '');
         v.textContent = String(nv);
+        v.setAttribute('data-u', nv === 1 ? 'venta' : 'ventas');
         row.appendChild(v);
 
         var u = document.createElement('span');

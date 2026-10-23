@@ -255,6 +255,10 @@
     gap: 22px;
 }
 
+/* Barra de tienda + nota al pie: solo visibles en mobile (diseño Figma) */
+.rk-storebar,
+.rk-note-mobile { display: none; }
+
 /* Mi puesto */
 .rk-me {
     flex: none;
@@ -580,9 +584,121 @@
 }
 
 @media (max-width: 600px) {
-    .rk-kpis { flex-direction: column; }
-    .rk-kpi { flex: 1 1 auto; }
-    .rk-kpi + .rk-kpi { border-top: 1px solid #DCE3EB; }
+    /* ===== Mobile Figma v3 (354px): respeta cambios recientes =====
+       - Top 10 plano + "Tu posición" (sin separador sin-ventas en colapsado)
+       - Separador "Sin ventas / empatados" solo en expandido
+       - Orden por comisiones + % ciego (se mantiene, el Figma es anterior) */
+    .rk-wrap { max-width: 390px; padding: 16px 18px 96px; }
+
+    /* Tabs + mes en una fila */
+    .rk-head__actions { width: 100%; flex-wrap: nowrap; gap: 8px; }
+    .rk-tabs { flex: 1 1 auto; height: 34px; }
+    .rk-tab {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 0 12px;
+        height: 32px;
+        font-size: 11.5px;
+        line-height: 14px;
+        letter-spacing: .7px;
+    }
+    .rk-month { flex: none; }
+    .rk-month__btn {
+        height: 34px;
+        width: 85px;
+        justify-content: center;
+        padding: 0 12px;
+        gap: 8px;
+        font-size: 11.5px;
+        line-height: 14px;
+    }
+    .rk-month__menu { right: 0; left: auto; }
+
+    /* KPIs 2x2 (se oculta "Tu última venta", ya visible en filas) */
+    .rk-kpis { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 12px; }
+    .rk-kpi { padding: 11px 12px; gap: 2px; border-top: 0; }
+    .rk-kpi + .rk-kpi { border-top: 0; }
+    .rk-kpi__val { font-size: 22px; line-height: 26px; }
+    .rk-kpi__label { font-size: 9px; line-height: 11px; letter-spacing: .9px; }
+    .rk-kpi:has(#kpi-ultima) { display: none; }
+    .rk-kpi:has(#kpi-ventas) { order: 3; }
+    .rk-kpi:has(#kpi-ventaja) { order: 4; }
+    #kpi-ventas { color: #0A6CB4; }
+
+    /* Sin panel "Mi puesto" en mobile: el #1/TÚ ya va en la tabla */
+    .rk-me { display: none; }
+    .rk-main { gap: 0; }
+
+    /* Barra tienda + etiqueta Ventas del mes */
+    .rk-storebar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 0 0;
+        margin-bottom: 8px;
+    }
+    .rk-storebar__tienda {
+        font-family: Barlow, Inter, sans-serif;
+        font-weight: 400;
+        font-size: 10px;
+        line-height: 12px;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+        color: #5B6B80;
+    }
+    .rk-storebar__label {
+        font-family: Barlow, Inter, sans-serif;
+        font-weight: 600;
+        font-size: 11px;
+        line-height: 13px;
+        color: #8494A6;
+    }
+
+    /* Tabla: sin cabeceras en mobile (el mes se cambia arriba) */
+    .rk-table__head,
+    .rk-table__colhead { display: none; }
+
+    .rk-row { padding: 10px 15px; gap: 11px; min-height: 47px; }
+    .rk-row__pos { width: 26px; }
+    .rk-pos { width: 26px; height: 26px; font-size: 13px; line-height: 16px; }
+    .rk-pos--tie { width: 26px; height: 26px; padding: 0; }
+    .rk-row__name { font-size: 12.5px; line-height: 15px; }
+    .rk-row__ventas { width: auto; margin-left: auto; font-size: 17px; line-height: 20px; color: #1B6E46; }
+    .rk-row__ventas--zero {
+        font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+        font-weight: 700;
+        font-size: 15px;
+        line-height: 18px;
+        color: #8494A6;
+    }
+    .rk-row__ventas::after { content: ' ' attr(data-u); font-size: .85em; font-weight: 500; }
+
+    /* Fila propia: última venta como sub-línea bajo el nombre */
+    .rk-row.is-me { flex-wrap: wrap; row-gap: 1px; padding-top: 12px; padding-bottom: 12px; }
+    .rk-row.is-me .rk-row__ultima {
+        display: block;
+        flex: 1 1 100%;
+        width: auto;
+        margin-left: 37px;
+        text-align: left;
+        font-size: 10.5px;
+        line-height: 13px;
+        color: #8494A6;
+    }
+
+    .rk-sep { padding: 8px 15px; }
+
+    .rk-table__foot { justify-content: center; padding: 11px 15px; }
+    #rk-mostrando { display: none; }
+
+    .rk-note-mobile {
+        display: block;
+        margin: 8px 0 0;
+        font-family: Inter, sans-serif;
+        font-size: 10px;
+        line-height: 12px;
+        color: #8494A6;
+    }
 }
 
 /* ===== Skeleton de carga (cambio de mes) ===== */

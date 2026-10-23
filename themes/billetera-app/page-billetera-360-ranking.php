@@ -105,6 +105,11 @@ if (!array_intersect(array('asesor', 'administrator'), $roles_ranking)) {
                     </div>
                 </div>
 
+                <div class="rk-storebar">
+                    <span class="rk-storebar__tienda" id="rk-store-nombre">—</span>
+                    <span class="rk-storebar__label">Ventas del mes</span>
+                </div>
+
                 <div class="rk-main">
                     <!-- Mi puesto -->
                     <aside class="rk-me" id="rk-me">
@@ -151,6 +156,8 @@ if (!array_intersect(array('asesor', 'administrator'), $roles_ranking)) {
                         </div>
                     </section>
                 </div>
+
+                <p class="rk-note-mobile">Se ordena por comisiones del mes y se reinicia el día 1. Por privacidad, no se muestran montos ni comisiones de ningún asesor.</p>
 
             </div>
 
