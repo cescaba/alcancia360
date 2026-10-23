@@ -185,7 +185,7 @@
     }
 
     function renderMesSelector() {
-        if (els.mesLabel) els.mesLabel.textContent = data.mes_label || '—';
+        if (els.mesLabel) els.mesLabel.textContent = etiquetaMes(data.mes_label || '—');
         buildMesMenu();
         markMesSelected();
     }
@@ -220,7 +220,7 @@
             check.className = 'rk-month__check';
             check.textContent = '✓';
             var txt = document.createElement('span');
-            txt.textContent = m.label;
+            txt.textContent = etiquetaMes(m.label);
             b.appendChild(check);
             b.appendChild(txt);
             if (idx === 0) {
@@ -246,6 +246,27 @@
             var on = b.dataset.mes === mesViendo;
             b.classList.toggle('is-selected', on);
             b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+    }
+
+    // En mobile (≤600px) los meses van abreviados: "Octubre 2026" -> "Oct 2026".
+    var mqMobile = (typeof window.matchMedia === 'function') ? window.matchMedia('(max-width: 600px)') : null;
+    function mesCorto(label) {
+        var partes = String(label || '').split(' ');
+        if (!partes.length) return label;
+        var idx = MESES_NOMBRE.indexOf(partes[0]);
+        if (idx < 0) return label;
+        var corto = MESES_SHORT[idx];
+        corto = corto.charAt(0).toUpperCase() + corto.slice(1);
+        return [corto].concat(partes.slice(1)).join(' ');
+    }
+    function etiquetaMes(label) {
+        return (mqMobile && mqMobile.matches) ? mesCorto(label) : label;
+    }
+    if (mqMobile && typeof mqMobile.addEventListener === 'function') {
+        mqMobile.addEventListener('change', function () {
+            if (els.mesMenu) { els.mesMenu.innerHTML = ''; delete els.mesMenu.dataset.built; }
+            if (data) renderMesSelector();
         });
     }
 
@@ -508,14 +529,9 @@
         posWrap.className = 'rk-row__pos';
         var pos = document.createElement('span');
         var p = Number(r.pos) || 0;
-        var nv0 = Number(r.ventas) || 0;
-        if (p >= 1 && p <= 3 && nv0 > 0) {
+        if (p >= 1 && p <= 3 && Number(r.ventas) > 0) {
             pos.className = 'rk-pos rk-pos--' + p;
             pos.textContent = String(p);
-        } else if (nv0 <= 0) {
-            // Sin ventas: van empatados (el separador indica el #), se muestra "=".
-            pos.className = 'rk-pos rk-pos--tie';
-            pos.textContent = '=';
         } else {
             pos.className = 'rk-pos rk-pos--tie';
             pos.textContent = String(p || '—');

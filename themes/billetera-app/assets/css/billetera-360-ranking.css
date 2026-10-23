@@ -588,8 +588,6 @@
        - Top 10 plano + "Tu posición" (sin separador sin-ventas en colapsado)
        - Separador "Sin ventas / empatados" solo en expandido
        - Orden por comisiones + % ciego (se mantiene, el Figma es anterior) */
-    .rk-wrap { max-width: 390px; padding: 16px 18px 96px; }
-
     /* Tabs + mes en una fila */
     .rk-head__actions { width: 100%; flex-wrap: nowrap; gap: 8px; }
     .rk-tabs { flex: 1 1 auto; height: 34px; }
