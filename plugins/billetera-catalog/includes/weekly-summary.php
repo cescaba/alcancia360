@@ -699,7 +699,9 @@ function billetera_summary_sample_users($limit = 200) {
 
 add_action('admin_post_billetera_summary_preview', 'billetera_summary_preview_output');
 function billetera_summary_preview_output() {
-    if (!current_user_can('manage_options')) {
+    // OCULTAMIENTO TEMPORAL para administrador_hyundai (bloquea acceso directo por URL).
+    $cap_resumen = defined('BILLETERA_CATALOG_CAP') ? BILLETERA_CATALOG_CAP : 'manage_options';
+    if ((function_exists('billetera_catalog_is_hyundai_admin') && billetera_catalog_is_hyundai_admin()) || !current_user_can($cap_resumen)) {
         wp_die('Sin permiso');
     }
     check_admin_referer('billetera_summary_preview');
@@ -723,7 +725,9 @@ function billetera_summary_preview_output() {
 // ============================================================================
 
 function billetera_render_resumen_page() {
-    if (!current_user_can('manage_options')) {
+    // OCULTAMIENTO TEMPORAL para administrador_hyundai (bloquea acceso directo por URL).
+    $cap_resumen = defined('BILLETERA_CATALOG_CAP') ? BILLETERA_CATALOG_CAP : 'manage_options';
+    if ((function_exists('billetera_catalog_is_hyundai_admin') && billetera_catalog_is_hyundai_admin()) || !current_user_can($cap_resumen)) {
         wp_die('Sin permiso');
     }
 

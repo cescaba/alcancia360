@@ -103,7 +103,6 @@ $alcancia_img = get_template_directory_uri() . '/assets/img/alcancia.svg';
                         </div>
                         <div class="st-banner__side">
                             <div class="st-banner__dots" id="st-banner-dots"></div>
-                            <button type="button" class="st-banner__cta" id="st-banner-cta">VER BASES</button>
                         </div>
                         <span class="st-banner__ad">Publicidad</span>
                     </div>
@@ -180,7 +179,6 @@ $alcancia_img = get_template_directory_uri() . '/assets/img/alcancia.svg';
                             <div id="st-need-list"></div>
                             <div class="st-need__empty" id="st-need-empty" hidden></div>
                             <div class="st-need__foot">
-                                <span>Comisión por venta según tus registros, sin bonos. Referencial.</span>
                                 <a class="st-need__cta" href="<?php echo esc_url($registro_url); ?>">Registrar venta</a>
                             </div>
                         </section>

@@ -53,13 +53,38 @@ function billetera_catalog_admin_menu() {
     add_submenu_page('billetera_catalogo', 'Metas potenciales', 'Metas potenciales', $cap, 'billetera_metas_admin', 'billetera_render_metas_page');
     add_submenu_page('billetera_catalogo', 'Líneas y Marcas', 'Líneas y Marcas', $cap, 'billetera_lineas_admin', 'billetera_render_lineas_page');
     add_submenu_page('billetera_catalogo', 'Configuración', 'Configuración', $cap, 'billetera_config_admin', 'billetera_render_config_page');
-    add_submenu_page('billetera_catalogo', 'Resumen semanal', 'Resumen semanal', 'manage_options', 'billetera_resumen_admin', 'billetera_render_resumen_page');
-    add_submenu_page('billetera_catalogo', 'Reglas de bonificación', 'Reglas de bonificación', 'manage_options', 'billetera_bonus_admin', 'billetera_render_bonus_page');
+    // OCULTAMIENTO TEMPORAL para administrador_hyundai: estas 2 páginas usan
+    // $cap (manage_billetera_catalog, solo administrator) para que no las vea
+    // el rol administrador_hyundai aunque tenga manage_options.
+    add_submenu_page('billetera_catalogo', 'Resumen semanal', 'Resumen semanal', $cap, 'billetera_resumen_admin', 'billetera_render_resumen_page');
+    add_submenu_page('billetera_catalogo', 'Reglas de bonificación', 'Reglas de bonificación', $cap, 'billetera_bonus_admin', 'billetera_render_bonus_page');
 
     // Reporte de comisiones: solo el rol administrador_hyundai
     if (defined('BILLETERA_REPORTS_CAP')) {
         add_submenu_page('billetera_catalogo', 'Reporte de comisiones', 'Reporte de comisiones', BILLETERA_REPORTS_CAP, 'billetera_reporte_comisiones', 'billetera_render_reports_page');
     }
+}
+
+// ---------------------------------------------------------------------------
+// OCULTAMIENTO TEMPORAL: quita Resumen semanal y Reglas de bonificación al
+// rol administrador_hyundai (aunque tuviera manage_options en BD). Para
+// revertir, borrar este bloque.
+// ---------------------------------------------------------------------------
+add_action('admin_menu', 'billetera_catalog_ocultar_hyundai', 999);
+function billetera_catalog_is_hyundai_admin() {
+    $user = wp_get_current_user();
+    if (!$user || empty($user->roles)) {
+        return false;
+    }
+    return in_array('administrador_hyundai', (array) $user->roles, true)
+        && !in_array('administrator', (array) $user->roles, true);
+}
+function billetera_catalog_ocultar_hyundai() {
+    if (!billetera_catalog_is_hyundai_admin()) {
+        return;
+    }
+    remove_submenu_page('billetera_catalogo', 'billetera_resumen_admin');
+    remove_submenu_page('billetera_catalogo', 'billetera_bonus_admin');
 }
 
 // ---------------------------------------------------------------------------
@@ -1150,7 +1175,8 @@ function billetera_render_config_page() {
 // REGLAS DE BONIFICACIÓN
 // ===========================================================================
 function billetera_render_bonus_page() {
-    if (!current_user_can('manage_options')) {
+    // OCULTAMIENTO TEMPORAL para administrador_hyundai (bloquea acceso directo por URL).
+    if ((function_exists('billetera_catalog_is_hyundai_admin') && billetera_catalog_is_hyundai_admin()) || !current_user_can(BILLETERA_CATALOG_CAP)) {
         wp_die('Sin permiso');
     }
 

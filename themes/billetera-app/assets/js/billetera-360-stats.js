@@ -193,7 +193,6 @@
         setText('st-banner-title', c.titulo || '');
         setText('st-banner-sub', c.bajada || '');
         setText('st-banner-dates', formatoVigencia(c.desde, c.hasta));
-        setText('st-banner-cta', c.cta || 'VER BASES');
         var dots = document.getElementById('st-banner-dots');
         if (dots) {
             var items = dots.querySelectorAll('.st-banner__dot');
@@ -423,9 +422,6 @@
             return;
         }
 
-        var max = 0;
-        rows.forEach(function (r) { max = Math.max(max, Number(r.total) || 0); });
-
         rows.forEach(function (r, i) {
             var row = document.createElement('div');
             row.className = 'st-bd__row' + (i % 2 === 1 ? ' st-bd__row--alt' : '');
@@ -446,15 +442,7 @@
             head.appendChild(left);
             head.appendChild(amount);
 
-            var track = document.createElement('div');
-            track.className = 'st-bd__track';
-            var fillBar = document.createElement('div');
-            fillBar.className = 'st-bd__fill';
-            fillBar.style.width = (max > 0 ? Math.max((Number(r.total) || 0) / max * 100, 3) : 3) + '%';
-            track.appendChild(fillBar);
-
             row.appendChild(head);
-            row.appendChild(track);
             els.breakdown.appendChild(row);
         });
     }

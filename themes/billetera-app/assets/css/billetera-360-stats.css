@@ -467,6 +467,18 @@
     text-decoration: none;
 }
 
+/* Desktop: la lista muestra máximo 4 filas (54px c/u) con scroll interno
+   para que la caja calce en altura con la de al lado. */
+@media (min-width: 1025px) {
+    #st-need-list {
+        max-height: 216px;
+        overflow-y: auto;
+    }
+    .st-need__foot {
+        margin-top: auto;
+    }
+}
+
 /* Chart + producto */
 .st-chartcard {
     flex: 1 1 auto;
