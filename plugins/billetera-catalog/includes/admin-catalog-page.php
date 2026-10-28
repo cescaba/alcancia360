@@ -99,8 +99,8 @@ function billetera_catalog_admin_assets() {
     }
 
     $base = defined('BILLETERA_CATALOG_URL') ? BILLETERA_CATALOG_URL : plugin_dir_url(dirname(__DIR__) . '/billetera-catalog.php');
-    wp_enqueue_style('billetera-catalog-admin', $base . 'assets/admin.css', [], '1.1');
-    wp_enqueue_script('billetera-catalog-admin', $base . 'assets/admin.js', [], '1.0', true);
+    wp_enqueue_style('billetera-catalog-admin', $base . 'assets/admin.css', [], '1.2');
+    wp_enqueue_script('billetera-catalog-admin', $base . 'assets/admin.js', [], '1.1', true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1316,6 +1316,16 @@ function billetera_render_bonus_page() {
             <input type="hidden" name="rule_id" value="<?php echo esc_attr($edit['id'] ?? ''); ?>">
 
             <div class="bc-field bc-field--full">
+                <div class="nav-tab-wrapper bc-bonus-tabs__nav">
+                    <button type="button" class="nav-tab nav-tab-active" data-bc-tab="bc-tab-base">Regla base</button>
+                    <button type="button" class="nav-tab" data-bc-tab="bc-tab-excepcion">Excepción</button>
+                    <button type="button" class="nav-tab" data-bc-tab="bc-tab-banner">Banner y vigencia</button>
+                </div>
+            </div>
+
+            <div class="bc-bonus-tabs__panel bc-field bc-field--full" id="bc-tab-base">
+            <div class="bc-grid">
+            <div class="bc-field bc-field--full">
                 <label class="bc-label">Categoría *</label>
                 <select name="categoria_id" class="bc-select" required>
                     <option value="">— Selecciona una categoría —</option>
@@ -1352,7 +1362,11 @@ function billetera_render_bonus_page() {
             <div class="bc-field bc-field--check">
                 <label><input type="checkbox" name="activo" value="1" <?php checked($edit['activo'] ?? 1, 1); ?>> Regla activa</label>
             </div>
+            </div><!-- /bc-tab-base -->
+            </div>
 
+            <div class="bc-bonus-tabs__panel bc-field bc-field--full" id="bc-tab-excepcion" hidden>
+            <div class="bc-grid">
             <div class="bc-field bc-field--full">
                 <h3 style="margin:10px 0 0;">Excepción por concesionaria (opcional)</h3>
                 <p class="bc-desc" style="margin:4px 0 0;">Para la concesionaria elegida, en vez de multiplicar, la comisión pasa a un monto fijo en USD por unidad.</p>
@@ -1394,7 +1408,11 @@ function billetera_render_bonus_page() {
             <div class="bc-field bc-field--check">
                 <label><input type="checkbox" name="excepcion_desde_umbral" value="1" <?php checked($edit['excepcion_desde_umbral'] ?? 1, 1); ?>> La excepción aplica desde el umbral (si no, desde la 1.ª venta)</label>
             </div>
+            </div><!-- /bc-tab-excepcion -->
+            </div>
 
+            <div class="bc-bonus-tabs__panel bc-field bc-field--full" id="bc-tab-banner" hidden>
+            <div class="bc-grid">
             <div class="bc-field bc-field--full">
                 <h3 style="margin:10px 0 0;">Vigencia y banner de campaña (opcional)</h3>
                 <p class="bc-desc" style="margin:4px 0 0;">La vigencia apaga el bono y el banner. El bono solo aplica a ventas con fecha dentro del rango y el banner solo se muestra mientras esté vigente.</p>
@@ -1433,6 +1451,8 @@ function billetera_render_bonus_page() {
             <div class="bc-field">
                 <label class="bc-label">Texto del botón</label>
                 <input type="text" name="banner_cta" class="bc-input" maxlength="20" value="<?php echo esc_attr($edit['banner_cta'] ?? 'VER BASES'); ?>">
+            </div>
+            </div><!-- /bc-tab-banner -->
             </div>
 
             <div class="bc-field bc-field--actions">

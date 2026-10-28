@@ -119,6 +119,13 @@
 
 .bc-wrap .wp-list-table th { font-weight: 600; }
 
+/* Tabs solo página Reglas de bonificación */
+.bc-bonus-tabs__nav { margin-bottom: 4px; padding-top: 0; }
+.bc-bonus-tabs__nav .nav-tab { cursor: pointer; }
+.bc-bonus-tabs__nav .nav-tab:focus { box-shadow: none; outline: none; }
+.bc-bonus-tabs__panel[hidden] { display: none !important; }
+.bc-bonus-tabs__panel > .bc-grid { margin-top: 14px; }
+
 @media (max-width: 960px) {
     .bc-grid { grid-template-columns: 1fr; }
     .bc-two-col { grid-template-columns: 1fr; }

@@ -23,9 +23,28 @@
         });
     }
 
+    function initBonusTabs() {
+        var nav = document.querySelector('.bc-bonus-tabs__nav');
+        if (!nav) return;
+        var form = nav.closest('form');
+        if (!form) return;
+        var buttons = Array.prototype.slice.call(nav.querySelectorAll('[data-bc-tab]'));
+        var panels = Array.prototype.slice.call(form.querySelectorAll('.bc-bonus-tabs__panel'));
+        if (!buttons.length || !panels.length) return;
+
+        buttons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var target = btn.getAttribute('data-bc-tab');
+                buttons.forEach(function (b) { b.classList.toggle('nav-tab-active', b === btn); });
+                panels.forEach(function (p) { p.hidden = (p.id !== target); });
+            });
+        });
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initAutoSlug);
+        document.addEventListener('DOMContentLoaded', function () { initAutoSlug(); initBonusTabs(); });
     } else {
         initAutoSlug();
+        initBonusTabs();
     }
 })();
