@@ -18,15 +18,16 @@ if (!defined('BILLETERA_CATALOG_CAP')) {
 // ---------------------------------------------------------------------------
 add_action('admin_init', 'billetera_catalog_ensure_cap');
 function billetera_catalog_ensure_cap() {
-    // El catálogo y comisiones es solo para el administrador (no administrador_hyundai)
+    // El catálogo y comisiones es para administrator y administrador_hyundai
+    // (Resumen semanal y Reglas se ocultan a hyundai más abajo).
     $role = get_role('administrator');
     if ($role && !$role->has_cap(BILLETERA_CATALOG_CAP)) {
         $role->add_cap(BILLETERA_CATALOG_CAP);
     }
 
     $hu = get_role('administrador_hyundai');
-    if ($hu && $hu->has_cap(BILLETERA_CATALOG_CAP)) {
-        $hu->remove_cap(BILLETERA_CATALOG_CAP);
+    if ($hu && !$hu->has_cap(BILLETERA_CATALOG_CAP)) {
+        $hu->add_cap(BILLETERA_CATALOG_CAP);
     }
 }
 
@@ -53,9 +54,10 @@ function billetera_catalog_admin_menu() {
     add_submenu_page('billetera_catalogo', 'Metas potenciales', 'Metas potenciales', $cap, 'billetera_metas_admin', 'billetera_render_metas_page');
     add_submenu_page('billetera_catalogo', 'Líneas y Marcas', 'Líneas y Marcas', $cap, 'billetera_lineas_admin', 'billetera_render_lineas_page');
     add_submenu_page('billetera_catalogo', 'Configuración', 'Configuración', $cap, 'billetera_config_admin', 'billetera_render_config_page');
-    // OCULTAMIENTO TEMPORAL para administrador_hyundai: estas 2 páginas usan
-    // $cap (manage_billetera_catalog, solo administrator) para que no las vea
-    // el rol administrador_hyundai aunque tenga manage_options.
+    // OCULTAMIENTO PERMANENTE para administrador_hyundai: estas 2 páginas usan
+    // $cap (manage_billetera_catalog) pero se quitan del menú y se bloquea el
+    // acceso directo por URL (ver billetera_catalog_ocultar_hyundai y los
+    // wp_die en billetera_render_resumen_page / billetera_render_bonus_page).
     add_submenu_page('billetera_catalogo', 'Resumen semanal', 'Resumen semanal', $cap, 'billetera_resumen_admin', 'billetera_render_resumen_page');
     add_submenu_page('billetera_catalogo', 'Reglas de bonificación', 'Reglas de bonificación', $cap, 'billetera_bonus_admin', 'billetera_render_bonus_page');
 
@@ -66,9 +68,9 @@ function billetera_catalog_admin_menu() {
 }
 
 // ---------------------------------------------------------------------------
-// OCULTAMIENTO TEMPORAL: quita Resumen semanal y Reglas de bonificación al
-// rol administrador_hyundai (aunque tuviera manage_options en BD). Para
-// revertir, borrar este bloque.
+// OCULTAMIENTO para el rol administrador_hyundai: quita Resumen semanal y
+// Reglas de bonificación del menú (aunque tenga el cap del catálogo) y
+// bloquea el acceso directo por URL. Para revertir, borrar este bloque.
 // ---------------------------------------------------------------------------
 add_action('admin_menu', 'billetera_catalog_ocultar_hyundai', 999);
 function billetera_catalog_is_hyundai_admin() {

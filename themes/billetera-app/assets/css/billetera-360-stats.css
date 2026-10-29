@@ -1153,7 +1153,10 @@
     body.page-template-page-billetera-360-estadisticas {
         background: #f5f7fb;
     }
-    .st-wrap { padding: 28px 32px 48px; }
+    body.page-template-page-billetera-360-estadisticas .main-content {
+        padding: 24px 26px 34px !important;
+    }
+    .st-wrap { max-width: none; margin: 0; padding: 0; }
     .st-kpis { grid-template-columns: repeat(4, 1fr); }
     .st-title { font-size: 30px; }
     .st-kpi__value { font-size: 24px; }

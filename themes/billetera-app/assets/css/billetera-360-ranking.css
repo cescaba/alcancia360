@@ -568,6 +568,11 @@
     body.page-template-page-billetera-360-ranking {
         background: #f5f7fb;
     }
+    body.page-template-page-billetera-360-ranking .main-content {
+        padding: 24px 26px 34px !important;
+    }
+    .rk-wrap,
+    .rk-v3 { max-width: none; margin: 0; width: 100%; padding: 0; }
 }
 
 /* Responsive */
