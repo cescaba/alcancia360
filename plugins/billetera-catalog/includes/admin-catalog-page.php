@@ -61,7 +61,7 @@ function billetera_catalog_admin_menu() {
     add_submenu_page('billetera_catalogo', 'Resumen semanal', 'Resumen semanal', $cap, 'billetera_resumen_admin', 'billetera_render_resumen_page');
     add_submenu_page('billetera_catalogo', 'Reglas de bonificación', 'Reglas de bonificación', $cap, 'billetera_bonus_admin', 'billetera_render_bonus_page');
 
-    // Reporte de comisiones: solo el rol administrador_hyundai
+    // Reporte de comisiones: administrator y administrador_hyundai
     if (defined('BILLETERA_REPORTS_CAP')) {
         add_submenu_page('billetera_catalogo', 'Reporte de comisiones', 'Reporte de comisiones', BILLETERA_REPORTS_CAP, 'billetera_reporte_comisiones', 'billetera_render_reports_page');
     }
