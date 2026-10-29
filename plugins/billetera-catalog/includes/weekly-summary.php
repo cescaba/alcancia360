@@ -686,8 +686,8 @@ function billetera_summary_render_semanal($user, $stats, $week_start, $week_end)
     $dias = $p['dias_cierre'];
     $por_dia = $p['por_dia'];
 
-    $F = "font-family:'Barlow',Arial,Helvetica,sans-serif";
-    $FC = "font-family:'Barlow Condensed','Barlow',Arial,Helvetica,sans-serif";
+    $F = "font-family:'Barlow','Roboto',Arial,Helvetica,sans-serif";
+    $FC = "font-family:'Barlow Condensed','Roboto Condensed','Barlow','Roboto',Arial,Helvetica,sans-serif";
 
     // --- Próximo paso (para llegar a la meta) ---
     $filas_pm = $p['para_meta']['filas'] ?? [];
@@ -722,7 +722,7 @@ function billetera_summary_render_semanal($user, $stats, $week_start, $week_end)
             }
         }
         $bloque_camp = '<tr><td style="padding:10px 32px 0;">'
-            . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#0A6CB4;padding:16px 18px;">'
+            . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#0A6CB4" style="background:#0A6CB4;background:linear-gradient(90deg,#0A6CB4 0%,#0B4F86 100%);padding:16px 18px;">'
             . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
             . '<td><div style="display:inline-block;background:#F5C563;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#5A3D06;padding:2px 7px;' . $F . '">' . esc_html(mb_strtoupper($et, 'UTF-8')) . '</div>'
             . '<div style="font-size:18px;font-weight:700;color:#FFFFFF;margin-top:6px;' . $FC . '">' . esc_html($c['titulo']) . '</div>'
@@ -735,7 +735,7 @@ function billetera_summary_render_semanal($user, $stats, $week_start, $week_end)
     $bar_w = (int) max(2, min(100, round($fill_bar)));
     $coin_txt = '+' . (string) intval(round($sem_total));
 
-    $html_out = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>' . esc_html($site) . '</title></head>'
+    $html_out = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@700&family=Roboto:wght@400;500;700&family=Roboto+Condensed:wght@700&display=swap");</style><title>' . esc_html($site) . '</title></head>'
     . '<body style="margin:0;padding:0;background:#E4EAF1;color:#0E2438;">'
     . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E4EAF1;padding:0;"><tr><td align="center">'
     . '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#FFFFFF;">'
@@ -753,7 +753,7 @@ function billetera_summary_render_semanal($user, $stats, $week_start, $week_end)
     . '</tr></table></td></tr>'
 
     // Hero
-    . '<tr><td style="background:#FBF6EA;padding:30px 32px 26px;">'
+    . '<tr><td bgcolor="#FBF6EA" style="background:#FBF6EA;background:linear-gradient(180deg,#FBF6EA 0%,#FFFFFF 100%);padding:30px 32px 26px;">'
     . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
     . '<td valign="middle" width="360">'
     . '<div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A5F0F;' . $F . '">' . esc_html($label_long) . '</div>'
@@ -762,10 +762,10 @@ function billetera_summary_render_semanal($user, $stats, $week_start, $week_end)
     . '<div style="font-size:15px;color:#5B6B80;' . $F . '">a tu alcancía de ' . esc_html($mes_cap) . '. ¡Sigue así!</div>'
     . '</td>'
     . '<td align="center" valign="middle" width="176">'
+    . '<div style="display:inline-block;background-color:#F8D27A;background:linear-gradient(180deg,#F8D27A 0%,#C98A1E 100%);border:1px solid #B77C16;border-radius:20px;font-size:12.8px;font-weight:700;color:#5A3D06;padding:10px 14px;' . $FC . '">' . esc_html($coin_txt) . '</div>'
     . ($alcancia_img !== ''
-        ? '<img src="' . esc_url($alcancia_img) . '" alt="Alcancía" width="156" style="width:156px;max-width:156px;display:block;border:0;">'
-        : '<div style="display:inline-block;background:linear-gradient(180deg,#F8D27A 0%,#C98A1E 100%);background-color:#F8D27A;border:1px solid #B77C16;border-radius:20px;font-size:12.8px;font-weight:700;color:#5A3D06;padding:10px 14px;' . $FC . '">' . esc_html($coin_txt) . '</div>'
-          . '<div style="font-size:52px;line-height:1;margin-top:6px;">🏦</div>')
+        ? '<div style="margin-top:6px;"><img src="' . esc_url($alcancia_img) . '" alt="Alcancía" width="156" style="width:156px;max-width:156px;display:block;border:0;margin:0 auto;"></div>'
+        : '')
     . '</td>'
     . '</tr></table></td></tr>'
 
@@ -783,7 +783,7 @@ function billetera_summary_render_semanal($user, $stats, $week_start, $week_end)
     . '<td style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#5B6B80;' . $F . '">TU AVANCE DE META · ' . esc_html(billetera_summary_month_name_upper($week_end)) . '</td>'
     . '<td align="right" style="font-size:20px;font-weight:700;color:#8A5F0F;' . $FC . '">' . esc_html($pct_txt) . '</td>'
     . '</tr></table>'
-    . '<div style="background:#E4EAF1;border-radius:6px;height:12px;margin-top:10px;line-height:12px;font-size:0;">&nbsp;<div style="background:#F5C563;height:12px;border-radius:6px;width:' . intval($bar_w) . '%;line-height:12px;font-size:0;">&nbsp;</div></div>'
+    . '<div style="background:#E4EAF1;border-radius:6px;height:12px;margin-top:10px;line-height:12px;font-size:0;">&nbsp;<div style="background:#F5C563;background:linear-gradient(90deg,#C98A1E 0%,#F5C563 100%);height:12px;border-radius:6px;width:' . intval($bar_w) . '%;line-height:12px;font-size:0;">&nbsp;</div></div>'
     . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
     . '<td style="padding-top:8px;font-size:12px;font-weight:600;color:#0E2438;' . $F . '">' . esc_html(billetera_summary_fmt_sol($mes_actual)) . ' ahorrados</td>'
     . '<td align="right" style="padding-top:8px;font-size:12px;color:#5B6B80;' . $F . '">Meta ' . esc_html(billetera_summary_fmt_sol($meta)) . '</td>'
@@ -844,7 +844,7 @@ function billetera_summary_bloque_campana($camp, $url, $F, $FC) {
         }
     }
     return '<tr><td style="padding:10px 32px 0;">'
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#0A6CB4;padding:16px 18px;">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#0A6CB4" style="background:#0A6CB4;background:linear-gradient(90deg,#0A6CB4 0%,#0B4F86 100%);padding:16px 18px;">'
         . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
         . '<td><div style="display:inline-block;background:#F5C563;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#5A3D06;padding:2px 7px;' . $F . '">' . esc_html(mb_strtoupper($et, 'UTF-8')) . '</div>'
         . '<div style="font-size:18px;font-weight:700;color:#FFFFFF;margin-top:6px;' . $FC . '">' . esc_html($c['titulo']) . '</div>'
@@ -877,8 +877,8 @@ function billetera_summary_render_cierre($user, $stats, $week_start, $week_end) 
     $mes_cap = billetera_summary_month_name_cap($week_end);
     $cierre_label = billetera_summary_cierre_label($week_end);
 
-    $F = "font-family:'Barlow',Arial,Helvetica,sans-serif";
-    $FC = "font-family:'Barlow Condensed','Barlow',Arial,Helvetica,sans-serif";
+    $F = "font-family:'Barlow','Roboto',Arial,Helvetica,sans-serif";
+    $FC = "font-family:'Barlow Condensed','Roboto Condensed','Barlow','Roboto',Arial,Helvetica,sans-serif";
 
     $pct_txt = rtrim(rtrim(number_format($pct, 1, '.', ''), '0'), '.') . '%';
     $bar_w = (int) max(2, min(100, round($pct)));
@@ -910,7 +910,7 @@ function billetera_summary_render_cierre($user, $stats, $week_start, $week_end) 
 
     $bloque_camp = billetera_summary_bloque_campana($p['campana'], $url, $F, $FC);
 
-    return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>' . esc_html($site) . '</title></head>'
+    return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@700&family=Roboto:wght@400;500;700&family=Roboto+Condensed:wght@700&display=swap");</style><title>' . esc_html($site) . '</title></head>'
     . '<body style="margin:0;padding:0;background:#E4EAF1;color:#0E2438;">'
     . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E4EAF1;padding:0;"><tr><td align="center">'
     . '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#FFFFFF;">'
@@ -924,7 +924,7 @@ function billetera_summary_render_cierre($user, $stats, $week_start, $week_end) 
     . '</td></tr></table></td>'
     . '<td align="right" valign="middle"><div style="display:inline-block;background:rgba(255,255,255,0.14);border-radius:12px;font-size:10.5px;font-weight:700;letter-spacing:1.2px;color:#FFFFFF;padding:5px 10px;' . $F . '">CIERRE DE MES</div></td>'
     . '</tr></table></td></tr>'
-    . '<tr><td style="background:#FBF6EA;padding:30px 32px 26px;">'
+    . '<tr><td bgcolor="#FBF6EA" style="background:#FBF6EA;background:linear-gradient(180deg,#FBF6EA 0%,#FFFFFF 100%);padding:30px 32px 26px;">'
     . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
     . '<td valign="middle" width="360">'
     . '<div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A5F0F;' . $F . '">' . esc_html($cierre_label) . '</div>'
@@ -933,10 +933,10 @@ function billetera_summary_render_cierre($user, $stats, $week_start, $week_end) 
     . '<div style="font-size:15px;color:#5B6B80;' . $F . '">' . esc_html($hero_sub) . '</div>'
     . '</td>'
     . '<td align="center" valign="middle" width="176">'
+    . '<div style="display:inline-block;background-color:#F8D27A;background:linear-gradient(180deg,#F8D27A 0%,#C98A1E 100%);border:1px solid #B77C16;border-radius:20px;font-size:12px;font-weight:700;color:#5A3D06;padding:10px 14px;' . $FC . '">' . $coin_txt . '</div>'
     . ($alcancia_img !== ''
-        ? '<img src="' . esc_url($alcancia_img) . '" alt="Alcancía" width="156" style="width:156px;max-width:156px;display:block;border:0;">'
-        : '<div style="display:inline-block;background-color:#F8D27A;border:1px solid #B77C16;border-radius:20px;font-size:12px;font-weight:700;color:#5A3D06;padding:10px 14px;' . $FC . '">' . $coin_txt . '</div>'
-          . '<div style="font-size:52px;line-height:1;margin-top:6px;">🏦</div>')
+        ? '<div style="margin-top:6px;"><img src="' . esc_url($alcancia_img) . '" alt="Alcancía" width="156" style="width:156px;max-width:156px;display:block;border:0;margin:0 auto;"></div>'
+        : '')
     . '</td>'
     . '</tr></table></td></tr>'
     . '<tr><td style="padding:24px 32px 8px;">'
@@ -950,7 +950,7 @@ function billetera_summary_render_cierre($user, $stats, $week_start, $week_end) 
     . '<td style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#5B6B80;' . $F . '">TU META DE ' . esc_html($mes_upper) . '</td>'
     . '<td align="right" style="font-size:20px;font-weight:700;color:#1B6E46;' . $FC . '">' . esc_html($pct_txt) . '</td>'
     . '</tr></table>'
-    . '<div style="background:#E4EAF1;border-radius:6px;height:12px;margin-top:10px;line-height:12px;font-size:0;">&nbsp;<div style="background:#2E9E67;height:12px;border-radius:6px;width:' . intval($bar_w) . '%;line-height:12px;font-size:0;">&nbsp;</div></div>'
+    . '<div style="background:#E4EAF1;border-radius:6px;height:12px;margin-top:10px;line-height:12px;font-size:0;">&nbsp;<div style="background:#2E9E67;background:linear-gradient(90deg,#1B6E46 0%,#2E9E67 100%);height:12px;border-radius:6px;width:' . intval($bar_w) . '%;line-height:12px;font-size:0;">&nbsp;</div></div>'
     . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
     . '<td style="padding-top:8px;font-size:12px;font-weight:600;color:#0E2438;' . $F . '">' . $meta_line . '</td>'
     . '<td align="right" style="padding-top:8px;font-size:12px;color:#5B6B80;' . $F . '">Meta ' . esc_html(billetera_summary_fmt_sol($meta)) . '</td>'
