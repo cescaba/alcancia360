@@ -859,6 +859,7 @@
     gap: 16px;
     flex: none;
     z-index: 1;
+    align-self: self-end;
 }
 
 .st-banner__dots {

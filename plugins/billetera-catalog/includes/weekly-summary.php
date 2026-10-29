@@ -299,7 +299,8 @@ function billetera_summary_stats_usuario($user_id, $desde, $hasta) {
 }
 
 // ============================================================================
-// Render del correo
+// Render del correo — Diseño v2 (600px, tablas inline, compatible email)
+// + variante cierre de mes (hook para segundo diseño)
 // ============================================================================
 
 function billetera_summary_logo_url() {
@@ -307,135 +308,734 @@ function billetera_summary_logo_url() {
     return apply_filters('billetera_summary_logo_url', $url);
 }
 
+function billetera_summary_logo_simple_url() {
+    $url = get_template_directory_uri() . '/assets/img/logo.png';
+    return apply_filters('billetera_summary_logo_simple_url', $url);
+}
+
+function billetera_summary_header_brand_url() {
+    $url = get_template_directory_uri() . '/assets/img/header-gildemeister.png';
+    $check = get_template_directory() . '/assets/img/header-gildemeister.png';
+    if (!file_exists($check)) {
+        return '';
+    }
+    return apply_filters('billetera_summary_header_brand_url', $url);
+}
+
+function billetera_summary_alcancia_url() {
+    // SVG no es email-safe; si luego se exporta PNG usarlo aquí.
+    // Por ahora se usa moneda CSS + fallback sin imagen.
+    $png = get_template_directory() . '/assets/img/email/alcancia.png';
+    if (file_exists($png)) {
+        return apply_filters(
+            'billetera_summary_alcancia_url',
+            get_template_directory_uri() . '/assets/img/email/alcancia.png'
+        );
+    }
+    return apply_filters('billetera_summary_alcancia_url', '');
+}
+
 function billetera_summary_subject($week_start, $week_end, $user = null) {
+    if (billetera_summary_variant($week_start, $week_end) === 'cierre') {
+        try {
+            $tz = wp_timezone();
+            $ref = (new DateTime($week_end, $tz))->modify('-1 day');
+            $mes = mb_convert_case(mb_strtolower(date_i18n('F', $ref->getTimestamp()), 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
+            return 'Cierre de ' . $mes . ' · Tu comisión ya está en camino';
+        } catch (Exception $ex) {
+        }
+    }
     return 'Tu resumen de comisiones · ' . billetera_summary_week_label($week_start, $week_end);
 }
 
-function billetera_summary_render_email($user, $stats, $week_start, $week_end) {
+function billetera_summary_cierre_label($week_end) {
+    try {
+        $tz = wp_timezone();
+        $ref = (new DateTime($week_end, $tz))->modify('-1 day');
+        return 'CIERRE DE ' . mb_strtoupper(date_i18n('F', $ref->getTimestamp()), 'UTF-8') . ' ' . $ref->format('Y');
+    } catch (Exception $ex) {
+        return 'CIERRE DE MES';
+    }
+}
+
+/**
+ * Datos extra solo para el template de cierre.
+ */
+function billetera_summary_get_payload_cierre($user_id, $p) {
+    global $wpdb;
+    $user_id = intval($user_id);
+    $v = $wpdb->prefix . 'billetera_ventas';
+    $sub = $wpdb->prefix . 'billetera_subcategorias';
+    $mes_inicio = $p['mes_inicio'] ?? '';
+    $mes_fin = $p['mes_fin'] ?? '';
+    $mes_actual = floatval($p['mes_actual'] ?? 0);
+    $meta = floatval($p['meta'] ?? 0);
+
+    $detalle = [];
+    if ($mes_inicio !== '' && $mes_fin !== '') {
+        $detalle = $wpdb->get_results($wpdb->prepare(
+            "SELECT s.nombre AS producto, COUNT(*) AS ventas,
+                    ROUND(SUM(v.monto_comision_sol * v.bonus_multiplier), 2) AS comision
+             FROM $v v JOIN $sub s ON s.id = v.subcategoria_id
+             WHERE v.usuario_id = %d AND v.creado_en >= %s AND v.creado_en < %s
+             GROUP BY s.id, s.nombre ORDER BY comision DESC",
+            $user_id, $mes_inicio, $mes_fin
+        ));
+    }
+    $mes_ventas = 0;
+    foreach ((array) $detalle as $d) {
+        $mes_ventas += intval($d->ventas);
+    }
+
+    // Acumulado año + mejor mes del año.
+    $acum_ano = 0;
+    $es_mejor = false;
+    try {
+        $tz = wp_timezone();
+        $ref = new DateTime($mes_inicio, $tz);
+        $y0 = $ref->format('Y-01-01 00:00:00');
+        $y1 = (clone $ref)->modify('first day of January next year')->format('Y-m-01 00:00:00');
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT DATE_FORMAT(creado_en, '%%Y-%%m') AS ym, SUM(monto_comision_sol * bonus_multiplier) AS total
+             FROM $v WHERE usuario_id = %d AND creado_en >= %s AND creado_en < %s GROUP BY ym",
+            $user_id, $y0, $y1
+        ));
+        $max = 0;
+        $cur_ym = $ref->format('Y-m');
+        $cur_tot = 0;
+        foreach ((array) $rows as $r) {
+            $t = floatval($r->total);
+            if ($t > $max) {
+                $max = $t;
+            }
+            if ($r->ym === $cur_ym) {
+                $cur_tot = $t;
+            }
+            $acum_ano += $t;
+        }
+        $es_mejor = ($cur_tot > 0 && $cur_tot >= $max);
+    } catch (Exception $ex) {
+    }
+    $acum_ano = round($acum_ano, 2);
+
+    // Siguiente mes: meta, días y por día.
+    $meta_next = function_exists('billetera_get_meta_por_usuario') ? floatval(billetera_get_meta_por_usuario($user_id)) : $meta;
+    $next_upper = '';
+    $next_cap = '';
+    $next_days = 30;
+    try {
+        $tz = wp_timezone();
+        $ref = new DateTime($mes_inicio, $tz);
+        $nx = (clone $ref)->modify('first day of next month');
+        $next_upper = mb_strtoupper(date_i18n('F', $nx->getTimestamp()), 'UTF-8');
+        $lc = mb_strtolower($next_upper, 'UTF-8');
+        $next_cap = mb_convert_case($lc, MB_CASE_TITLE, 'UTF-8');
+        $next_days = intval($nx->format('t'));
+    } catch (Exception $ex) {
+    }
+    $next_por_dia = $next_days > 0 ? round($meta_next / $next_days, 2) : $meta_next;
+
+    $pct = $meta > 0 ? round(($mes_actual / $meta) * 100, 1) : 0;
+    $supero = ($mes_actual >= $meta && $meta > 0);
+    $excedente = $supero ? round($mes_actual - $meta, 2) : 0;
+
+    return [
+        'detalle_producto' => $detalle ?: [],
+        'mes_ventas' => $mes_ventas,
+        'acum_ano' => $acum_ano,
+        'es_mejor' => $es_mejor,
+        'pct' => $pct,
+        'supero' => $supero,
+        'excedente' => $excedente,
+        'meta_next' => $meta_next,
+        'next_upper' => $next_upper,
+        'next_cap' => $next_cap,
+        'next_days' => $next_days,
+        'next_por_dia' => $next_por_dia,
+        'ano' => (new DateTime($mes_inicio))->format('Y'),
+    ];
+}
+
+/**
+ * ¿Semana que cruza fin de mes? week = [lunes 00:00, lunes siguiente 00:00).
+ * Si el mes de week_start != mes de (week_end - 1 día) => es semana de cierre.
+ * Cuando se tenga el segundo diseño, aquí se bifurca el template.
+ */
+function billetera_summary_is_closing_week($week_start, $week_end) {
+    try {
+        $tz = wp_timezone();
+        $s = new DateTime($week_start, $tz);
+        $e = (new DateTime($week_end, $tz))->modify('-1 day');
+        return $s->format('Y-m') !== $e->format('Y-m');
+    } catch (Exception $ex) {
+        return false;
+    }
+}
+
+function billetera_summary_variant($week_start, $week_end) {
+    $v = billetera_summary_is_closing_week($week_start, $week_end) ? 'cierre' : 'semanal';
+    return apply_filters('billetera_summary_variant', $v, $week_start, $week_end);
+}
+
+function billetera_summary_week_label_long($week_start, $week_end) {
+    try {
+        $tz = wp_timezone();
+        $s = new DateTime($week_start, $tz);
+        $e = (new DateTime($week_end, $tz))->modify('-1 day');
+        // "SEMANA DEL 5 AL 11 DE OCTUBRE"
+        $txt = sprintf(
+            'SEMANA DEL %s AL %s DE %s',
+            date_i18n('j', $s->getTimestamp()),
+            date_i18n('j', $e->getTimestamp()),
+            mb_strtoupper(date_i18n('F', $e->getTimestamp()), 'UTF-8')
+        );
+        return $txt;
+    } catch (Exception $ex) {
+        return '';
+    }
+}
+
+function billetera_summary_month_name_upper($week_end) {
+    try {
+        $tz = wp_timezone();
+        $e = (new DateTime($week_end, $tz))->modify('-1 day');
+        return mb_strtoupper(date_i18n('F', $e->getTimestamp()), 'UTF-8');
+    } catch (Exception $ex) {
+        return '';
+    }
+}
+
+function billetera_summary_month_name_cap($week_end) {
+    $u = billetera_summary_month_name_upper($week_end);
+    return $u !== '' ? mb_convert_case(mb_strtolower($u, 'UTF-8'), MB_CASE_TITLE, 'UTF-8') : '';
+}
+
+function billetera_summary_first_names($display_name) {
+    $parts = preg_split('/\s+/', trim((string) $display_name));
+    $parts = array_values(array_filter($parts));
+    if (count($parts) >= 2) {
+        return $parts[0] . ' ' . $parts[1];
+    }
+    return $parts[0] ?? '';
+}
+
+/**
+ * Payload completo para el template v2. Reutiliza funciones existentes.
+ */
+function billetera_summary_get_payload($user_id, $week_start, $week_end, $stats_semana = null) {
+    global $wpdb;
+    $user_id = intval($user_id);
+    $tz = wp_timezone();
+
+    try {
+        $last_day = (new DateTime($week_end, $tz))->modify('-1 day');
+    } catch (Exception $ex) {
+        $last_day = billetera_stats_local_now();
+    }
+    $base_mes = (clone $last_day)->modify('first day of this month')->setTime(0, 0, 0);
+    $mes_inicio = $base_mes->format('Y-m-d H:i:s');
+    $mes_fin = (clone $base_mes)->modify('first day of next month')->format('Y-m-01 00:00:00');
+
+    if (!is_array($stats_semana)) {
+        $stats_semana = billetera_summary_stats_usuario($user_id, $week_start, $week_end);
+    }
+
+    $resumen_mes = function_exists('billetera_stats_resumen_usuario')
+        ? billetera_stats_resumen_usuario($user_id, $base_mes)
+        : ['mes_actual' => 0, 'meta' => 1200, 'fill_percent' => 0, 'fill_real' => 0, 'faltan' => 1200];
+
+    $mes_actual = round(floatval($resumen_mes['mes_actual'] ?? 0), 2);
+    $meta = floatval($resumen_mes['meta'] ?? 1200);
+    $fill = floatval($resumen_mes['fill_real'] ?? 0);
+    if ($fill <= 0 && $meta > 0) {
+        $fill = round(($mes_actual / $meta) * 100, 1);
+    }
+    $faltan = max(round($meta - $mes_actual, 2), 0);
+
+    // Días para el cierre (calendario): fin de mes - último día de la semana.
+    $dias_mes = intval($last_day->format('t'));
+    $dia_ref = intval($last_day->format('j'));
+    $dias_cierre = max($dias_mes - $dia_ref, 0);
+    $por_dia = $dias_cierre > 0 ? round($faltan / $dias_cierre, 2) : $faltan;
+
+    // Detalle de ventas de la semana (fecha, producto, placa, comisión).
+    $v = $wpdb->prefix . 'billetera_ventas';
+    $sub = $wpdb->prefix . 'billetera_subcategorias';
+    $ventas = $wpdb->get_results($wpdb->prepare(
+        "SELECT v.creado_en AS fecha, s.nombre AS producto, v.id_type, v.id_value,
+                ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) AS comision
+         FROM $v v
+         JOIN $sub s ON s.id = v.subcategoria_id
+         WHERE v.usuario_id = %d AND v.creado_en >= %s AND v.creado_en < %s
+         ORDER BY v.creado_en DESC
+         LIMIT 10",
+        $user_id, $week_start, $week_end
+    ));
+
+    // Ranking del mes de referencia (tienda + global) con conteo de ventas.
+    $ranking = ['tienda' => ['rank' => 0, 'total' => 0], 'global' => ['rank' => 0, 'total' => 0], 'diff_txt' => ''];
+    if (function_exists('billetera_stats_ranking')) {
+        // billetera_stats_ranking usa mes actual; recalculamos para el mes de la semana.
+        $tot = $wpdb->get_results($wpdb->prepare(
+            "SELECT usuario_id, SUM(monto_comision_sol * bonus_multiplier) AS total, COUNT(*) AS ventas
+             FROM $v WHERE creado_en >= %s AND creado_en < %s AND (monto_comision_sol * bonus_multiplier) > 0
+             GROUP BY usuario_id",
+            $mes_inicio, $mes_fin
+        ));
+        $bal = [];
+        $nventas = [];
+        foreach ($tot as $t) {
+            $bal[intval($t->usuario_id)] = floatval($t->total);
+            $nventas[intval($t->usuario_id)] = intval($t->ventas);
+        }
+        $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
+        if ($tienda_id) {
+            $ases = get_users(['meta_key' => '_tienda_asociada', 'meta_value' => $tienda_id, 'fields' => 'ID', 'role__not_in' => ['jefe_venta']]);
+            $tb = [];
+            foreach ($ases as $aid) {
+                $tb[intval($aid)] = $bal[intval($aid)] ?? 0;
+            }
+            arsort($tb, SORT_NUMERIC);
+            $pos = array_search($user_id, array_keys($tb), true);
+            $ranking['tienda'] = ['rank' => $pos === false ? 0 : $pos + 1, 'total' => count($tb)];
+        }
+        $glob = get_users(['role__in' => ['asesor', 'jefe_venta'], 'fields' => 'ID', 'number' => -1]);
+        $gb = [];
+        foreach ($glob as $gid) {
+            $gb[intval($gid)] = $bal[intval($gid)] ?? 0;
+        }
+        arsort($gb, SORT_NUMERIC);
+        $keys = array_keys($gb);
+        $posg = array_search($user_id, $keys, true);
+        $ranking['global'] = ['rank' => $posg === false ? 0 : $posg + 1, 'total' => count($gb)];
+        // Texto "+N ventas sobre el #2" (solo si hay contexto).
+        if ($posg !== false) {
+            $mis_ventas = $nventas[$user_id] ?? 0;
+            if ($posg === 0 && isset($keys[1])) {
+                $seg = $nventas[intval($keys[1])] ?? 0;
+                $d = $mis_ventas - $seg;
+                if ($d > 0) {
+                    $ranking['diff_txt'] = '+' . $d . ($d === 1 ? ' venta sobre el #2' : ' ventas sobre el #2');
+                }
+            } elseif ($posg > 0 && isset($keys[$posg - 1])) {
+                $prev = $nventas[intval($keys[$posg - 1])] ?? 0;
+                $d = $prev - $mis_ventas;
+                if ($d > 0) {
+                    $ranking['diff_txt'] = 'Te faltan ' . $d . ($d === 1 ? ' venta para el puesto anterior' : ' ventas para el puesto anterior');
+                }
+            }
+        }
+    }
+
+    $para_meta = function_exists('billetera_stats_para_meta')
+        ? billetera_stats_para_meta($user_id, 'mes', $base_mes, floatval($faltan))
+        : ['alcanzada' => false, 'filas' => []];
+
+    $camp = function_exists('billetera_campanas_para_usuario')
+        ? billetera_campanas_para_usuario($user_id)
+        : [];
+    $camp1 = $camp[0] ?? null;
+
+    return [
+        'semana' => $stats_semana,
+        'mes_actual' => $mes_actual,
+        'meta' => $meta,
+        'fill' => $fill,
+        'fill_bar' => min(max($fill, 0), 100),
+        'faltan' => $faltan,
+        'dias_cierre' => $dias_cierre,
+        'por_dia' => $por_dia,
+        'ventas_detalle' => $ventas ?: [],
+        'ranking' => $ranking,
+        'para_meta' => $para_meta,
+        'campana' => $camp1,
+        'mes_inicio' => $mes_inicio,
+        'mes_fin' => $mes_fin,
+    ];
+}
+
+function billetera_summary_render_semanal($user, $stats, $week_start, $week_end) {
+    $variant = billetera_summary_variant($week_start, $week_end);
+    // Hook para el segundo diseño (cierre). Por ahora ambos usan v2 semanal.
+    $html = apply_filters('billetera_summary_render_variant', null, $user, $stats, $week_start, $week_end, $variant);
+    if (is_string($html) && $html !== '') {
+        return $html;
+    }
+
     $logo   = billetera_summary_logo_url();
-    $nombre = $user ? $user->display_name : '';
-    $label  = billetera_summary_week_label($week_start, $week_end);
+    $logo_simple = billetera_summary_logo_simple_url();
+    $brand  = billetera_summary_header_brand_url();
+    $alcancia_img = billetera_summary_alcancia_url();
+    $nombre_full = $user ? $user->display_name : '';
+    $nombre = billetera_summary_first_names($nombre_full);
+    $label_long = billetera_summary_week_label_long($week_start, $week_end);
+    $label_short = billetera_summary_week_label($week_start, $week_end);
+    $mes_cap = billetera_summary_month_name_cap($week_end);
     $site   = get_bloginfo('name');
     $url    = home_url('/');
 
-    $tiene = $stats['ventas'] > 0;
+    $p = billetera_summary_get_payload($user ? $user->ID : 0, $week_start, $week_end, $stats);
+    $sem = $p['semana'];
+    $sem_total = round(floatval($sem['total'] ?? 0), 2);
+    $sem_ventas = intval($sem['ventas'] ?? 0);
+    $mes_actual = $p['mes_actual'];
+    $meta = $p['meta'];
+    $fill = $p['fill'];
+    $fill_bar = $p['fill_bar'];
+    $faltan = $p['faltan'];
+    $dias = $p['dias_cierre'];
+    $por_dia = $p['por_dia'];
 
-    $rows = '';
-    foreach ($stats['por_linea'] as $l) {
-        $rows .= '<tr>'
-            . '<td style="padding:10px 0;border-bottom:1px solid #eef2f7;font-size:14px;color:#0e2438;">' . esc_html($l['label']) . '</td>'
-            . '<td style="padding:10px 0;border-bottom:1px solid #eef2f7;font-size:13px;color:#5b6b80;text-align:center;">' . intval($l['ventas']) . '</td>'
-            . '<td style="padding:10px 0;border-bottom:1px solid #eef2f7;font-size:14px;color:#0a6cb4;text-align:right;font-weight:bold;">' . esc_html(billetera_summary_fmt_sol($l['total'])) . '</td>'
-            . '</tr>';
+    $F = "font-family:'Barlow',Arial,Helvetica,sans-serif";
+    $FC = "font-family:'Barlow Condensed','Barlow',Arial,Helvetica,sans-serif";
+
+    // --- Próximo paso (para llegar a la meta) ---
+    $filas_pm = $p['para_meta']['filas'] ?? [];
+    if (!empty($filas_pm)) {
+        $top = array_slice($filas_pm, 0, 3);
+        $tit = intval($top[0]['necesarias']) . ' ventas de ' . $top[0]['sub'];
+        $detalles = [];
+        for ($i = 1; $i < count($top); $i++) {
+            $detalles[] = 'o ' . intval($top[$i]['necesarias']) . ' de ' . $top[$i]['sub'];
+        }
+        $bajada_pm = implode(' · ', $detalles);
+        if ($bajada_pm !== '') {
+            $bajada_pm .= '. Comisión referencial según tus registros.';
+        } else {
+            $bajada_pm = 'Comisión referencial según tus registros.';
+        }
+    } else {
+        $tit = $faltan > 0 ? 'Sigue sumando ventas este mes' : '¡Meta alcanzada!';
+        $bajada_pm = $faltan > 0 ? 'Cada registro acerca tu alcancía a la meta.' : 'Buen trabajo, mantén el ritmo.';
     }
 
-    $desglose = '';
-    if ($rows !== '') {
-        $desglose = '
-        <tr><td style="padding:8px 28px 4px;">
-          <div style="font-size:13px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:#5b6b80;margin:12px 0 4px;">Desglose por línea</div>
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8494a6;padding-bottom:6px;">Línea</td>
-              <td style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8494a6;text-align:center;padding-bottom:6px;">Ventas</td>
-              <td style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8494a6;text-align:right;padding-bottom:6px;">Comisión</td>
-            </tr>
-            ' . $rows . '
-          </table>
-        </td></tr>';
+    // --- Campaña ---
+    $bloque_camp = '';
+    if (!empty($p['campana'])) {
+        $c = $p['campana'];
+        $et = trim((string) ($c['etiqueta'] ?? 'CAMPAÑA'));
+        if (!empty($c['hasta'])) {
+            try {
+                $h = new DateTime($c['hasta'], wp_timezone());
+                $et .= ' · HASTA EL ' . mb_strtoupper(date_i18n('d M', $h->getTimestamp()), 'UTF-8');
+            } catch (Exception $ex) {
+            }
+        }
+        $bloque_camp = '<tr><td style="padding:10px 32px 0;">'
+            . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#0A6CB4;padding:16px 18px;">'
+            . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+            . '<td><div style="display:inline-block;background:#F5C563;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#5A3D06;padding:2px 7px;' . $F . '">' . esc_html(mb_strtoupper($et, 'UTF-8')) . '</div>'
+            . '<div style="font-size:18px;font-weight:700;color:#FFFFFF;margin-top:6px;' . $FC . '">' . esc_html($c['titulo']) . '</div>'
+            . (!empty($c['bajada']) ? '<div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:2px;' . $F . '">' . esc_html($c['bajada']) . '</div>' : '')
+            . '</td>'
+            . '</tr></table></td></tr></table></td></tr>';
     }
 
-    $cuerpo = $tiene
-        ? '
-        <tr><td style="padding:24px 28px 8px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-            <td width="33%" style="padding:0 6px 0 0;vertical-align:top;">
-              <div style="background:#f3f6fa;border-radius:10px;padding:16px;text-align:center;">
-                <div style="font-size:24px;font-weight:bold;color:#0a6cb4;">' . intval($stats['ventas']) . '</div>
-                <div style="font-size:12px;color:#5b6b80;margin-top:2px;">Ventas</div>
-              </div>
-            </td>
-            <td width="33%" style="padding:0 3px;vertical-align:top;">
-              <div style="background:#f3f6fa;border-radius:10px;padding:16px;text-align:center;">
-                <div style="font-size:24px;font-weight:bold;color:#0a6cb4;">' . intval($stats['unidades']) . '</div>
-                <div style="font-size:12px;color:#5b6b80;margin-top:2px;">Unidades</div>
-              </div>
-            </td>
-            <td width="33%" style="padding:0 0 0 6px;vertical-align:top;">
-              <div style="background:#f3f6fa;border-radius:10px;padding:16px;text-align:center;">
-                <div style="font-size:20px;font-weight:bold;color:#0a6cb4;">' . esc_html(billetera_summary_fmt_sol($stats['ticket'])) . '</div>
-                <div style="font-size:12px;color:#5b6b80;margin-top:2px;">Ticket promedio</div>
-              </div>
-            </td>
-          </tr></table>
-        </td></tr>
-        ' . $desglose . '
-        <tr><td style="padding:20px 28px 4px;font-size:14px;color:#5b6b80;line-height:1.5;">
-          ¡Buen trabajo esta semana! Sigue registrando tus ventas al cierre para que tu alcancía crezca.
-        </td></tr>'
-        : '
-        <tr><td style="padding:28px;font-size:15px;color:#5b6b80;line-height:1.6;">
-          Esta semana no registramos ventas con comisión a tu nombre.<br>
-          Cuando cierres una venta, regístrala en la app para verla aquí.
-        </td></tr>';
+    $pct_txt = rtrim(rtrim(number_format($fill, 1, '.', ''), '0'), '.') . '%';
+    $bar_w = (int) max(2, min(100, round($fill_bar)));
+    $coin_txt = '+' . (string) intval(round($sem_total));
 
-    $html = '<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>' . esc_html($site) . '</title>
-</head>
-<body style="margin:0;padding:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif;color:#0e2438;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:24px 12px;">
-    <tr><td align="center">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #dce3eb;">
-        <tr><td style="padding:20px 28px;border-bottom:3px solid #f5c563;">
-          <img src="' . esc_url($logo) . '" alt="' . esc_attr($site) . '" height="42" style="height:42px;display:block;border:0;">
-        </td></tr>
-        <tr><td style="background:#0a2c4e;padding:26px 28px;color:#ffffff;">
-          <div style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#9fc3e0;">Resumen semanal de comisiones</div>
-          <div style="font-size:14px;color:#cdd9e6;margin-top:6px;">Hola ' . esc_html($nombre) . ' · ' . esc_html($label) . '</div>
-          <div style="font-size:34px;font-weight:bold;color:#f5c563;margin-top:14px;">' . esc_html(billetera_summary_fmt_sol($stats['total'])) . '</div>
-          <div style="font-size:12px;color:#9fc3e0;margin-top:2px;">comisión acumulada de la semana</div>
-        </td></tr>
-        ' . $cuerpo . '
-        <tr><td style="padding:20px 28px 28px;">
-          <a href="' . esc_url($url) . '" style="display:inline-block;background:#0a6cb4;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold;padding:12px 22px;border-radius:8px;">Ver mi alcancía</a>
-        </td></tr>
-        <tr><td style="padding:18px 28px;background:#f3f6fa;border-top:1px solid #dce3eb;">
-          <div style="font-size:12px;color:#8494a6;line-height:1.6;">
-            &copy; ' . date_i18n('Y') . ' ' . esc_html($site) . '. Todos los derechos reservados.<br>
-            Este es un correo automático, por favor no responder.
-          </div>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>';
+    $html_out = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>' . esc_html($site) . '</title></head>'
+    . '<body style="margin:0;padding:0;background:#E4EAF1;color:#0E2438;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E4EAF1;padding:0;"><tr><td align="center">'
+    . '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#FFFFFF;">'
 
-    return $html;
+    // Header azul
+    . '<tr><td style="background:#0A6CB4;padding:18px 28px;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td valign="middle"><table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+    . '<td valign="middle"><img src="' . esc_url($logo_simple) . '" alt="" width="48" height="28" style="width:48px;height:28px;display:block;border:0;"></td>'
+    . '<td valign="middle" style="padding-left:12px;">'
+    . ($brand !== '' ? '<img src="' . esc_url($brand) . '" alt="Gildemeister" height="14" style="height:14px;display:block;border:0;">' : '<div style="font-size:13px;font-weight:700;color:#FFFFFF;' . $F . '">GILDEMEISTER</div>')
+    . '<div style="font-size:11px;color:rgba(255,255,255,0.85);margin-top:3px;' . $F . '">Mi alcancía 360 · Postventa</div>'
+    . '</td></tr></table></td>'
+    . '<td align="right" valign="middle"><div style="display:inline-block;background:rgba(255,255,255,0.14);border-radius:12px;font-size:10.5px;font-weight:700;letter-spacing:1.2px;color:#FFFFFF;padding:5px 10px;' . $F . '">RESUMEN SEMANAL</div></td>'
+    . '</tr></table></td></tr>'
+
+    // Hero
+    . '<tr><td style="background:#FBF6EA;padding:30px 32px 26px;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td valign="middle" width="360">'
+    . '<div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A5F0F;' . $F . '">' . esc_html($label_long) . '</div>'
+    . '<div style="font-size:18px;font-weight:500;color:#0E2438;margin-top:10px;' . $F . '">Hola ' . esc_html($nombre) . ', esta semana sumaste</div>'
+    . '<div style="font-size:60px;line-height:72px;font-weight:700;color:#0A6CB4;' . $FC . '">' . esc_html(billetera_summary_fmt_sol($sem_total)) . '</div>'
+    . '<div style="font-size:15px;color:#5B6B80;' . $F . '">a tu alcancía de ' . esc_html($mes_cap) . '. ¡Sigue así!</div>'
+    . '</td>'
+    . '<td align="center" valign="middle" width="176">'
+    . ($alcancia_img !== ''
+        ? '<img src="' . esc_url($alcancia_img) . '" alt="Alcancía" width="156" style="width:156px;max-width:156px;display:block;border:0;">'
+        : '<div style="display:inline-block;background:linear-gradient(180deg,#F8D27A 0%,#C98A1E 100%);background-color:#F8D27A;border:1px solid #B77C16;border-radius:20px;font-size:12.8px;font-weight:700;color:#5A3D06;padding:10px 14px;' . $FC . '">' . esc_html($coin_txt) . '</div>'
+          . '<div style="font-size:52px;line-height:1;margin-top:6px;">🏦</div>')
+    . '</td>'
+    . '</tr></table></td></tr>'
+
+    // KPIs
+    . '<tr><td style="padding:24px 32px 8px;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #DCE3EB;"><tr>'
+    . '<td width="33%" valign="top" style="padding:14px 16px;background:#FFFFFF;"><div style="font-size:26px;font-weight:700;color:#0E2438;' . $FC . '">' . intval($sem_ventas) . '</div><div style="font-size:10px;font-weight:600;letter-spacing:1px;color:#8494A6;margin-top:4px;' . $F . '">VENTAS DE LA SEMANA</div></td>'
+    . '<td width="34%" valign="top" style="padding:14px 16px;background:#F5F8FB;border-left:1px solid #DCE3EB;border-right:1px solid #DCE3EB;"><div style="font-size:26px;font-weight:700;color:#1B6E46;' . $FC . '">' . esc_html(billetera_summary_fmt_sol($sem_total)) . '</div><div style="font-size:10px;font-weight:600;letter-spacing:1px;color:#8494A6;margin-top:4px;' . $F . '">COMISIÓN DE LA SEMANA</div></td>'
+    . '<td width="33%" valign="top" style="padding:14px 16px;background:#FFFFFF;"><div style="font-size:26px;font-weight:700;color:#0A6CB4;' . $FC . '">' . esc_html(billetera_summary_fmt_sol($mes_actual)) . '</div><div style="font-size:10px;font-weight:600;letter-spacing:1px;color:#8494A6;margin-top:4px;' . $F . '">ACUMULADO ' . esc_html(billetera_summary_month_name_upper($week_end)) . '</div></td>'
+    . '</tr></table></td></tr>'
+
+    // Avance meta
+    . '<tr><td style="padding:18px 32px 0;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#5B6B80;' . $F . '">TU AVANCE DE META · ' . esc_html(billetera_summary_month_name_upper($week_end)) . '</td>'
+    . '<td align="right" style="font-size:20px;font-weight:700;color:#8A5F0F;' . $FC . '">' . esc_html($pct_txt) . '</td>'
+    . '</tr></table>'
+    . '<div style="background:#E4EAF1;border-radius:6px;height:12px;margin-top:10px;line-height:12px;font-size:0;">&nbsp;<div style="background:#F5C563;height:12px;border-radius:6px;width:' . intval($bar_w) . '%;line-height:12px;font-size:0;">&nbsp;</div></div>'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td style="padding-top:8px;font-size:12px;font-weight:600;color:#0E2438;' . $F . '">' . esc_html(billetera_summary_fmt_sol($mes_actual)) . ' ahorrados</td>'
+    . '<td align="right" style="padding-top:8px;font-size:12px;color:#5B6B80;' . $F . '">Meta ' . esc_html(billetera_summary_fmt_sol($meta)) . '</td>'
+    . '</tr></table>'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td width="33%" style="padding:10px 5px 0 0;"><div style="background:#F5F8FB;padding:10px 12px;"><div style="font-size:11px;color:#5B6B80;' . $F . '">Te faltan</div><div style="font-size:17px;font-weight:700;color:#0E2438;margin-top:2px;' . $FC . '">' . esc_html(billetera_summary_fmt_sol($faltan)) . '</div></div></td>'
+    . '<td width="34%" style="padding:10px 5px 0 5px;"><div style="background:#F5F8FB;padding:10px 12px;"><div style="font-size:11px;color:#5B6B80;' . $F . '">Días para el cierre</div><div style="font-size:17px;font-weight:700;color:#0E2438;margin-top:2px;' . $FC . '">' . intval($dias) . ' días</div></div></td>'
+    . '<td width="33%" style="padding:10px 0 0 5px;"><div style="background:#F5F8FB;padding:10px 12px;"><div style="font-size:11px;color:#5B6B80;' . $F . '">Necesitas por día</div><div style="font-size:17px;font-weight:700;color:#0E2438;margin-top:2px;' . $FC . '">' . esc_html(billetera_summary_fmt_sol($por_dia)) . '</div></div></td>'
+    . '</tr></table></td></tr>'
+
+    // Ranking + próximo paso
+    . '<tr><td style="padding:14px 32px 0;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td width="50%" valign="top" style="padding-right:6px;"><div style="border:1px solid #DCE3EB;background:#F5F8FB;padding:16px;">'
+    . '<div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#5B6B80;' . $F . '">TU RANKING</div>'
+    . '<div style="margin-top:4px;"><span style="font-size:34px;font-weight:700;color:#8A5F0F;' . $FC . '">#' . intval($p['ranking']['tienda']['rank']) . '</span> <span style="font-size:13px;color:#5B6B80;' . $F . '">de ' . intval($p['ranking']['tienda']['total']) . ' en tu tienda</span></div>'
+    . '<div style="font-size:12px;color:#5B6B80;margin-top:2px;' . $F . '">#' . intval($p['ranking']['global']['rank']) . ' de ' . intval($p['ranking']['global']['total']) . ' a nivel global'
+    . ($p['ranking']['diff_txt'] !== '' ? ' · ' . esc_html($p['ranking']['diff_txt']) : '') . '</div>'
+    . '</div></td>'
+    . '<td width="50%" valign="top" style="padding-left:6px;"><div style="border:1px solid #F0D9A8;background:#FBF6EA;padding:16px;">'
+    . '<div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A5F0F;' . $F . '">PARA LLEGAR A TU META</div>'
+    . '<div style="font-size:17px;font-weight:700;color:#0E2438;margin-top:4px;' . $FC . '">' . esc_html($tit) . '</div>'
+    . '<div style="font-size:12px;color:#5B6B80;margin-top:2px;' . $F . '">' . esc_html($bajada_pm) . '</div>'
+    . '</div></td>'
+    . '</tr></table></td></tr>'
+
+    . $bloque_camp
+
+    // CTA
+    . '<tr><td align="center" style="padding:22px 32px 30px;">'
+    . '<a href="' . esc_url($url) . '" style="display:inline-block;background:#0A6CB4;font-size:15px;font-weight:700;letter-spacing:1.5px;color:#FFFFFF;text-decoration:none;padding:14px 36px;' . $FC . '">VER MI ALCANCÍA</a>'
+    . '<div style="margin-top:12px;"><a href="' . esc_url($url) . '" style="font-size:12px;font-weight:600;color:#0A6CB4;text-decoration:none;' . $F . '">¿Te falta registrar una venta? Regístrala aquí</a></div>'
+    . '</td></tr>'
+
+    // Footer
+    . '<tr><td style="background:#F5F8FB;padding:20px 32px;">'
+    . '<div style="font-size:11px;line-height:13px;color:#5B6B80;' . $F . '">Montos referenciales sujetos a validación del jefe de taller. El pago se realiza al cierre de mes. Por privacidad, el ranking solo muestra número de ventas.</div>'
+    . '<div style="font-size:11px;line-height:13px;color:#8494A6;margin-top:8px;' . $F . '">Correo automático de Mi Alcancía 360 · Gildemeister Postventa · No respondas a este mensaje.</div>'
+    . '<div style="margin-top:8px;"><a href="' . esc_url($url) . '" style="font-size:11px;font-weight:600;color:#0A6CB4;text-decoration:none;' . $F . '">Configurar notificaciones</a></div>'
+    . '</td></tr>'
+
+    . '</table></td></tr></table></body></html>';
+
+    return $html_out;
+}
+
+function billetera_summary_bloque_campana($camp, $url, $F, $FC) {
+    if (empty($camp)) {
+        return '';
+    }
+    $c = $camp;
+    $et = trim((string) ($c['etiqueta'] ?? 'CAMPAÑA'));
+    if (!empty($c['hasta'])) {
+        try {
+            $h = new DateTime($c['hasta'], wp_timezone());
+            $et .= ' · HASTA EL ' . mb_strtoupper(date_i18n('d M', $h->getTimestamp()), 'UTF-8');
+        } catch (Exception $ex) {
+        }
+    }
+    return '<tr><td style="padding:10px 32px 0;">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#0A6CB4;padding:16px 18px;">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+        . '<td><div style="display:inline-block;background:#F5C563;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#5A3D06;padding:2px 7px;' . $F . '">' . esc_html(mb_strtoupper($et, 'UTF-8')) . '</div>'
+        . '<div style="font-size:18px;font-weight:700;color:#FFFFFF;margin-top:6px;' . $FC . '">' . esc_html($c['titulo']) . '</div>'
+        . (!empty($c['bajada']) ? '<div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:2px;' . $F . '">' . esc_html($c['bajada']) . '</div>' : '')
+        . '</td>'
+        . '</tr></table></td></tr></table></td></tr>';
+}
+
+function billetera_summary_render_cierre($user, $stats, $week_start, $week_end) {
+    $logo_simple = billetera_summary_logo_simple_url();
+    $brand  = billetera_summary_header_brand_url();
+    $alcancia_img = billetera_summary_alcancia_url();
+    $nombre = billetera_summary_first_names($user ? $user->display_name : '');
+    $site   = get_bloginfo('name');
+    $url    = home_url('/');
+
+    $p = billetera_summary_get_payload($user ? $user->ID : 0, $week_start, $week_end, $stats);
+    $c = billetera_summary_get_payload_cierre($user ? $user->ID : 0, $p);
+
+    $mes_actual = $p['mes_actual'];
+    $meta = $p['meta'];
+    $pct = $c['pct'];
+    $supero = $c['supero'];
+    $excedente = $c['excedente'];
+    $mes_ventas = $c['mes_ventas'];
+    $detalle = $c['detalle_producto'];
+    $acum_ano = $c['acum_ano'];
+    $ano = $c['ano'];
+    $mes_upper = billetera_summary_month_name_upper($week_end);
+    $mes_cap = billetera_summary_month_name_cap($week_end);
+    $cierre_label = billetera_summary_cierre_label($week_end);
+
+    $F = "font-family:'Barlow',Arial,Helvetica,sans-serif";
+    $FC = "font-family:'Barlow Condensed','Barlow',Arial,Helvetica,sans-serif";
+
+    $pct_txt = rtrim(rtrim(number_format($pct, 1, '.', ''), '0'), '.') . '%';
+    $bar_w = (int) max(2, min(100, round($pct)));
+    $coin_txt = esc_html($pct_txt);
+    $amount_color = $supero ? '#1B6E46' : '#0A6CB4';
+
+    $hero_title = $supero
+        ? '¡Felicitaciones, ' . $nombre . '! Superaste tu meta y cobras'
+        : 'Hola ' . $nombre . ', cerraste ' . mb_strtolower($mes_cap, 'UTF-8') . ' con';
+    $hero_sub = $pct_txt . ' de tu meta de ' . billetera_summary_fmt_sol($meta)
+        . ($supero && $c['es_mejor'] ? ' · tu mejor mes del año.' : ($supero ? '.' : '.'));
+
+    // Detalle por producto: sección eliminada (se conserva $detalle para "Repite").
+
+    $meta_line = $supero
+        ? esc_html(billetera_summary_fmt_sol($mes_actual)) . ' · meta superada'
+        : esc_html(billetera_summary_fmt_sol($mes_actual)) . ' ahorrados';
+    $box1_label = $supero ? 'Superaste tu meta por' : 'Te faltó para tu meta';
+    $box1_val = $supero ? billetera_summary_fmt_sol($excedente) : billetera_summary_fmt_sol($p['faltan']);
+
+    $top = $detalle[0] ?? null;
+    if ($top && $mes_ventas > 0) {
+        $repite_tit = 'Con ' . intval($mes_ventas) . ' ventas como las de ' . mb_strtolower($mes_cap, 'UTF-8');
+        $repite_baj = 'vuelves a superar tu meta. Tu producto más fuerte: ' . $top->producto . ' (' . billetera_summary_fmt_sol($top->comision) . ').';
+    } else {
+        $repite_tit = 'Registra tus primeras ventas';
+        $repite_baj = 'Cada venta te acerca a tu meta del próximo mes.';
+    }
+
+    $bloque_camp = billetera_summary_bloque_campana($p['campana'], $url, $F, $FC);
+
+    return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>' . esc_html($site) . '</title></head>'
+    . '<body style="margin:0;padding:0;background:#E4EAF1;color:#0E2438;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E4EAF1;padding:0;"><tr><td align="center">'
+    . '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#FFFFFF;">'
+    . '<tr><td style="background:#0A6CB4;padding:18px 28px;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td valign="middle"><table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+    . '<td valign="middle"><img src="' . esc_url($logo_simple) . '" alt="" width="48" height="28" style="width:48px;height:28px;display:block;border:0;"></td>'
+    . '<td valign="middle" style="padding-left:12px;">'
+    . ($brand !== '' ? '<img src="' . esc_url($brand) . '" alt="Gildemeister" height="14" style="height:14px;display:block;border:0;">' : '<div style="font-size:13px;font-weight:700;color:#FFFFFF;' . $F . '">GILDEMEISTER</div>')
+    . '<div style="font-size:11px;color:rgba(255,255,255,0.85);margin-top:3px;' . $F . '">Mi alcancía 360 · Postventa</div>'
+    . '</td></tr></table></td>'
+    . '<td align="right" valign="middle"><div style="display:inline-block;background:rgba(255,255,255,0.14);border-radius:12px;font-size:10.5px;font-weight:700;letter-spacing:1.2px;color:#FFFFFF;padding:5px 10px;' . $F . '">CIERRE DE MES</div></td>'
+    . '</tr></table></td></tr>'
+    . '<tr><td style="background:#FBF6EA;padding:30px 32px 26px;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td valign="middle" width="360">'
+    . '<div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A5F0F;' . $F . '">' . esc_html($cierre_label) . '</div>'
+    . '<div style="font-size:18px;font-weight:500;color:#0E2438;margin-top:10px;line-height:22px;' . $F . '">' . esc_html($hero_title) . '</div>'
+    . '<div style="font-size:60px;line-height:72px;font-weight:700;color:' . $amount_color . ';' . $FC . '">' . esc_html(billetera_summary_fmt_sol($mes_actual)) . '</div>'
+    . '<div style="font-size:15px;color:#5B6B80;' . $F . '">' . esc_html($hero_sub) . '</div>'
+    . '</td>'
+    . '<td align="center" valign="middle" width="176">'
+    . ($alcancia_img !== ''
+        ? '<img src="' . esc_url($alcancia_img) . '" alt="Alcancía" width="156" style="width:156px;max-width:156px;display:block;border:0;">'
+        : '<div style="display:inline-block;background-color:#F8D27A;border:1px solid #B77C16;border-radius:20px;font-size:12px;font-weight:700;color:#5A3D06;padding:10px 14px;' . $FC . '">' . $coin_txt . '</div>'
+          . '<div style="font-size:52px;line-height:1;margin-top:6px;">🏦</div>')
+    . '</td>'
+    . '</tr></table></td></tr>'
+    . '<tr><td style="padding:24px 32px 8px;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #DCE3EB;"><tr>'
+    . '<td width="33%" valign="top" style="padding:14px 16px;background:#FFFFFF;"><div style="font-size:26px;font-weight:700;color:#0E2438;' . $FC . '">' . intval($mes_ventas) . '</div><div style="font-size:10px;font-weight:600;letter-spacing:1px;color:#8494A6;margin-top:4px;' . $F . '">VENTAS DEL MES</div></td>'
+    . '<td width="34%" valign="top" style="padding:14px 16px;background:#F5F8FB;border-left:1px solid #DCE3EB;border-right:1px solid #DCE3EB;"><div style="font-size:26px;font-weight:700;color:#1B6E46;' . $FC . '">' . esc_html(billetera_summary_fmt_sol($mes_actual)) . '</div><div style="font-size:10px;font-weight:600;letter-spacing:1px;color:#8494A6;margin-top:4px;' . $F . '">COMISIÓN A COBRAR</div></td>'
+    . '<td width="33%" valign="top" style="padding:14px 16px;background:#FFFFFF;"><div style="font-size:26px;font-weight:700;color:#8A5F0F;' . $FC . '">' . esc_html($pct_txt) . '</div><div style="font-size:10px;font-weight:600;letter-spacing:1px;color:#8494A6;margin-top:4px;' . $F . '">DE TU META</div></td>'
+    . '</tr></table></td></tr>'
+    . '<tr><td style="padding:18px 32px 0;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#5B6B80;' . $F . '">TU META DE ' . esc_html($mes_upper) . '</td>'
+    . '<td align="right" style="font-size:20px;font-weight:700;color:#1B6E46;' . $FC . '">' . esc_html($pct_txt) . '</td>'
+    . '</tr></table>'
+    . '<div style="background:#E4EAF1;border-radius:6px;height:12px;margin-top:10px;line-height:12px;font-size:0;">&nbsp;<div style="background:#2E9E67;height:12px;border-radius:6px;width:' . intval($bar_w) . '%;line-height:12px;font-size:0;">&nbsp;</div></div>'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td style="padding-top:8px;font-size:12px;font-weight:600;color:#0E2438;' . $F . '">' . $meta_line . '</td>'
+    . '<td align="right" style="padding-top:8px;font-size:12px;color:#5B6B80;' . $F . '">Meta ' . esc_html(billetera_summary_fmt_sol($meta)) . '</td>'
+    . '</tr></table>'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td width="33%" style="padding:10px 5px 0 0;"><div style="background:#F5F8FB;padding:10px 12px;"><div style="font-size:11px;color:#5B6B80;' . $F . '">' . esc_html($box1_label) . '</div><div style="font-size:17px;font-weight:700;color:#0E2438;margin-top:2px;' . $FC . '">' . esc_html($box1_val) . '</div></div></td>'
+    . '<td width="34%" style="padding:10px 5px 0 5px;"><div style="background:#F5F8FB;padding:10px 12px;"><div style="font-size:11px;color:#5B6B80;' . $F . '">Ventas validadas</div><div style="font-size:17px;font-weight:700;color:#0E2438;margin-top:2px;' . $FC . '">' . intval($mes_ventas) . ' de ' . intval($mes_ventas) . '</div></div></td>'
+    . '<td width="33%" style="padding:10px 0 0 5px;"><div style="background:#F5F8FB;padding:10px 12px;"><div style="font-size:11px;color:#5B6B80;' . $F . '">Acumulado ' . esc_html($ano) . '</div><div style="font-size:17px;font-weight:700;color:#0E2438;margin-top:2px;' . $FC . '">' . esc_html(billetera_summary_fmt_sol($acum_ano)) . '</div></div></td>'
+    . '</tr></table></td></tr>'
+    . '<tr><td style="padding:14px 32px 0;">'
+    . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    . '<td width="50%" valign="top" style="padding-right:6px;"><div style="border:1px solid #DCE3EB;background:#F5F8FB;padding:16px;">'
+    . '<div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#5B6B80;' . $F . '">TU NUEVA META · ' . esc_html($c['next_upper']) . '</div>'
+    . '<div style="margin-top:4px;"><span style="font-size:34px;font-weight:700;color:#0A6CB4;' . $FC . '">' . esc_html(billetera_summary_fmt_sol($c['meta_next'])) . '</span> <span style="font-size:13px;color:#5B6B80;' . $F . '">en ' . intval($c['next_days']) . ' días</span></div>'
+    . '<div style="font-size:12px;color:#5B6B80;margin-top:2px;' . $F . '">Tu alcancía de ' . esc_html(mb_strtolower($c['next_cap'], 'UTF-8')) . ' empieza en S/ 0. Necesitas unos ' . esc_html(billetera_summary_fmt_sol($c['next_por_dia'])) . ' por día.</div>'
+    . '</div></td>'
+    . '<td width="50%" valign="top" style="padding-left:6px;"><div style="border:1px solid #F0D9A8;background:#FBF6EA;padding:16px;">'
+    . '<div style="font-size:11px;font-weight:600;letter-spacing:1.4px;color:#8A5F0F;' . $F . '">REPITE ' . esc_html($mes_upper) . '</div>'
+    . '<div style="font-size:17px;font-weight:700;color:#0E2438;margin-top:4px;line-height:20px;' . $FC . '">' . esc_html($repite_tit) . '</div>'
+    . '<div style="font-size:12px;color:#5B6B80;margin-top:2px;' . $F . '">' . esc_html($repite_baj) . '</div>'
+    . '</div></td>'
+    . '</tr></table></td></tr>'
+    . $bloque_camp
+    . '<tr><td align="center" style="padding:22px 32px 30px;">'
+    . '<a href="' . esc_url($url) . '" style="display:inline-block;background:#0A6CB4;font-size:15px;font-weight:700;letter-spacing:1.5px;color:#FFFFFF;text-decoration:none;padding:14px 36px;' . $FC . '">VER MI HISTORIAL</a>'
+    . '<div style="margin-top:12px;"><a href="' . esc_url($url) . '" style="font-size:12px;font-weight:600;color:#0A6CB4;text-decoration:none;' . $F . '">Empieza ' . esc_html(mb_strtolower($c['next_cap'], 'UTF-8')) . ': registra tu primera venta</a></div>'
+    . '</td></tr>'
+    . '<tr><td style="background:#F5F8FB;padding:20px 32px;">'
+    . '<div style="font-size:11px;line-height:13px;color:#5B6B80;' . $F . '">Comisión validada por tu jefe de taller. Si tienes alguna observación sobre tu pago, escríbele a tu jefe de taller o a RR.HH.</div>'
+    . '<div style="font-size:11px;line-height:13px;color:#8494A6;margin-top:8px;' . $F . '">Correo automático de Mi Alcancía 360 · Gildemeister Postventa · No respondas a este mensaje.</div>'
+    . '<div style="margin-top:8px;"><a href="' . esc_url($url) . '" style="font-size:11px;font-weight:600;color:#0A6CB4;text-decoration:none;' . $F . '">Configurar notificaciones</a></div>'
+    . '</td></tr>'
+    . '</table></td></tr></table></body></html>';
+}
+
+function billetera_summary_render_email($user, $stats, $week_start, $week_end) {
+    $variant = billetera_summary_variant($week_start, $week_end);
+    $html = apply_filters('billetera_summary_render_variant', null, $user, $stats, $week_start, $week_end, $variant);
+    if (is_string($html) && $html !== '') {
+        return $html;
+    }
+    if ($variant === 'cierre') {
+        return billetera_summary_render_cierre($user, $stats, $week_start, $week_end);
+    }
+    return billetera_summary_render_semanal($user, $stats, $week_start, $week_end);
 }
 
 function billetera_summary_render_text($user, $stats, $week_start, $week_end) {
     $nombre = $user ? $user->display_name : '';
+    $variant = billetera_summary_variant($week_start, $week_end);
+    $p = billetera_summary_get_payload($user ? $user->ID : 0, $week_start, $week_end, $stats);
+
+    if ($variant === 'cierre') {
+        $c = billetera_summary_get_payload_cierre($user ? $user->ID : 0, $p);
+        $t = 'Cierre de mes · ' . billetera_summary_cierre_label($week_end) . "\n";
+        $t .= "Hola $nombre\n";
+        $t .= ($c['supero'] ? '¡Felicitaciones! Superaste tu meta y cobras ' : 'Cerraste el mes con ') . billetera_summary_fmt_sol($p['mes_actual']) . "\n";
+        $t .= 'Meta: ' . billetera_summary_fmt_sol($p['meta']) . ' (' . $c['pct'] . "%)\n";
+        $t .= 'Ventas del mes: ' . intval($c['mes_ventas']) . ' · Acumulado año: ' . billetera_summary_fmt_sol($c['acum_ano']) . "\n\n";
+        $t .= 'Nueva meta ' . $c['next_upper'] . ': ' . billetera_summary_fmt_sol($c['meta_next']) . ' en ' . intval($c['next_days']) . " días\n";
+        $t .= "\n" . home_url('/') . "\n";
+        return $t;
+    }
+
     $label  = billetera_summary_week_label($week_start, $week_end);
+    $label_long = billetera_summary_week_label_long($week_start, $week_end);
+
+    $p = billetera_summary_get_payload($user ? $user->ID : 0, $week_start, $week_end, $stats);
+    $sem = $p['semana'];
 
     $t = "Resumen semanal de comisiones\n";
     $t .= "Hola $nombre\n";
-    $t .= "Semana: $label\n\n";
-    $t .= 'Comisión total: ' . billetera_summary_fmt_sol($stats['total']) . "\n";
-    $t .= 'Ventas: ' . intval($stats['ventas']) . "\n";
-    $t .= 'Unidades: ' . intval($stats['unidades']) . "\n\n";
+    $t .= "$label_long ($label)\n\n";
+    $t .= 'Comisión semana: ' . billetera_summary_fmt_sol($sem['total'] ?? 0) . "\n";
+    $t .= 'Ventas semana: ' . intval($sem['ventas'] ?? 0) . "\n";
+    $t .= 'Acumulado mes: ' . billetera_summary_fmt_sol($p['mes_actual']) . "\n";
+    $t .= 'Meta: ' . billetera_summary_fmt_sol($p['meta']) . ' (' . $p['fill'] . "%)\n";
+    $t .= 'Te faltan: ' . billetera_summary_fmt_sol($p['faltan']) . ' · Días cierre: ' . intval($p['dias_cierre']) . ' · Por día: ' . billetera_summary_fmt_sol($p['por_dia']) . "\n\n";
 
-    if (!empty($stats['por_linea'])) {
-        $t .= "Desglose por línea:\n";
-        foreach ($stats['por_linea'] as $l) {
-            $t .= '- ' . $l['label'] . ': ' . billetera_summary_fmt_sol($l['total']) . "\n";
-        }
-    } else {
-        $t .= "Esta semana no registramos ventas con comisión a tu nombre.\n";
+    $t .= 'Ranking: #' . intval($p['ranking']['tienda']['rank']) . ' de ' . intval($p['ranking']['tienda']['total']) . ' en tienda · #' . intval($p['ranking']['global']['rank']) . ' de ' . intval($p['ranking']['global']['total']) . " global\n";
+    if (!empty($p['ranking']['diff_txt'])) {
+        $t .= $p['ranking']['diff_txt'] . "\n";
+    }
+    if (!empty($p['campana'])) {
+        $t .= 'Campaña: ' . $p['campana']['titulo'] . "\n";
     }
 
     $t .= "\n" . home_url('/') . "\n";
@@ -713,6 +1313,21 @@ function billetera_summary_preview_output() {
     }
 
     list($week_start, $week_end) = billetera_summary_last_week_range();
+    // ?variant=cierre fuerza una semana que cruza fin de mes para previsualizar el template de cierre.
+    if (isset($_GET['variant']) && $_GET['variant'] === 'cierre' && !billetera_summary_is_closing_week($week_start, $week_end)) {
+        try {
+            $tz = wp_timezone();
+            $ref = billetera_stats_local_now()->modify('first day of last month')->modify('last day of this month');
+            $monday = (clone $ref)->modify('monday this week')->setTime(0, 0, 0);
+            // Si el lunes cae después del último día, retrocede una semana.
+            if ($monday > $ref) {
+                $monday->modify('-7 days');
+            }
+            $week_start = $monday->format('Y-m-d H:i:s');
+            $week_end = (clone $monday)->modify('+7 days')->format('Y-m-d H:i:s');
+        } catch (Exception $ex) {
+        }
+    }
     $stats = billetera_summary_stats_usuario($uid, $week_start, $week_end);
 
     header('Content-Type: text/html; charset=UTF-8');
@@ -831,6 +1446,10 @@ function billetera_render_resumen_page() {
 
     $preview_url = wp_nonce_url(
         admin_url('admin-post.php?action=billetera_summary_preview&user_id=' . (int) ($sample_users ? $sample_users[0]->ID : 0)),
+        'billetera_summary_preview'
+    );
+    $preview_cierre_url = wp_nonce_url(
+        admin_url('admin-post.php?action=billetera_summary_preview&user_id=' . (int) ($sample_users ? $sample_users[0]->ID : 0) . '&variant=cierre'),
         'billetera_summary_preview'
     );
 
@@ -960,7 +1579,8 @@ function billetera_render_resumen_page() {
             </div>
             <div class="bc-field bc-field--actions">
                 <button type="submit" class="button button-primary" <?php disabled(!$test_email); ?>>Enviar correo de prueba</button>
-                <a class="button" href="<?php echo esc_url($preview_url); ?>" target="_blank" rel="noopener">Ver preview</a>
+                <a class="button" href="<?php echo esc_url($preview_url); ?>" target="_blank" rel="noopener">Ver preview semanal</a>
+                <a class="button" href="<?php echo esc_url($preview_cierre_url); ?>" target="_blank" rel="noopener">Ver preview cierre</a>
             </div>
         </form>
         <?php if (!$test_email): ?>
