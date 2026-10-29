@@ -898,19 +898,6 @@
     white-space: nowrap;
 }
 
-.st-banner__ad {
-    position: absolute;
-    top: 8px;
-    right: 12px;
-    font-family: Barlow, 'Barlow Condensed', Inter, sans-serif;
-    font-weight: 500;
-    font-size: 10px;
-    line-height: 12px;
-    letter-spacing: 0.5px;
-    color: rgba(255, 255, 255, 0.55);
-    z-index: 1;
-}
-
 @media (max-width: 1024px) {
     .st-banner {
         flex-direction: column;

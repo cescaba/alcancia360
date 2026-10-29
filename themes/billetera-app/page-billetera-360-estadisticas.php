@@ -104,7 +104,6 @@ $alcancia_img = get_template_directory_uri() . '/assets/img/alcancia.svg';
                         <div class="st-banner__side">
                             <div class="st-banner__dots" id="st-banner-dots"></div>
                         </div>
-                        <span class="st-banner__ad">Publicidad</span>
                     </div>
 
                     <!-- KPIs v3 -->
