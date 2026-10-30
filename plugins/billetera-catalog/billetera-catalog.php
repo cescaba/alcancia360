@@ -861,21 +861,93 @@ function billetera_convert_to_sol($comision) {
 }
 
 // ============================================================================
-// REGLAS DE BONIFICACIÓN (configurables desde el admin)
-// Cada regla elige una categoría (toda la categoría o solo una línea), un
-// umbral, un multiplicador y una excepción opcional por concesionaria
-// (monto fijo en USD por unidad, para el asesor y para el jefe).
+// REGLAS DE BONIFICACIÓN v2 (configurables desde el admin)
+// Alcance en 4 ejes independientes (0/'' = Todas): categoría, marca/línea,
+// subcategoría y concesionaria (scope_dealer_id). Solo UNA regla gana por
+// venta: la más específica (mayor score). La general nunca se suma.
+// Cada regla mantiene umbral, multiplicador y excepción opcional por
+// concesionaria (monto fijo en USD/PEN por unidad, para asesor y jefe).
 // ============================================================================
 
 /**
  * Lee las reglas de bonificación (opción). Siembra las reglas por defecto la 1.ª vez.
+ * Siempre devuelve reglas normalizadas a v2 (con scope_* y prioridad_manual).
  */
 function billetera_bonus_reglas() {
     $reglas = get_option('billetera_bonus_reglas', null);
     if ($reglas === null) {
         $reglas = billetera_bonus_seed_reglas();
     }
-    return is_array($reglas) ? $reglas : [];
+    if (!is_array($reglas)) {
+        return [];
+    }
+    $out = [];
+    $dirty = false;
+    foreach ($reglas as $r) {
+        if (!is_array($r)) {
+            continue;
+        }
+        $n = billetera_bonus_normalize_regla($r);
+        if ($n !== $r) {
+            $dirty = true;
+        }
+        $out[] = $n;
+    }
+    if ($dirty) {
+        update_option('billetera_bonus_reglas', $out, false);
+    }
+    return $out;
+}
+
+/**
+ * Normaliza una regla legacy a v2 sin cambiar su comportamiento.
+ * Legacy: ambito=categoria (por slug, todas las líneas) o ambito=linea (una categoría exacta).
+ * v2: scope_categoria_id / scope_slug / scope_linea_codigo / scope_marca_id /
+ *     scope_subcategoria_id / scope_dealer_id / prioridad_manual.
+ */
+function billetera_bonus_normalize_regla($r) {
+    if (!isset($r['scope_categoria_id'])) {
+        $ambito = $r['ambito'] ?? 'categoria';
+        if ($ambito === 'linea') {
+            $r['scope_categoria_id'] = intval($r['categoria_id'] ?? 0);
+            $r['scope_slug']         = '';
+            $r['scope_linea_codigo'] = strtolower(trim((string) ($r['linea_codigo'] ?? '')));
+        } else {
+            $r['scope_categoria_id'] = 0;
+            $r['scope_slug']         = strtolower(trim((string) ($r['slug'] ?? '')));
+            $r['scope_linea_codigo'] = '';
+        }
+    }
+    if (!isset($r['scope_slug'])) {
+        $r['scope_slug'] = '';
+    }
+    if (!isset($r['scope_linea_codigo'])) {
+        $r['scope_linea_codigo'] = strtolower(trim((string) ($r['linea_codigo'] ?? '')));
+        // Si la regla legacy era de categoría (por slug), la línea no filtra.
+        if (($r['ambito'] ?? 'categoria') !== 'linea') {
+            $r['scope_linea_codigo'] = '';
+        }
+    }
+    if (!isset($r['scope_marca_id'])) {
+        $r['scope_marca_id'] = 0;
+    }
+    if (!isset($r['scope_subcategoria_id'])) {
+        $r['scope_subcategoria_id'] = 0;
+    }
+    if (!isset($r['scope_dealer_id'])) {
+        $r['scope_dealer_id'] = 0;
+    }
+    if (!isset($r['prioridad_manual'])) {
+        $r['prioridad_manual'] = 0;
+    }
+    $r['scope_categoria_id']   = intval($r['scope_categoria_id']);
+    $r['scope_marca_id']       = intval($r['scope_marca_id']);
+    $r['scope_subcategoria_id'] = intval($r['scope_subcategoria_id']);
+    $r['scope_dealer_id']      = intval($r['scope_dealer_id']);
+    $r['prioridad_manual']     = intval($r['prioridad_manual']);
+    $r['scope_linea_codigo']   = strtolower(trim((string) $r['scope_linea_codigo']));
+    $r['scope_slug']           = strtolower(trim((string) $r['scope_slug']));
+    return $r;
 }
 
 /**
@@ -1009,6 +1081,7 @@ function billetera_bonus_find_regla($categoria_id, $slug, $fecha_ymd = null) {
 /**
  * Condición SQL de categoría para una regla: [sql, params].
  * 'categoria' = todas las líneas (por slug); 'linea' = solo esa categoría.
+ * (Legacy: se mantiene por compatibilidad; el motor v2 usa billetera_bonus_cond_v2).
  */
 function billetera_bonus_cond($regla) {
     if (($regla['ambito'] ?? 'categoria') === 'linea') {
@@ -1016,6 +1089,238 @@ function billetera_bonus_cond($regla) {
     }
     $m = strtolower($regla['slug'] ?? '');
     return ['(LOWER(c.slug) = %s OR LOWER(c.nombre) = %s)', [$m, $m]];
+}
+
+/**
+ * Contexto de una venta para el matcher v2: categoría, slug, línea y marca.
+ * Devuelve null si la subcategoría no existe.
+ */
+function billetera_bonus_ctx($subcategoria_id) {
+    global $wpdb;
+    $sub = $wpdb->prefix . 'billetera_subcategorias';
+    $cat = $wpdb->prefix . 'billetera_categorias';
+    $lin = $wpdb->prefix . 'billetera_lineas';
+    $row = $wpdb->get_row($wpdb->prepare("
+        SELECT c.id AS categoria_id, c.slug AS slug, c.nombre AS categoria_nombre,
+               c.linea_codigo AS linea_codigo, l.marca_id AS marca_id, s.id AS subcategoria_id
+        FROM $sub s
+        JOIN $cat c ON c.id = s.categoria_id
+        LEFT JOIN $lin l ON l.codigo = c.linea_codigo
+        WHERE s.id = %d
+    ", intval($subcategoria_id)));
+    if (!$row) {
+        return null;
+    }
+    return [
+        'categoria_id'    => intval($row->categoria_id),
+        'slug'            => strtolower((string) $row->slug),
+        'categoria_nombre' => (string) $row->categoria_nombre,
+        'linea_codigo'    => strtolower((string) ($row->linea_codigo ?? '')),
+        'marca_id'        => intval($row->marca_id ?? 0),
+        'subcategoria_id' => intval($row->subcategoria_id),
+    ];
+}
+
+/**
+ * Score de especificidad de una regla para un contexto + dealer.
+ * Devuelve false si la regla NO aplica. Mayor score = más específica.
+ *  +40 subcategoría exacta, +20 concesionaria (alcance), +10 categoría exacta,
+ *  +5 línea exacta, +3 slug (toda la categoría), +2 marca exacta.
+ *  La prioridad_manual se suma después en el finder (desempate explícito).
+ */
+function billetera_bonus_regla_match_score($regla, $ctx, $dealer_id) {
+    $regla = billetera_bonus_normalize_regla($regla);
+    $dealer_id = intval($dealer_id);
+    $score = 0;
+
+    $scope_sub = intval($regla['scope_subcategoria_id'] ?? 0);
+    if ($scope_sub > 0) {
+        if ($ctx['subcategoria_id'] !== $scope_sub) {
+            return false;
+        }
+        $score += 40;
+    }
+
+    $scope_dealer = intval($regla['scope_dealer_id'] ?? 0);
+    if ($scope_dealer > 0) {
+        if ($dealer_id <= 0 || $dealer_id !== $scope_dealer) {
+            return false;
+        }
+        $score += 20;
+    }
+
+    $scope_cat = intval($regla['scope_categoria_id'] ?? 0);
+    if ($scope_cat > 0) {
+        if ($ctx['categoria_id'] !== $scope_cat) {
+            return false;
+        }
+        $score += 10;
+    } else {
+        $slug = (string) ($regla['scope_slug'] ?? ($regla['slug'] ?? ''));
+        $slug = strtolower(trim($slug));
+        if ($slug !== '') {
+            if ($ctx['slug'] !== $slug) {
+                return false;
+            }
+            $score += 3;
+            // Retrocompat: si la regla legacy apuntaba a esta categoría exacta,
+            // pequeño plus para preservar "exacta antes que slug genérico".
+            if (intval($regla['categoria_id'] ?? 0) === $ctx['categoria_id']) {
+                $score += 1;
+            }
+        }
+        // scope_categoria 0 + slug '' = regla global "todas": score 0, aplica a todo.
+    }
+
+    $scope_linea = strtolower(trim((string) ($regla['scope_linea_codigo'] ?? '')));
+    if ($scope_linea !== '') {
+        if ($ctx['linea_codigo'] !== $scope_linea) {
+            return false;
+        }
+        $score += 5;
+    }
+
+    $scope_marca = intval($regla['scope_marca_id'] ?? 0);
+    if ($scope_marca > 0) {
+        if (intval($ctx['marca_id']) !== $scope_marca) {
+            return false;
+        }
+        $score += 2;
+    }
+
+    return $score;
+}
+
+/**
+ * Mejor regla v2 para una venta: solo UNA gana, la más específica.
+ * Empate: mayor prioridad_manual, luego la más reciente (última del array).
+ * Devuelve la regla normalizada o null.
+ */
+function billetera_bonus_find_best_regla($subcategoria_id, $dealer_id = 0, $fecha_ymd = null) {
+    $ctx = billetera_bonus_ctx($subcategoria_id);
+    if (!$ctx) {
+        return null;
+    }
+    if ($fecha_ymd === null) {
+        $fecha_ymd = billetera_stats_local_now()->format('Y-m-d');
+    }
+    $best = null;
+    $best_score = -1;
+    $best_prio = -1;
+    $best_idx = -1;
+    foreach (billetera_bonus_reglas() as $idx => $r) {
+        if (empty($r['activo'])) {
+            continue;
+        }
+        if (!billetera_regla_vigente_en($r, $fecha_ymd)) {
+            continue;
+        }
+        $s = billetera_bonus_regla_match_score($r, $ctx, $dealer_id);
+        if ($s === false) {
+            continue;
+        }
+        $prio = intval($r['prioridad_manual'] ?? 0);
+        $total = $s + $prio;
+        if ($total > $best_score || ($total === $best_score && ($prio > $best_prio || ($prio === $best_prio && $idx >= $best_idx)))) {
+            $best = billetera_bonus_normalize_regla($r);
+            $best_score = $total;
+            $best_prio = $prio;
+            $best_idx = $idx;
+        }
+    }
+    return $best;
+}
+
+/**
+ * Condición SQL v2 del ámbito de una regla: [sql, params].
+ * Cubre subcategoría / categoría exacta / slug / línea / marca.
+ * NOTA: scope_dealer_id NO filtra el conteo (la tabla de ventas no guarda
+ * dealer por fila); el alcance de concesionaria se valida en el matcher
+ * (venta actual) y el umbral cuenta el resto del ámbito. Se documenta para
+ * Fase 2 (agregar columna dealer_id a ventas si se requiere conteo por tienda).
+ */
+function billetera_bonus_cond_v2($regla) {
+    global $wpdb;
+    $regla = billetera_bonus_normalize_regla($regla);
+    $lin = $wpdb->prefix . 'billetera_lineas';
+    $parts = [];
+    $params = [];
+
+    $scope_sub = intval($regla['scope_subcategoria_id'] ?? 0);
+    if ($scope_sub > 0) {
+        $parts[] = 's.id = %d';
+        $params[] = $scope_sub;
+    } elseif (intval($regla['scope_categoria_id'] ?? 0) > 0) {
+        $parts[] = 'c.id = %d';
+        $params[] = intval($regla['scope_categoria_id']);
+    } else {
+        $slug = (string) ($regla['scope_slug'] ?? ($regla['slug'] ?? ''));
+        $slug = strtolower(trim($slug));
+        if ($slug !== '') {
+            $parts[] = '(LOWER(c.slug) = %s OR LOWER(c.nombre) = %s)';
+            $params[] = $slug;
+            $params[] = $slug;
+        }
+    }
+
+    $scope_linea = strtolower(trim((string) ($regla['scope_linea_codigo'] ?? '')));
+    if ($scope_linea !== '') {
+        $parts[] = 'c.linea_codigo = %s';
+        $params[] = $scope_linea;
+    }
+
+    $scope_marca = intval($regla['scope_marca_id'] ?? 0);
+    if ($scope_marca > 0) {
+        $parts[] = "c.linea_codigo IN (SELECT codigo FROM $lin WHERE marca_id = %d)";
+        $params[] = $scope_marca;
+    }
+
+    if (empty($parts)) {
+        return ['1=1', []];
+    }
+    return [implode(' AND ', $parts), $params];
+}
+
+/**
+ * Frase humana del alcance (para el admin de Fase 2 y el dry-run).
+ * Ej: "Prepagados · Todas las marcas · Línea hyu · Todas las subcategorías · Todas las tiendas".
+ */
+function billetera_bonus_regla_describe($regla) {
+    $regla = billetera_bonus_normalize_regla($regla);
+    global $wpdb;
+    $cat = $wpdb->prefix . 'billetera_categorias';
+    $sub = $wpdb->prefix . 'billetera_subcategorias';
+    $lin = $wpdb->prefix . 'billetera_lineas';
+    $mar = $wpdb->prefix . 'billetera_marcas';
+
+    $cat_txt = 'Todas las categorías';
+    if (intval($regla['scope_categoria_id'] ?? 0) > 0) {
+        $n = $wpdb->get_var($wpdb->prepare("SELECT nombre FROM $cat WHERE id = %d", intval($regla['scope_categoria_id'])));
+        $cat_txt = $n ? (string) $n : ('Categoría #' . intval($regla['scope_categoria_id']));
+    } elseif (trim((string) ($regla['scope_slug'] ?? ($regla['slug'] ?? ''))) !== '') {
+        $cat_txt = (string) ($regla['nombre'] ?? $regla['slug']);
+    }
+    $marca_txt = 'Todas las marcas';
+    if (intval($regla['scope_marca_id'] ?? 0) > 0) {
+        $n = $wpdb->get_var($wpdb->prepare("SELECT nombre FROM $mar WHERE id = %d", intval($regla['scope_marca_id'])));
+        $marca_txt = $n ? (string) $n : ('Marca #' . intval($regla['scope_marca_id']));
+    }
+    $linea_txt = 'Todas las líneas';
+    if (trim((string) ($regla['scope_linea_codigo'] ?? '')) !== '') {
+        $n = $wpdb->get_var($wpdb->prepare("SELECT nombre FROM $lin WHERE codigo = %s", (string) $regla['scope_linea_codigo']));
+        $linea_txt = 'Línea ' . ($n ? (string) $n : (string) $regla['scope_linea_codigo']);
+    }
+    $sub_txt = 'Todas las subcategorías';
+    if (intval($regla['scope_subcategoria_id'] ?? 0) > 0) {
+        $n = $wpdb->get_var($wpdb->prepare("SELECT nombre FROM $sub WHERE id = %d", intval($regla['scope_subcategoria_id'])));
+        $sub_txt = $n ? (string) $n : ('Subcategoría #' . intval($regla['scope_subcategoria_id']));
+    }
+    $dealer_txt = 'Todas las tiendas';
+    if (intval($regla['scope_dealer_id'] ?? 0) > 0) {
+        $t = get_the_title(intval($regla['scope_dealer_id']));
+        $dealer_txt = 'Solo ' . ($t ? (string) $t : ('#' . intval($regla['scope_dealer_id'])));
+    }
+    return $cat_txt . ' · ' . $marca_txt . ' · ' . $linea_txt . ' · ' . $sub_txt . ' · ' . $dealer_txt;
 }
 
 /**
@@ -1056,14 +1361,15 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
     }
 
     $fecha_ymd = $fecha_datetime ? substr((string) $fecha_datetime, 0, 10) : billetera_stats_local_now()->format('Y-m-d');
-    $regla = billetera_bonus_find_regla($catrow->id, $catrow->slug, $fecha_ymd);
+    // Motor v2: gana una sola regla, la más específica (subcat > dealer > cat > línea > marca).
+    $regla = billetera_bonus_find_best_regla($subcategoria_id, $dealer_id, $fecha_ymd);
     if (!$regla) {
         return $out;
     }
     $out['regla']            = $regla['id'];
     $out['categoria_nombre'] = $regla['nombre'] ?? $catrow->nombre;
 
-    list($cond, $cond_params) = billetera_bonus_cond($regla);
+    list($cond, $cond_params) = billetera_bonus_cond_v2($regla);
 
     $mes_inicio = substr($fecha_ymd, 0, 7) . '-01 00:00:00';
     // El conteo del umbral solo suma ventas dentro de la vigencia.
@@ -1140,7 +1446,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
     $cat    = $wpdb->prefix . 'billetera_categorias';
 
     $limite = max(1, (int) $regla['umbral'] - 1);
-    list($cond, $cond_params) = billetera_bonus_cond($regla);
+    list($cond, $cond_params) = billetera_bonus_cond_v2($regla);
 
     // No tocar ventas anteriores a la vigencia.
     $inicio = (string) $mes_inicio;
@@ -1608,7 +1914,7 @@ function billetera_campana_ventas_mes($user_id, $regla) {
         }
     }
 
-    list($cond_sql, $cond_params) = billetera_bonus_cond($regla);
+    list($cond_sql, $cond_params) = billetera_bonus_cond_v2($regla);
     $params = array_merge([intval($user_id), $desde, $hasta], $cond_params);
 
     return intval($wpdb->get_var($wpdb->prepare(
@@ -1622,11 +1928,19 @@ function billetera_campana_ventas_mes($user_id, $regla) {
 
 /**
  * Campañas vigentes para un usuario (asesor): reglas con banner activo
- * dentro de vigencia. Sin segmentación por tienda: global para todos.
+ * dentro de vigencia. v2: respeta scope_dealer_id (solo se muestra si la
+ * tienda actual del usuario coincide).
  */
 function billetera_campanas_para_usuario($user_id) {
     $user_id   = intval($user_id);
     $hoy       = billetera_stats_local_now()->format('Y-m-d');
+
+    // Dealer actual del usuario (para filtrar reglas con alcance de tienda).
+    $user_dealer = 0;
+    $tienda_id = get_user_meta($user_id, '_tienda_asociada', true);
+    if ($tienda_id) {
+        $user_dealer = intval(get_post_meta($tienda_id, '_dealer_id', true));
+    }
 
     $out = [];
     foreach (billetera_bonus_reglas() as $r) {
@@ -1634,6 +1948,10 @@ function billetera_campanas_para_usuario($user_id) {
             continue;
         }
         if (trim((string) ($r['banner_titulo'] ?? '')) === '') {
+            continue;
+        }
+        $scope_dealer = intval($r['scope_dealer_id'] ?? 0);
+        if ($scope_dealer > 0 && $user_dealer !== $scope_dealer) {
             continue;
         }
         $desde = (string) ($r['banner_desde'] ?? '');

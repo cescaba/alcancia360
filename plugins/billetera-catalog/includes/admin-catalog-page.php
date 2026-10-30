@@ -1176,6 +1176,117 @@ function billetera_render_config_page() {
 // ===========================================================================
 // REGLAS DE BONIFICACIÓN
 // ===========================================================================
+
+/**
+ * Helpers admin v2 (solo backoffice): mismo alcance, solapamiento y prueba.
+ * Mismo alcance = tupla idéntica (categoría, marca, línea, subcategoría, tienda).
+ * Solapan = en cada eje son iguales o uno es "Todas" (alcances que se cruzan).
+ * La vigencia se compara como rango [desde|−∞, hasta|+∞].
+ */
+function billetera_bonus_admin_mismo_alcance($a, $b) {
+    $a = billetera_bonus_normalize_regla($a);
+    $b = billetera_bonus_normalize_regla($b);
+    $ka = [strtolower(trim((string) ($a['scope_slug'] ?? ''))), intval($a['scope_marca_id'] ?? 0), strtolower(trim((string) ($a['scope_linea_codigo'] ?? ''))), intval($a['scope_subcategoria_id'] ?? 0), intval($a['scope_dealer_id'] ?? 0)];
+    $kb = [strtolower(trim((string) ($b['scope_slug'] ?? ''))), intval($b['scope_marca_id'] ?? 0), strtolower(trim((string) ($b['scope_linea_codigo'] ?? ''))), intval($b['scope_subcategoria_id'] ?? 0), intval($b['scope_dealer_id'] ?? 0)];
+    return $ka === $kb;
+}
+
+function billetera_bonus_admin_eje_cruza($x, $y) {
+    $x = is_string($x) ? strtolower(trim($x)) : intval($x);
+    $y = is_string($y) ? strtolower(trim($y)) : intval($y);
+    $wild_x = ($x === '' || $x === 0);
+    $wild_y = ($y === '' || $y === 0);
+    if ($wild_x || $wild_y) {
+        return true;
+    }
+    return $x === $y;
+}
+
+function billetera_bonus_admin_solapan($a, $b) {
+    $a = billetera_bonus_normalize_regla($a);
+    $b = billetera_bonus_normalize_regla($b);
+    // Categoría exacta legacy también cruza con su slug.
+    $slug_a = strtolower(trim((string) ($a['scope_slug'] ?? ($a['slug'] ?? ''))));
+    $slug_b = strtolower(trim((string) ($b['scope_slug'] ?? ($b['slug'] ?? ''))));
+    if (!billetera_bonus_admin_eje_cruza($slug_a, $slug_b)) {
+        // Excepción: regla exacta de categoría (scope_categoria_id) vs slug.
+        $ca = intval($a['scope_categoria_id'] ?? 0);
+        $cb = intval($b['scope_categoria_id'] ?? 0);
+        if (!($ca > 0 && $cb > 0 && $ca === $cb)) {
+            return false;
+        }
+    }
+    foreach ([['scope_marca_id', 'scope_marca_id'], ['scope_linea_codigo', 'scope_linea_codigo'], ['scope_subcategoria_id', 'scope_subcategoria_id'], ['scope_dealer_id', 'scope_dealer_id']] as $par) {
+        if (!billetera_bonus_admin_eje_cruza($a[$par[0]] ?? 0, $b[$par[1]] ?? 0)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function billetera_bonus_admin_vigencia_solapa($a, $b) {
+    $da = trim((string) ($a['banner_desde'] ?? ''));
+    $ha = trim((string) ($a['banner_hasta'] ?? ''));
+    $db = trim((string) ($b['banner_desde'] ?? ''));
+    $hb = trim((string) ($b['banner_hasta'] ?? ''));
+    $desde = max($da !== '' ? $da : '0000-00-00', $db !== '' ? $db : '0000-00-00');
+    $hasta = min($ha !== '' ? $ha : '9999-99-99', $hb !== '' ? $hb : '9999-99-99');
+    return $desde <= $hasta;
+}
+
+/**
+ * Prueba de alcance: cuántas ventas y asesores del mes caen en el ámbito.
+ * No guarda nada. Devuelve ['ventas'=>int, 'asesores'=>int, 'solapan'=>[descripciones]].
+ */
+function billetera_bonus_admin_dry_run($regla) {
+    global $wpdb;
+    $regla = billetera_bonus_normalize_regla($regla);
+    $ventas = $wpdb->prefix . 'billetera_ventas';
+    $sub    = $wpdb->prefix . 'billetera_subcategorias';
+    $cat    = $wpdb->prefix . 'billetera_categorias';
+    $now = billetera_stats_local_now();
+    $desde = $now->format('Y-m-01 00:00:00');
+    $hasta = (clone $now)->modify('first day of next month')->format('Y-m-01 00:00:00');
+    if (!empty($regla['banner_desde'])) {
+        $d = (string) $regla['banner_desde'] . ' 00:00:00';
+        if ($d > $desde) {
+            $desde = $d;
+        }
+    }
+    if (!empty($regla['banner_hasta'])) {
+        $h = (new DateTime((string) $regla['banner_hasta'] . ' 00:00:00'))->modify('+1 day')->format('Y-m-d 00:00:00');
+        if ($h < $hasta) {
+            $hasta = $h;
+        }
+    }
+    list($cond_sql, $cond_params) = billetera_bonus_cond_v2($regla);
+    $params = array_merge([$desde, $hasta], $cond_params);
+    $row = $wpdb->get_row($wpdb->prepare(
+        "SELECT COUNT(*) AS ventas, COUNT(DISTINCT v.usuario_id) AS asesores
+         FROM $ventas v
+         JOIN $sub s ON s.id = v.subcategoria_id
+         JOIN $cat c ON c.id = s.categoria_id
+         WHERE v.creado_en >= %s AND v.creado_en < %s AND ($cond_sql)",
+        ...$params
+    ));
+    $solapan = [];
+    foreach (billetera_bonus_reglas() as $r) {
+        if (($r['id'] ?? '') === ($regla['id'] ?? '')) {
+            continue;
+        }
+        if (empty($r['activo'])) {
+            continue;
+        }
+        if (!billetera_bonus_admin_solapan($r, $regla)) {
+            continue;
+        }
+        if (!billetera_bonus_admin_vigencia_solapa($r, $regla)) {
+            continue;
+        }
+        $solapan[] = '“' . ($r['nombre'] ?? $r['slug'] ?? $r['id']) . '” (' . billetera_bonus_regla_describe($r) . ')';
+    }
+    return ['ventas' => intval($row->ventas ?? 0), 'asesores' => intval($row->asesores ?? 0), 'solapan' => $solapan];
+}
 function billetera_render_bonus_page() {
     // OCULTAMIENTO TEMPORAL para administrador_hyundai (bloquea acceso directo por URL).
     if ((function_exists('billetera_catalog_is_hyundai_admin') && billetera_catalog_is_hyundai_admin()) || !current_user_can(BILLETERA_CATALOG_CAP)) {
@@ -1191,25 +1302,78 @@ function billetera_render_bonus_page() {
         check_admin_referer('billetera_catalog');
         $action = sanitize_key($_POST['bc_action']);
 
-        if ($action === 'save_rule') {
-            $categoria_id = intval($_POST['categoria_id'] ?? 0);
-            if ($categoria_id <= 0) {
-                $err = 'Selecciona una categoría.';
-            } else {
-                $catrow = $wpdb->get_row($wpdb->prepare("SELECT id, nombre, slug, linea_codigo FROM $cat_table WHERE id = %d", $categoria_id));
-                if (!$catrow) {
-                    $err = 'Categoría no encontrada.';
-                } else {
-                    $rid    = sanitize_text_field(wp_unslash($_POST['rule_id'] ?? ''));
-                    $ambito = (isset($_POST['ambito']) && $_POST['ambito'] === 'linea') ? 'linea' : 'categoria';
+        if ($action === 'save_rule' || $action === 'dry_run') {
+            // ---- Alcance v2: 5 selects independientes ('' / 0 = Todas) ----
+            $scope_slug = strtolower(trim(sanitize_text_field(wp_unslash($_POST['scope_categoria_slug'] ?? ''))));
+            $scope_marca_id = intval($_POST['scope_marca_id'] ?? 0);
+            $scope_linea_codigo = strtolower(trim(sanitize_text_field(wp_unslash($_POST['scope_linea_codigo'] ?? ''))));
+            $scope_sub_id = intval($_POST['scope_subcategoria_id'] ?? 0);
+            $scope_dealer_id = intval($_POST['scope_dealer_id'] ?? 0);
+            $prioridad = max(0, min(100, intval($_POST['prioridad_manual'] ?? 0)));
 
+            if ($scope_slug === '' && $scope_sub_id <= 0) {
+                $err = 'Elige al menos una categoría o una subcategoría. Una regla para “todo” sería demasiado amplia.';
+            } else {
+                // Si se eligió subcategoría, ella manda: derivamos su categoría/línea/marca
+                // para que la regla nunca quede en un cruce imposible.
+                $subcat_cat_id = 0;
+                $nota_sub = '';
+                if ($scope_sub_id > 0) {
+                    $subrow = $wpdb->get_row($wpdb->prepare(
+                        "SELECT s.id, s.nombre AS sub_nombre, c.id AS cat_id, c.nombre AS cat_nombre, c.slug AS cat_slug, c.linea_codigo AS linea_codigo, l.marca_id AS marca_id
+                         FROM {$wpdb->prefix}billetera_subcategorias s
+                         JOIN $cat_table c ON c.id = s.categoria_id
+                         LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
+                         WHERE s.id = %d",
+                        $scope_sub_id
+                    ));
+                    if (!$subrow) {
+                        $err = 'La subcategoría elegida no existe.';
+                    } else {
+                        $scope_slug = strtolower(trim((string) $subrow->cat_slug));
+                        $scope_linea_codigo = strtolower(trim((string) ($subrow->linea_codigo ?? '')));
+                        $scope_marca_id = intval($subrow->marca_id ?? 0);
+                        $subcat_cat_id = intval($subrow->cat_id);
+                        $nota_sub = ' (alcance ajustado a la subcategoría “' . $subrow->sub_nombre . '”)';
+                    }
+                }
+
+                if ($err === '') {
+                    // Nombre visible: el de la categoría (o de la subcategoría si es específica).
+                    if ($scope_sub_id > 0 && isset($subrow)) {
+                        $nombre_vis = (string) $subrow->cat_nombre;
+                    } else {
+                        $nombre_vis = (string) $wpdb->get_var($wpdb->prepare("SELECT nombre FROM $cat_table WHERE LOWER(slug) = %s OR LOWER(nombre) = %s ORDER BY id ASC LIMIT 1", $scope_slug, $scope_slug));
+                        if ($nombre_vis === '') {
+                            $nombre_vis = $scope_slug;
+                        }
+                    }
+                    // categoria_id legacy (representativa, solo informativa: el motor v2 usa scope_*).
+                    if ($subcat_cat_id > 0) {
+                        $legacy_cat_id = $subcat_cat_id;
+                    } elseif ($scope_linea_codigo !== '' && $scope_slug !== '') {
+                        $legacy_cat_id = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $cat_table WHERE LOWER(slug) = %s AND linea_codigo = %s ORDER BY id ASC LIMIT 1", $scope_slug, $scope_linea_codigo)));
+                    } else {
+                        $legacy_cat_id = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $cat_table WHERE LOWER(slug) = %s OR LOWER(nombre) = %s ORDER BY id ASC LIMIT 1", $scope_slug, $scope_slug)));
+                    }
+
+                    $rid = sanitize_text_field(wp_unslash($_POST['rule_id'] ?? ''));
                     $nueva = [
                         'id'                     => $rid !== '' ? $rid : ('r_' . wp_generate_password(8, false, false)),
-                        'categoria_id'           => intval($catrow->id),
-                        'slug'                   => $catrow->slug,
-                        'nombre'                 => $catrow->nombre,
-                        'linea_codigo'           => $catrow->linea_codigo,
-                        'ambito'                 => $ambito,
+                        // Legacy (informativo; el motor v2 usa scope_*).
+                        'categoria_id'           => $legacy_cat_id,
+                        'slug'                   => $scope_slug,
+                        'nombre'                 => $nombre_vis,
+                        'linea_codigo'           => $scope_linea_codigo,
+                        'ambito'                 => ($scope_sub_id > 0) ? 'linea' : 'categoria',
+                        // Alcance v2.
+                        'scope_categoria_id'     => 0,
+                        'scope_slug'             => $scope_slug,
+                        'scope_marca_id'         => $scope_marca_id,
+                        'scope_linea_codigo'     => $scope_linea_codigo,
+                        'scope_subcategoria_id'  => $scope_sub_id,
+                        'scope_dealer_id'        => $scope_dealer_id,
+                        'prioridad_manual'       => $prioridad,
                         'activo'                 => isset($_POST['activo']) ? 1 : 0,
                         'umbral'                 => max(1, intval($_POST['umbral'] ?? 6)),
                         'multiplicador'          => max(0, floatval($_POST['multiplicador'] ?? 2)),
@@ -1232,42 +1396,54 @@ function billetera_render_bonus_page() {
                         'banner_tiendas'         => [],
                     ];
 
-                    $reglas    = billetera_bonus_reglas();
-                    $duplicado = false;
-                    foreach ($reglas as $r) {
-                        if ($r['id'] === $nueva['id']) {
-                            continue;
-                        }
-                        $r_ambito     = $r['ambito'] ?? 'categoria';
-                        $misma_cat    = intval($r['categoria_id']) === $nueva['categoria_id'];
-                        $mismo_ambito = $r_ambito === $nueva['ambito'];
-                        // Para "toda la categoría" también es duplicado si ya hay
-                        // otra regla con el mismo slug (aplica a todas las líneas).
-                        $mismo_slug   = ($nueva['ambito'] === 'categoria')
-                            && (strtolower($r['slug'] ?? '') === strtolower($nueva['slug']));
-
-                        if (($misma_cat && $mismo_ambito) || $mismo_slug) {
-                            $duplicado = true;
-                            break;
-                        }
-                    }
-
-                    if ($duplicado) {
-                        $err = 'Ya existe una regla para esa categoría y ámbito. Edítala o elimínala primero.';
+                    if ($action === 'dry_run') {
+                        $dry = billetera_bonus_admin_dry_run($nueva);
+                        $msg = 'Prueba de alcance' . $nota_sub . ': este mes hay ' . $dry['ventas'] . ' ventas de ' . $dry['asesores'] . ' asesores dentro de este alcance (' . billetera_bonus_regla_describe($nueva) . ').'
+                            . ($dry['solapan'] ? ' Convive con: ' . implode('; ', $dry['solapan']) . '. La más específica tendrá prioridad.' : ' No se solapa con otra regla vigente.');
                     } else {
-                        $found = false;
-                        foreach ($reglas as $i => $r) {
-                            if ($r['id'] === $nueva['id']) {
-                                $reglas[$i] = $nueva;
-                                $found = true;
+                        $reglas = billetera_bonus_reglas();
+                        $exacto = false;
+                        $avisos = [];
+                        foreach ($reglas as $r) {
+                            if (($r['id'] ?? '') === $nueva['id']) {
+                                continue;
+                            }
+                            if (empty($r['activo']) && empty($nueva['activo'])) {
+                                continue;
+                            }
+                            if (!billetera_bonus_admin_solapan($r, $nueva)) {
+                                continue;
+                            }
+                            if (!billetera_bonus_admin_vigencia_solapa($r, $nueva)) {
+                                continue;
+                            }
+                            if (billetera_bonus_admin_mismo_alcance($r, $nueva)) {
+                                $exacto = true;
                                 break;
                             }
+                            $avisos[] = '“' . ($r['nombre'] ?? $r['slug'] ?? $r['id']) . '” (' . billetera_bonus_regla_describe($r) . ')';
                         }
-                        if (!$found) {
-                            $reglas[] = $nueva;
+
+                        if ($exacto) {
+                            $err = 'Ya existe una regla idéntica para ese alcance y vigencia. Edítala en la tabla de abajo en vez de crear otra.';
+                        } else {
+                            $found = false;
+                            foreach ($reglas as $i => $r) {
+                                if ($r['id'] === $nueva['id']) {
+                                    $reglas[$i] = $nueva;
+                                    $found = true;
+                                    break;
+                                }
+                            }
+                            if (!$found) {
+                                $reglas[] = $nueva;
+                            }
+                            update_option('billetera_bonus_reglas', $reglas, false);
+                            $msg = ($found ? 'Regla actualizada' : 'Regla creada') . $nota_sub . '. Aplica a: ' . billetera_bonus_regla_describe($nueva) . '.';
+                            if ($avisos) {
+                                $msg .= ' Aviso: convive con ' . implode('; ', $avisos) . '. No se duplican: la regla más específica (subcategoría > tienda > categoría > línea > marca) tendrá prioridad en cada venta.';
+                            }
                         }
-                        update_option('billetera_bonus_reglas', $reglas, false);
-                        $msg = $found ? 'Regla actualizada.' : 'Regla creada.';
                     }
                 }
             }
@@ -1288,83 +1464,163 @@ function billetera_render_bonus_page() {
     $reglas  = billetera_bonus_reglas();
     $dealers = billetera_bc_dealers();
 
-    $lineas_map = [];
-    foreach (billetera_bc_lineas() as $l) {
-        $lineas_map[$l->codigo] = $l->nombre;
-    }
+    $lineas_all = billetera_bc_lineas();
+    // Marcas para el filtro (0 = todas).
+    $marcas_all = $wpdb->get_results("SELECT id, nombre, slug FROM {$wpdb->prefix}billetera_marcas ORDER BY nombre");
+    // Categorías con slug y línea (para el select de categoría por slug).
+    $cats_all = $wpdb->get_results(
+        "SELECT c.id, c.nombre, c.slug, c.linea_codigo, l.nombre AS linea_nombre, l.marca_id AS marca_id
+         FROM {$wpdb->prefix}billetera_categorias c
+         LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
+         ORDER BY c.linea_codigo, c.orden_display, c.nombre"
+    );
+    // Subcategorías con su categoría y línea (para cascada).
+    $subs_all = $wpdb->get_results(
+        "SELECT s.id, s.nombre AS sub_nombre, c.id AS cat_id, c.slug AS cat_slug, c.linea_codigo AS linea_codigo, l.marca_id AS marca_id
+         FROM {$wpdb->prefix}billetera_subcategorias s
+         JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
+         LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
+         ORDER BY c.linea_codigo, s.nombre"
+    );
 
     $edit = null;
     if (isset($_GET['edit'])) {
         $rid = sanitize_text_field(wp_unslash($_GET['edit']));
         foreach ($reglas as $r) {
             if ($r['id'] === $rid) {
-                $edit = $r;
+                $edit = billetera_bonus_normalize_regla($r);
                 break;
             }
         }
     }
 
-    $ambito_sel = $edit['ambito'] ?? 'categoria';
-    $cat_sel    = intval($edit['categoria_id'] ?? 0);
+    $sel_slug   = strtolower(trim((string) ($edit['scope_slug'] ?? ($edit['slug'] ?? ''))));
+    $sel_marca  = intval($edit['scope_marca_id'] ?? 0);
+    $sel_linea  = strtolower(trim((string) ($edit['scope_linea_codigo'] ?? '')));
+    $sel_sub    = intval($edit['scope_subcategoria_id'] ?? 0);
+    $sel_dealer = intval($edit['scope_dealer_id'] ?? 0);
 
-    billetera_bc_open('Reglas de bonificación', 'Crea reglas por categoría: umbral de ventas del mes, multiplicador y excepción opcional por concesionaria. Se aplican al registrar la venta (asesor y jefe).');
+    billetera_bc_open('Reglas de bonificación', 'Elige a qué ventas aplica la regla (categoría, marca, línea, subcategoría y tienda), luego el bono y la vigencia. Si dos reglas coinciden en una venta, gana la más específica: subcategoría > tienda > categoría > línea > marca.');
     billetera_bc_notices($msg, $err);
     ?>
     <div class="bc-card">
         <h2 class="bc-card__title"><?php echo $edit ? 'Editar regla' : 'Nueva regla'; ?></h2>
-        <form method="post" class="bc-grid">
+        <form method="post" class="bc-grid" id="bc-bonus-form">
             <?php wp_nonce_field('billetera_catalog'); ?>
-            <input type="hidden" name="bc_action" value="save_rule">
+            <input type="hidden" name="bc_action" id="bc-bonus-action" value="save_rule">
             <input type="hidden" name="rule_id" value="<?php echo esc_attr($edit['id'] ?? ''); ?>">
 
             <div class="bc-field bc-field--full">
                 <div class="nav-tab-wrapper bc-bonus-tabs__nav">
-                    <button type="button" class="nav-tab nav-tab-active" data-bc-tab="bc-tab-base">Regla base</button>
-                    <button type="button" class="nav-tab" data-bc-tab="bc-tab-excepcion">Excepción</button>
-                    <button type="button" class="nav-tab" data-bc-tab="bc-tab-banner">Banner y vigencia</button>
+                    <button type="button" class="nav-tab nav-tab-active" data-bc-tab="bc-tab-base">1 · ¿A qué ventas aplica?</button>
+                    <button type="button" class="nav-tab" data-bc-tab="bc-tab-bono">2 · ¿Qué bono se da?</button>
+                    <button type="button" class="nav-tab" data-bc-tab="bc-tab-excepcion">3 · Excepción (opcional)</button>
+                    <button type="button" class="nav-tab" data-bc-tab="bc-tab-banner">4 · Vigencia y banner</button>
                 </div>
             </div>
 
             <div class="bc-bonus-tabs__panel bc-field bc-field--full" id="bc-tab-base">
             <div class="bc-grid">
+            <div class="bc-field bc-field--full" style="background:#f0f6ff;border:1px solid #cfe0fb;border-radius:8px;padding:10px 12px;">
+                <strong>Aplica a:</strong> <span id="bc-bonus-resumen"><?php echo esc_html(billetera_bonus_regla_describe($edit ?: ['scope_slug' => $sel_slug, 'scope_marca_id' => $sel_marca, 'scope_linea_codigo' => $sel_linea, 'scope_subcategoria_id' => $sel_sub, 'scope_dealer_id' => $sel_dealer, 'nombre' => $sel_slug])); ?></span>
+                <p class="bc-desc" style="margin:6px 0 0;">Lee este resumen antes de guardar. “Todas” significa sin filtro en ese nivel. Si una venta cae en dos reglas, <strong>no se duplican</strong>: gana la más específica.</p>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Categoría (o subcategoría abajo)</label>
+                <select name="scope_categoria_slug" id="bc-scope-categoria" class="bc-select">
+                    <option value="">— Todas las categorías —</option>
+                    <?php
+                    $seen_slug = [];
+                    foreach ($cats_all as $c) {
+                        $sl = strtolower(trim((string) $c->slug));
+                        if ($sl === '' || isset($seen_slug[$sl])) {
+                            continue;
+                        }
+                        $seen_slug[$sl] = true;
+                        echo '<option value="' . esc_attr($sl) . '"' . selected($sel_slug, $sl, false) . '>' . esc_html($c->nombre) . '</option>';
+                    }
+                    ?>
+                </select>
+                <p class="bc-desc" style="margin:6px 0 0;">Ej. Prepagados o Kit360 (vale para todas sus líneas salvo que filtres abajo).</p>
+            </div>
+
+            <div class="bc-field">
+                <label class="bc-label">Marca</label>
+                <select name="scope_marca_id" id="bc-scope-marca" class="bc-select">
+                    <option value="0">— Todas las marcas —</option>
+                    <?php foreach ($marcas_all as $m): ?>
+                        <option value="<?php echo intval($m->id); ?>" <?php selected($sel_marca, intval($m->id)); ?>><?php echo esc_html($m->nombre); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="bc-field">
+                <label class="bc-label">Línea</label>
+                <select name="scope_linea_codigo" id="bc-scope-linea" class="bc-select">
+                    <option value="">— Todas las líneas —</option>
+                    <?php foreach ($lineas_all as $l): ?>
+                        <option value="<?php echo esc_attr(strtolower((string) $l->codigo)); ?>" data-marca="<?php echo intval($l->marca_id); ?>" <?php selected($sel_linea, strtolower((string) $l->codigo)); ?>><?php echo esc_html($l->nombre); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="bc-desc" style="margin:6px 0 0;">Filtra la categoría elegida a una sola línea (ej. solo Hyundai).</p>
+            </div>
+
+            <div class="bc-field">
+                <label class="bc-label">Subcategoría</label>
+                <select name="scope_subcategoria_id" id="bc-scope-sub" class="bc-select">
+                    <option value="0">— Todas las subcategorías —</option>
+                    <?php foreach ($subs_all as $s): ?>
+                        <option value="<?php echo intval($s->id); ?>" data-cat="<?php echo esc_attr(strtolower(trim((string) $s->cat_slug))); ?>" data-linea="<?php echo esc_attr(strtolower(trim((string) ($s->linea_codigo ?? '')))); ?>" data-marca="<?php echo intval($s->marca_id ?? 0); ?>" <?php selected($sel_sub, intval($s->id)); ?>><?php echo esc_html($s->sub_nombre . ' (' . $s->cat_slug . ')'); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="bc-desc" style="margin:6px 0 0;">La opción más específica: si la eliges, tiene prioridad sobre las reglas generales.</p>
+            </div>
+
+            <div class="bc-field">
+                <label class="bc-label">Tienda / concesionaria (alcance)</label>
+                <select name="scope_dealer_id" id="bc-scope-dealer" class="bc-select">
+                    <option value="0">— Todas las tiendas —</option>
+                    <?php foreach ($dealers as $d): ?>
+                        <option value="<?php echo intval($d->ID); ?>" <?php selected($sel_dealer, intval($d->ID)); ?>><?php echo esc_html($d->post_title); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="bc-desc" style="margin:6px 0 0;">Vacío = vale para todas. Si eliges una, la regla solo aplica a ventas de esa tienda.</p>
+            </div>
+
+            <div class="bc-field">
+                <label class="bc-label">Prioridad manual (0–100)</label>
+                <input type="number" min="0" max="100" name="prioridad_manual" class="bc-input" value="<?php echo intval($edit['prioridad_manual'] ?? 0); ?>">
+                <p class="bc-desc" style="margin:6px 0 0;">Solo para desempatar dos reglas igual de específicas. Normalmente déjalo en 0.</p>
+            </div>
+            </div><!-- /bc-tab-base -->
+            </div>
+
+            <div class="bc-bonus-tabs__panel bc-field bc-field--full" id="bc-tab-bono" hidden>
+            <div class="bc-grid">
             <div class="bc-field bc-field--full">
-                <label class="bc-label">Categoría *</label>
-                <select name="categoria_id" class="bc-select" required>
-                    <option value="">— Selecciona una categoría —</option>
-                    <?php echo billetera_bc_categorias_options($cat_sel); ?>
-                </select>
-                <p class="bc-desc" style="margin:6px 0 0;">Categoría del catálogo a la que se aplicará la bonificación.</p>
+                <h3 style="margin:10px 0 0;">¿Qué bono se da?</h3>
+                <p class="bc-desc" style="margin:4px 0 0;">Desde cuántas ventas del mes se activa y por cuánto se multiplica la comisión.</p>
             </div>
-
             <div class="bc-field">
-                <label class="bc-label">Ámbito</label>
-                <select name="ambito" class="bc-select">
-                    <option value="categoria" <?php selected($ambito_sel, 'categoria'); ?>>Toda la categoría (todas las líneas)</option>
-                    <option value="linea" <?php selected($ambito_sel, 'linea'); ?>>Solo la línea de la categoría elegida</option>
-                </select>
-                <p class="bc-desc" style="margin:6px 0 0;">"Toda la categoría" aplica a Hyundai/JMC/Geely; "Solo la línea" solo a la categoría de esa línea.</p>
-            </div>
-
-            <div class="bc-field">
-                <label class="bc-label">Umbral (ventas del mes)</label>
+                <label class="bc-label">¿Desde cuántas ventas del mes? *</label>
                 <input type="number" min="1" name="umbral" class="bc-input" value="<?php echo intval($edit['umbral'] ?? 6); ?>">
-                <p class="bc-desc" style="margin:6px 0 0;">Desde esta venta del mes se activa la regla (y se ajustan las anteriores).</p>
+                <p class="bc-desc" style="margin:6px 0 0;">Al llegar a esta venta se activa el bono y se ajustan las anteriores del mes.</p>
             </div>
 
             <div class="bc-field">
-                <label class="bc-label">Multiplicador</label>
+                <label class="bc-label">¿Por cuánto se multiplica?</label>
                 <input type="number" step="0.1" min="0" name="multiplicador" class="bc-input" value="<?php echo esc_attr($edit['multiplicador'] ?? 2); ?>">
-                <p class="bc-desc" style="margin:6px 0 0;">Ej. 2 = comisión ×2.</p>
+                <p class="bc-desc" style="margin:6px 0 0;">Ej. 2 = la comisión se duplica.</p>
             </div>
 
             <div class="bc-field bc-field--check">
-                <label><input type="checkbox" name="aplica_jefe" value="1" <?php checked($edit['aplica_jefe'] ?? 1, 1); ?>> Aplica al jefe de venta</label>
+                <label><input type="checkbox" name="aplica_jefe" value="1" <?php checked($edit['aplica_jefe'] ?? 1, 1); ?>> También aplica al jefe de venta</label>
             </div>
 
             <div class="bc-field bc-field--check">
                 <label><input type="checkbox" name="activo" value="1" <?php checked($edit['activo'] ?? 1, 1); ?>> Regla activa</label>
             </div>
-            </div><!-- /bc-tab-base -->
+            </div><!-- /bc-tab-bono -->
             </div>
 
             <div class="bc-bonus-tabs__panel bc-field bc-field--full" id="bc-tab-excepcion" hidden>
@@ -1458,7 +1714,8 @@ function billetera_render_bonus_page() {
             </div>
 
             <div class="bc-field bc-field--actions">
-                <button type="submit" class="button button-primary"><?php echo $edit ? 'Guardar cambios' : 'Crear regla'; ?></button>
+                <button type="submit" class="button button-primary" onclick="document.getElementById('bc-bonus-action').value='save_rule';"><?php echo $edit ? 'Guardar cambios' : 'Crear regla'; ?></button>
+                <button type="submit" class="button" onclick="document.getElementById('bc-bonus-action').value='dry_run';" title="Calcula cuántas ventas de este mes caen en este alcance, sin guardar">Probar alcance</button>
                 <?php if ($edit): ?><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=billetera_bonus_admin')); ?>">Cancelar</a><?php endif; ?>
             </div>
         </form>
@@ -1466,28 +1723,30 @@ function billetera_render_bonus_page() {
 
     <div class="bc-card">
         <h2 class="bc-card__title">Reglas configuradas</h2>
+        <p class="bc-desc">Si una venta coincide con varias reglas, <strong>gana solo la más específica</strong> (subcategoría &gt; tienda &gt; categoría &gt; línea &gt; marca; luego prioridad manual). Nunca se suman ni se duplican.</p>
         <?php if (!$reglas): ?>
             <p>Aún no hay reglas. Crea la primera arriba.</p>
         <?php else: ?>
         <table class="wp-list-table widefat fixed striped">
             <thead>
                 <tr>
-                    <th>Categoría</th>
-                    <th>Ámbito</th>
-                    <th style="width:80px;">Umbral</th>
-                    <th style="width:110px;">Multiplicador</th>
-                    <th style="width:70px;">Jefe</th>
+                    <th>Aplica a</th>
+                    <th style="width:80px;">Desde</th>
+                    <th style="width:90px;">Bono</th>
+                    <th style="width:90px;">Este mes</th>
                     <th>Excepción</th>
-                    <th>Banner</th>
+                    <th>Banner / vigencia</th>
                     <th style="width:80px;">Estado</th>
                     <th style="width:150px;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($reglas as $r):
-                    $ambito_txt = (($r['ambito'] ?? 'categoria') === 'linea')
-                        ? 'Solo ' . ($lineas_map[$r['linea_codigo'] ?? ''] ?? ($r['linea_codigo'] ?? '—'))
-                        : 'Todas las líneas';
+                    $r = billetera_bonus_normalize_regla($r);
+                    $describe = billetera_bonus_regla_describe($r);
+                    $especifica = (intval($r['scope_subcategoria_id'] ?? 0) > 0 || intval($r['scope_dealer_id'] ?? 0) > 0) ? ' <span style="background:#e6f4ea;color:#146c43;border-radius:10px;padding:1px 8px;font-size:11px;">Específica</span>' : '';
+                    $prio = intval($r['prioridad_manual'] ?? 0) > 0 ? ' <span title="Prioridad manual para desempatar">P' . intval($r['prioridad_manual']) . '</span>' : '';
+                    $dry_row = billetera_bonus_admin_dry_run($r);
 
                     if (!empty($r['excepcion_dealer_id'])) {
                         $sim    = (($r['excepcion_moneda'] ?? 'USD') === 'PEN') ? 'S/ ' : 'US$';
@@ -1518,11 +1777,10 @@ function billetera_render_bonus_page() {
                     }
                 ?>
                     <tr>
-                        <td><strong><?php echo esc_html($r['nombre'] ?? $r['slug']); ?></strong></td>
-                        <td><?php echo esc_html($ambito_txt); ?></td>
-                        <td><?php echo intval($r['umbral']); ?></td>
-                        <td>×<?php echo esc_html($mult_txt); ?></td>
-                        <td><?php echo !empty($r['aplica_jefe']) ? 'Sí' : 'No'; ?></td>
+                        <td><strong><?php echo esc_html($r['nombre'] ?? $r['slug']); ?></strong><?php echo $especifica; ?><?php echo $prio; ?><br><span style="color:#50575e;font-size:12px;"><?php echo esc_html($describe); ?></span></td>
+                        <td><?php echo intval($r['umbral']); ?> ventas</td>
+                        <td>×<?php echo esc_html($mult_txt); ?><?php echo !empty($r['aplica_jefe']) ? ' (+jefe)' : ''; ?></td>
+                        <td title="Ventas de este mes dentro del alcance"><?php echo intval($dry_row['ventas']); ?> ventas</td>
                         <td><?php echo esc_html($excep); ?></td>
                         <td><span title="<?php echo esc_attr($banner_title); ?>"><?php echo esc_html($banner_txt); ?></span></td>
                         <td><?php echo !empty($r['activo']) ? '<span style="color:#146C43;">Activa</span>' : '<span style="color:#b3352a;">Inactiva</span>'; ?></td>
