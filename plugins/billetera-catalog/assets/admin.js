@@ -107,7 +107,10 @@
         if (!radios.length) return;
         function show(el, visible) {
             if (!el) return;
-            // style.display en vez de hidden: inmune a reglas CSS que pisan [hidden].
+            // Por los dos lados: hidden para el CSS base y display inline
+            // por si alguna regla pisa [hidden]. Si no, el bloque reaparecido
+            // sigue oculto por el atributo que pintó el servidor.
+            el.hidden = !visible;
             el.style.display = visible ? '' : 'none';
         }
         function refresh() {

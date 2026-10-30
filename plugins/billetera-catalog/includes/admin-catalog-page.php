@@ -102,7 +102,7 @@ function billetera_catalog_admin_assets() {
 
     $base = defined('BILLETERA_CATALOG_URL') ? BILLETERA_CATALOG_URL : plugin_dir_url(dirname(__DIR__) . '/billetera-catalog.php');
     wp_enqueue_style('billetera-catalog-admin', $base . 'assets/admin.css', [], '1.2');
-    wp_enqueue_script('billetera-catalog-admin', $base . 'assets/admin.js', [], '1.2', true);
+    wp_enqueue_script('billetera-catalog-admin', $base . 'assets/admin.js', [], '1.3', true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1372,7 +1372,6 @@ function billetera_render_bonus_page() {
             $scope_linea_codigo = strtolower(trim(sanitize_text_field(wp_unslash($_POST['scope_linea_codigo'] ?? ''))));
             $scope_sub_id = intval($_POST['scope_subcategoria_id'] ?? 0);
             $scope_dealer_id = intval($_POST['scope_dealer_id'] ?? 0);
-            $prioridad = max(0, min(100, intval($_POST['prioridad_manual'] ?? 0)));
 
             if ($scope_slug === '' && $scope_sub_id <= 0) {
                 $err = 'Elige al menos una categoría o una subcategoría. Una regla para “todo” sería demasiado amplia.';
@@ -1443,7 +1442,7 @@ function billetera_render_bonus_page() {
                         $edit = array_merge($edit ?: [], [
                             'scope_slug' => $scope_slug, 'scope_marca_id' => $scope_marca_id,
                             'scope_linea_codigo' => $scope_linea_codigo, 'scope_subcategoria_id' => $scope_sub_id,
-                            'scope_dealer_id' => $scope_dealer_id, 'prioridad_manual' => $prioridad,
+                            'scope_dealer_id' => $scope_dealer_id,
                             'efecto_tipo' => $efecto_tipo, 'efecto_valor' => ($efecto_tipo === 'multiplicar' ? floatval($_POST['multiplicador'] ?? 2) : floatval($_POST['efecto_valor'] ?? 0)),
                             'efecto_moneda' => ($efecto_tipo === 'multiplicar' ? 'USD' : ((isset($_POST['efecto_moneda']) && $_POST['efecto_moneda'] === 'PEN') ? 'PEN' : 'USD')),
                             'efecto_jefe_valor' => ($efecto_tipo === 'multiplicar' ? floatval($_POST['multiplicador'] ?? 2) : floatval($_POST['efecto_jefe_valor'] ?? 0)),
@@ -1478,7 +1477,6 @@ function billetera_render_bonus_page() {
                         'scope_linea_codigo'     => $scope_linea_codigo,
                         'scope_subcategoria_id'  => $scope_sub_id,
                         'scope_dealer_id'        => $scope_dealer_id,
-                        'prioridad_manual'       => $prioridad,
                         // Efecto (un solo tipo por regla; sin pestaña de excepción).
                         'efecto_tipo'            => $efecto_tipo,
                         'efecto_valor'           => $efecto_valor,
@@ -1511,7 +1509,7 @@ function billetera_render_bonus_page() {
                         $nueva['creada_en'] = ($rid !== '') ? $nueva['creada_en'] : '';
                         $dry = billetera_bonus_admin_dry_run($nueva);
                         $msg = 'Prueba de alcance' . $nota_sub . ': este mes hay ' . $dry['ventas'] . ' ventas de ' . $dry['asesores'] . ' asesores dentro de este alcance (' . billetera_bonus_regla_describe($nueva) . ').'
-                            . ($dry['solapan'] ? ' Convive con: ' . implode('; ', $dry['solapan']) . '. En cada venta gana la más específica; a igual especificidad decide el desempate.' : ' No se solapa con otra regla vigente.');
+                            . ($dry['solapan'] ? ' Convive con: ' . implode('; ', $dry['solapan']) . '. En cada venta gana la más específica; a igual especificidad gana la más reciente.' : ' No se solapa con otra regla vigente.');
                         foreach (billetera_bonus_reglas() as $r) {
                             if (($r['id'] ?? '') === $nueva['id']) {
                                 continue;
@@ -1573,7 +1571,7 @@ function billetera_render_bonus_page() {
                             update_option('billetera_bonus_reglas', $reglas, false);
                             $msg = ($found ? 'Regla actualizada' : 'Regla creada') . $nota_sub . '. Aplica a: ' . billetera_bonus_regla_describe($nueva) . '.';
                             if ($avisos) {
-                                $msg .= ' Convive con ' . implode('; ', $avisos) . '. No se duplican: en cada venta gana la más específica (subcategoría > tienda > categoría > línea > marca); a igual especificidad decide el desempate.';
+                                $msg .= ' Convive con ' . implode('; ', $avisos) . '. No se duplican: en cada venta gana la más específica (subcategoría > tienda > categoría > línea > marca); a igual especificidad gana la más reciente.';
                             }
                             if ($muertas) {
                                 $warn = 'Ojo: esta regla nunca se aplicará ' . implode(' ni ', $muertas) . ', que ya la cubre por completo con mayor especificidad. Solo tiene sentido si la otra regla se desactiva o vence.';
@@ -1725,11 +1723,6 @@ function billetera_render_bonus_page() {
                 <p class="bc-desc" style="margin:6px 0 0;">Vacío = vale para todas. Si eliges una, la regla solo aplica a ventas de esa tienda.</p>
             </div>
 
-            <div class="bc-field">
-                <label class="bc-label">Desempate (avanzado, 0–100)</label>
-                <input type="number" min="0" max="100" name="prioridad_manual" class="bc-input" value="<?php echo intval($edit['prioridad_manual'] ?? 0); ?>">
-                <p class="bc-desc" style="margin:6px 0 0;">Solo si dos reglas igual de específicas chocan: gana el número mayor. Déjalo en 0.</p>
-            </div>
             <div class="bc-field bc-field--full">
                 <button type="submit" class="button" onclick="document.getElementById('bc-bonus-action').value='dry_run';" title="Calcula cuántas ventas de este mes caen en este alcance, sin guardar">Probar alcance</button>
                 <p class="bc-desc" style="margin:6px 0 0;">Pruébalo antes de seguir: te dice a cuántas ventas afecta y con qué reglas convive.</p>
@@ -1842,7 +1835,7 @@ function billetera_render_bonus_page() {
 
     <div class="bc-card">
         <h2 class="bc-card__title">Reglas configuradas</h2>
-        <p class="bc-desc">Si una venta coincide con varias reglas, <strong>gana solo la más específica</strong> (subcategoría &gt; tienda &gt; categoría &gt; línea &gt; marca; a igual especificidad decide el desempate). Nunca se suman ni se duplican.</p>
+        <p class="bc-desc">Si una venta coincide con varias reglas, <strong>gana solo la más específica</strong> (subcategoría &gt; tienda &gt; categoría &gt; línea &gt; marca; a igual especificidad gana la más reciente). Nunca se suman ni se duplican.</p>
         <?php if (!$reglas): ?>
             <p>Aún no hay reglas. Crea la primera arriba.</p>
         <?php else: ?>
@@ -1863,7 +1856,6 @@ function billetera_render_bonus_page() {
                     $r = billetera_bonus_normalize_regla($r);
                     $describe = billetera_bonus_regla_describe($r) . ' · ' . billetera_bonus_efecto_txt($r);
                     $especifica = (intval($r['scope_subcategoria_id'] ?? 0) > 0 || intval($r['scope_dealer_id'] ?? 0) > 0) ? ' <span style="background:#e6f4ea;color:#146c43;border-radius:10px;padding:1px 8px;font-size:11px;">Específica</span>' : '';
-                    $prio = intval($r['prioridad_manual'] ?? 0) > 0 ? ' <span title="Desempate: solo vale si empata en especificidad con otra regla">D' . intval($r['prioridad_manual']) . '</span>' : '';
                     $dry_row = billetera_bonus_admin_dry_run($r);
 
                     $efecto_txt = billetera_bonus_efecto_txt($r);
@@ -1885,7 +1877,7 @@ function billetera_render_bonus_page() {
                     }
                 ?>
                     <tr>
-                        <td><strong><?php echo esc_html($r['nombre'] ?? $r['slug']); ?></strong><?php echo $especifica; ?><?php echo $prio; ?><br><span style="color:#50575e;font-size:12px;"><?php echo esc_html($describe); ?></span></td>
+                        <td><strong><?php echo esc_html($r['nombre'] ?? $r['slug']); ?></strong><?php echo $especifica; ?><br><span style="color:#50575e;font-size:12px;"><?php echo esc_html($describe); ?></span></td>
                         <td><?php echo intval($r['umbral']); ?> ventas</td>
                         <td><?php echo esc_html($efecto_txt); ?></td>
                         <td title="Ventas de este mes dentro del alcance"><?php echo intval($dry_row['ventas']); ?> ventas</td>

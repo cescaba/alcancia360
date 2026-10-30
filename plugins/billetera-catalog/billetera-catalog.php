@@ -890,7 +890,7 @@ function billetera_convert_to_sol($comision) {
 
 /**
  * Lee las reglas de bonificación (opción). Siembra las reglas por defecto la 1.ª vez.
- * Siempre devuelve reglas normalizadas a v2 (con scope_* y prioridad_manual)
+ * Siempre devuelve reglas normalizadas a v2 (con scope_*, efecto_* y creada_en).
  * y con las excepciones legacy migradas a reglas de tienda (efecto fijo/sumar).
  */
 function billetera_bonus_reglas() {
@@ -993,7 +993,8 @@ function billetera_bonus_migrar_excepciones(&$reglas) {
  * Normaliza una regla legacy a v2 sin cambiar su comportamiento.
  * Legacy: ambito=categoria (por slug, todas las líneas) o ambito=linea (una categoría exacta).
  * v2: scope_categoria_id / scope_slug / scope_linea_codigo / scope_marca_id /
- *     scope_subcategoria_id / scope_dealer_id / prioridad_manual.
+ *     scope_subcategoria_id / scope_dealer_id. (prioridad_manual quedó legacy:
+ *     se conserva el dato pero el matcher la ignora.)
  */
 function billetera_bonus_normalize_regla($r) {
     if (!isset($r['scope_categoria_id'])) {
@@ -1255,7 +1256,7 @@ function billetera_bonus_ctx($subcategoria_id) {
  * Devuelve false si la regla NO aplica. Mayor score = más específica.
  *  +40 subcategoría exacta, +20 concesionaria (alcance), +10 categoría exacta,
  *  +5 línea exacta, +3 slug (toda la categoría), +2 marca exacta.
- *  La prioridad_manual se suma después en el finder (desempate explícito).
+ *  El desempate manual se eliminó: a igual especificidad gana la más reciente.
  */
 function billetera_bonus_regla_match_score($regla, $ctx, $dealer_id) {
     $regla = billetera_bonus_normalize_regla($regla);
@@ -1322,9 +1323,7 @@ function billetera_bonus_regla_match_score($regla, $ctx, $dealer_id) {
 
 /**
  * Mejor regla v2 para una venta: solo UNA gana, la más específica.
- * El desempate manual SOLO desempat: primero manda la especificidad,
- * luego el desempate, luego la más reciente (última del array). Nunca
- * puede imponerse a una regla más específica.
+ * A igual especificidad gana la más reciente (última del array).
  * Devuelve la regla normalizada o null.
  */
 function billetera_bonus_find_best_regla($subcategoria_id, $dealer_id = 0, $fecha_ymd = null) {
@@ -1337,7 +1336,6 @@ function billetera_bonus_find_best_regla($subcategoria_id, $dealer_id = 0, $fech
     }
     $best = null;
     $best_score = -1;
-    $best_prio = -1;
     $best_idx = -1;
     foreach (billetera_bonus_reglas() as $idx => $r) {
         if (empty($r['activo'])) {
@@ -1350,11 +1348,9 @@ function billetera_bonus_find_best_regla($subcategoria_id, $dealer_id = 0, $fech
         if ($s === false) {
             continue;
         }
-        $prio = intval($r['prioridad_manual'] ?? 0);
-        if ($s > $best_score || ($s === $best_score && ($prio > $best_prio || ($prio === $best_prio && $idx >= $best_idx)))) {
+        if ($s > $best_score || ($s === $best_score && $idx >= $best_idx)) {
             $best = billetera_bonus_normalize_regla($r);
             $best_score = $s;
-            $best_prio = $prio;
             $best_idx = $idx;
         }
     }
