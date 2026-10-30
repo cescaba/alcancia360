@@ -105,29 +105,32 @@
         if (!form) return;
         var radios = form.querySelectorAll('input[name="efecto_tipo"]');
         if (!radios.length) return;
-        var mult = form.querySelector('#bc-efecto-mult');
-        var monto = form.querySelector('#bc-efecto-monto');
-        var moneda = form.querySelector('#bc-efecto-moneda');
-        var jefe = form.querySelector('#bc-efecto-jefe');
+        function show(el, visible) {
+            if (!el) return;
+            // style.display en vez de hidden: inmune a reglas CSS que pisan [hidden].
+            el.style.display = visible ? '' : 'none';
+        }
         function refresh() {
             var v = 'multiplicar';
-            radios.forEach(function (r) { if (r.checked) v = r.value; });
+            Array.prototype.forEach.call(radios, function (r) { if (r.checked) v = r.value; });
             var isMult = (v === 'multiplicar');
-            if (mult) mult.hidden = !isMult;
-            if (monto) monto.hidden = isMult;
-            if (moneda) moneda.hidden = isMult;
-            if (jefe) jefe.hidden = isMult;
+            show(form.querySelector('#bc-efecto-mult'), isMult);
+            show(form.querySelector('#bc-efecto-monto'), !isMult);
+            show(form.querySelector('#bc-efecto-moneda'), !isMult);
+            show(form.querySelector('#bc-efecto-jefe'), !isMult);
         }
-        radios.forEach(function (r) { r.addEventListener('change', refresh); });
+        Array.prototype.forEach.call(radios, function (r) { r.addEventListener('change', refresh); });
         refresh();
     }
 
+    function safe(fn) { try { fn(); } catch (e) { if (window.console) console.warn(e); } }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () { initAutoSlug(); initBonusTabs(); initBonusCascade(); initBonusEfecto(); });
+        document.addEventListener('DOMContentLoaded', function () { safe(initAutoSlug); safe(initBonusTabs); safe(initBonusCascade); safe(initBonusEfecto); });
     } else {
-        initAutoSlug();
-        initBonusTabs();
-        initBonusCascade();
-        initBonusEfecto();
+        safe(initAutoSlug);
+        safe(initBonusTabs);
+        safe(initBonusCascade);
+        safe(initBonusEfecto);
     }
 })();

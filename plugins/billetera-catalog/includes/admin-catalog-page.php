@@ -102,7 +102,7 @@ function billetera_catalog_admin_assets() {
 
     $base = defined('BILLETERA_CATALOG_URL') ? BILLETERA_CATALOG_URL : plugin_dir_url(dirname(__DIR__) . '/billetera-catalog.php');
     wp_enqueue_style('billetera-catalog-admin', $base . 'assets/admin.css', [], '1.2');
-    wp_enqueue_script('billetera-catalog-admin', $base . 'assets/admin.js', [], '1.1', true);
+    wp_enqueue_script('billetera-catalog-admin', $base . 'assets/admin.js', [], '1.2', true);
 }
 
 // ---------------------------------------------------------------------------
