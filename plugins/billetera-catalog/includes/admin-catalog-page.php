@@ -1358,14 +1358,45 @@ function billetera_render_bonus_page() {
                     }
 
                     $rid = sanitize_text_field(wp_unslash($_POST['rule_id'] ?? ''));
+                    // ---- Efecto: un solo tipo por regla ----
+                    $efecto_tipo = (isset($_POST['efecto_tipo']) && in_array($_POST['efecto_tipo'], ['multiplicar', 'fijo', 'sumar'], true)) ? $_POST['efecto_tipo'] : 'multiplicar';
+                    if ($efecto_tipo === 'multiplicar') {
+                        $efecto_valor = floatval($_POST['multiplicador'] ?? 2);
+                        if ($efecto_valor <= 0) {
+                            $err = 'Pon por cuánto se multiplica (ej. 2). Debe ser mayor que 0.';
+                        }
+                        $efecto_moneda = 'USD';
+                        $efecto_jefe_valor = $efecto_valor;
+                    } else {
+                        $efecto_valor = max(0, floatval($_POST['efecto_valor'] ?? 0));
+                        if ($efecto_valor <= 0) {
+                            $err = ($efecto_tipo === 'fijo' ? 'Pon el monto fijo por venta (ej. 100).' : 'Pon el extra por venta (ej. 20).') . ' Debe ser mayor que 0.';
+                        }
+                        $efecto_moneda = (isset($_POST['efecto_moneda']) && $_POST['efecto_moneda'] === 'PEN') ? 'PEN' : 'USD';
+                        $efecto_jefe_valor = max(0, floatval($_POST['efecto_jefe_valor'] ?? 0));
+                    }
+                    if ($err !== '') {
+                        // No se guarda; se repinta el formulario con lo ingresado.
+                        $edit = array_merge($edit ?: [], [
+                            'scope_slug' => $scope_slug, 'scope_marca_id' => $scope_marca_id,
+                            'scope_linea_codigo' => $scope_linea_codigo, 'scope_subcategoria_id' => $scope_sub_id,
+                            'scope_dealer_id' => $scope_dealer_id, 'prioridad_manual' => $prioridad,
+                            'efecto_tipo' => $efecto_tipo, 'efecto_valor' => ($efecto_tipo === 'multiplicar' ? floatval($_POST['multiplicador'] ?? 2) : floatval($_POST['efecto_valor'] ?? 0)),
+                            'efecto_moneda' => ($efecto_tipo === 'multiplicar' ? 'USD' : ((isset($_POST['efecto_moneda']) && $_POST['efecto_moneda'] === 'PEN') ? 'PEN' : 'USD')),
+                            'efecto_jefe_valor' => ($efecto_tipo === 'multiplicar' ? floatval($_POST['multiplicador'] ?? 2) : floatval($_POST['efecto_jefe_valor'] ?? 0)),
+                            'umbral' => max(1, intval($_POST['umbral'] ?? 6)), 'aplica_jefe' => isset($_POST['aplica_jefe']) ? 1 : 0,
+                            'activo' => isset($_POST['activo']) ? 1 : 0,
+                        ]);
+                    } else {
                     $nueva = [
                         'id'                     => $rid !== '' ? $rid : ('r_' . wp_generate_password(8, false, false)),
-                        // Legacy (informativo; el motor v2 usa scope_*).
+                        // Legacy (informativo; el motor v2 usa scope_*/efecto_*).
                         'categoria_id'           => $legacy_cat_id,
                         'slug'                   => $scope_slug,
                         'nombre'                 => $nombre_vis,
                         'linea_codigo'           => $scope_linea_codigo,
                         'ambito'                 => ($scope_sub_id > 0) ? 'linea' : 'categoria',
+                        'multiplicador'          => ($efecto_tipo === 'multiplicar') ? $efecto_valor : 1.0,
                         // Alcance v2.
                         'scope_categoria_id'     => 0,
                         'scope_slug'             => $scope_slug,
@@ -1374,16 +1405,21 @@ function billetera_render_bonus_page() {
                         'scope_subcategoria_id'  => $scope_sub_id,
                         'scope_dealer_id'        => $scope_dealer_id,
                         'prioridad_manual'       => $prioridad,
+                        // Efecto (un solo tipo por regla; sin pestaña de excepción).
+                        'efecto_tipo'            => $efecto_tipo,
+                        'efecto_valor'           => $efecto_valor,
+                        'efecto_moneda'          => $efecto_moneda,
+                        'efecto_jefe_valor'      => $efecto_jefe_valor,
+                        'excepcion_dealer_id'    => 0,
+                        'excepcion_usd'          => 0,
+                        'excepcion_jefe_usd'     => 0,
+                        'excepcion_moneda'       => 'USD',
+                        'excepcion_modo'         => 'reemplazar',
+                        'excepcion_desde_umbral' => 1,
+                        'excepcion_migrada'      => 1,
                         'activo'                 => isset($_POST['activo']) ? 1 : 0,
                         'umbral'                 => max(1, intval($_POST['umbral'] ?? 6)),
-                        'multiplicador'          => max(0, floatval($_POST['multiplicador'] ?? 2)),
                         'aplica_jefe'            => isset($_POST['aplica_jefe']) ? 1 : 0,
-                        'excepcion_dealer_id'    => intval($_POST['excepcion_dealer_id'] ?? 0),
-                        'excepcion_usd'          => max(0, floatval($_POST['excepcion_usd'] ?? 0)),
-                        'excepcion_jefe_usd'     => max(0, floatval($_POST['excepcion_jefe_usd'] ?? 0)),
-                        'excepcion_moneda'       => (isset($_POST['excepcion_moneda']) && $_POST['excepcion_moneda'] === 'PEN') ? 'PEN' : 'USD',
-                        'excepcion_modo'         => (isset($_POST['excepcion_modo']) && $_POST['excepcion_modo'] === 'sumar') ? 'sumar' : 'reemplazar',
-                        'excepcion_desde_umbral' => isset($_POST['excepcion_desde_umbral']) ? 1 : 0,
                         'banner_activo'          => isset($_POST['banner_activo']) ? 1 : 0,
                         'banner_orden'           => max(0, intval($_POST['banner_orden'] ?? 0)),
                         'banner_etiqueta'        => sanitize_text_field(wp_unslash($_POST['banner_etiqueta'] ?? 'CAMPAÑA · EVENTO')),
@@ -1400,6 +1436,7 @@ function billetera_render_bonus_page() {
                         $dry = billetera_bonus_admin_dry_run($nueva);
                         $msg = 'Prueba de alcance' . $nota_sub . ': este mes hay ' . $dry['ventas'] . ' ventas de ' . $dry['asesores'] . ' asesores dentro de este alcance (' . billetera_bonus_regla_describe($nueva) . ').'
                             . ($dry['solapan'] ? ' Convive con: ' . implode('; ', $dry['solapan']) . '. La más específica tendrá prioridad.' : ' No se solapa con otra regla vigente.');
+                        $edit = $nueva; // conserva lo escrito para seguir ajustando
                     } else {
                         $reglas = billetera_bonus_reglas();
                         $exacto = false;
@@ -1445,6 +1482,7 @@ function billetera_render_bonus_page() {
                             }
                         }
                     }
+                    } // fin validación de efecto
                 }
             }
         } elseif ($action === 'delete_rule') {
@@ -1514,8 +1552,7 @@ function billetera_render_bonus_page() {
                 <div class="nav-tab-wrapper bc-bonus-tabs__nav">
                     <button type="button" class="nav-tab nav-tab-active" data-bc-tab="bc-tab-base">1 · ¿A qué ventas aplica?</button>
                     <button type="button" class="nav-tab" data-bc-tab="bc-tab-bono">2 · ¿Qué bono se da?</button>
-                    <button type="button" class="nav-tab" data-bc-tab="bc-tab-excepcion">3 · Excepción (opcional)</button>
-                    <button type="button" class="nav-tab" data-bc-tab="bc-tab-banner">4 · Vigencia y banner</button>
+                    <button type="button" class="nav-tab" data-bc-tab="bc-tab-banner">3 · Vigencia y banner</button>
                 </div>
             </div>
 
@@ -1599,18 +1636,42 @@ function billetera_render_bonus_page() {
             <div class="bc-grid">
             <div class="bc-field bc-field--full">
                 <h3 style="margin:10px 0 0;">¿Qué bono se da?</h3>
-                <p class="bc-desc" style="margin:4px 0 0;">Desde cuántas ventas del mes se activa y por cuánto se multiplica la comisión.</p>
+                <p class="bc-desc" style="margin:4px 0 0;">Elige <strong>una sola</strong> forma de premiar. Si una tienda necesita otro trato, crea otra regla igual pero eligiendo esa tienda en el paso 1: ganará automáticamente solo ahí.</p>
             </div>
-            <div class="bc-field">
-                <label class="bc-label">¿Desde cuántas ventas del mes? *</label>
-                <input type="number" min="1" name="umbral" class="bc-input" value="<?php echo intval($edit['umbral'] ?? 6); ?>">
-                <p class="bc-desc" style="margin:6px 0 0;">Al llegar a esta venta se activa el bono y se ajustan las anteriores del mes.</p>
+            <?php $ef_tipo = ($edit['efecto_tipo'] ?? 'multiplicar'); ?>
+            <div class="bc-field bc-field--full">
+                <label class="bc-label">Tipo de bono</label>
+                <label style="display:block;margin:4px 0;"><input type="radio" name="efecto_tipo" value="multiplicar" <?php checked($ef_tipo, 'multiplicar'); ?>> Multiplicar la comisión <span class="bc-desc">— ej. ×2: la comisión se duplica.</span></label>
+                <label style="display:block;margin:4px 0;"><input type="radio" name="efecto_tipo" value="fijo" <?php checked($ef_tipo, 'fijo'); ?>> Pagar un monto fijo por venta <span class="bc-desc">— en vez de la comisión.</span></label>
+                <label style="display:block;margin:4px 0;"><input type="radio" name="efecto_tipo" value="sumar" <?php checked($ef_tipo, 'sumar'); ?>> Sumar un extra a la comisión <span class="bc-desc">— comisión + monto fijo.</span></label>
             </div>
-
-            <div class="bc-field">
+            <div class="bc-field" id="bc-efecto-mult"<?php echo ($ef_tipo !== 'multiplicar') ? ' hidden' : ''; ?>>
                 <label class="bc-label">¿Por cuánto se multiplica?</label>
-                <input type="number" step="0.1" min="0" name="multiplicador" class="bc-input" value="<?php echo esc_attr($edit['multiplicador'] ?? 2); ?>">
-                <p class="bc-desc" style="margin:6px 0 0;">Ej. 2 = la comisión se duplica.</p>
+                <input type="number" step="0.1" min="0" name="multiplicador" class="bc-input" value="<?php echo esc_attr(($ef_tipo === 'multiplicar') ? ($edit['efecto_valor'] ?? ($edit['multiplicador'] ?? 2)) : 2); ?>">
+                <p class="bc-desc" style="margin:6px 0 0;">Ej. 2 = la comisión se duplica. Vale igual para el jefe si marcas la casilla.</p>
+            </div>
+            <div class="bc-field" id="bc-efecto-monto"<?php echo ($ef_tipo === 'multiplicar') ? ' hidden' : ''; ?>>
+                <label class="bc-label">Monto por venta (asesor)</label>
+                <input type="number" step="0.01" min="0" name="efecto_valor" class="bc-input" value="<?php echo esc_attr($edit['efecto_valor'] ?? 0); ?>">
+                <p class="bc-desc" style="margin:6px 0 0;">Lo que recibe el asesor por cada venta dentro del alcance.</p>
+            </div>
+            <div class="bc-field" id="bc-efecto-moneda"<?php echo ($ef_tipo === 'multiplicar') ? ' hidden' : ''; ?>>
+                <label class="bc-label">Moneda</label>
+                <select name="efecto_moneda" class="bc-select">
+                    <option value="USD" <?php selected($edit['efecto_moneda'] ?? 'USD', 'USD'); ?>>Dólares (US$)</option>
+                    <option value="PEN" <?php selected($edit['efecto_moneda'] ?? 'USD', 'PEN'); ?>>Soles (S/)</option>
+                </select>
+                <p class="bc-desc" style="margin:6px 0 0;">Los dólares se convierten con el tipo de cambio del catálogo.</p>
+            </div>
+            <div class="bc-field" id="bc-efecto-jefe"<?php echo ($ef_tipo === 'multiplicar') ? ' hidden' : ''; ?>>
+                <label class="bc-label">Monto por venta (jefe)</label>
+                <input type="number" step="0.01" min="0" name="efecto_jefe_valor" class="bc-input" value="<?php echo esc_attr($edit['efecto_jefe_valor'] ?? 0); ?>">
+                <p class="bc-desc" style="margin:6px 0 0;">0 = el jefe recibe su comisión normal (sin bono).</p>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">¿Desde cuántas ventas del mes?</label>
+                <input type="number" min="1" name="umbral" class="bc-input" value="<?php echo intval($edit['umbral'] ?? 6); ?>">
+                <p class="bc-desc" style="margin:6px 0 0;">Al llegar a esta venta se activa el bono y se ajustan las anteriores del mes. Pon 1 si vale desde la primera venta.</p>
             </div>
 
             <div class="bc-field bc-field--check">
@@ -1621,52 +1682,6 @@ function billetera_render_bonus_page() {
                 <label><input type="checkbox" name="activo" value="1" <?php checked($edit['activo'] ?? 1, 1); ?>> Regla activa</label>
             </div>
             </div><!-- /bc-tab-bono -->
-            </div>
-
-            <div class="bc-bonus-tabs__panel bc-field bc-field--full" id="bc-tab-excepcion" hidden>
-            <div class="bc-grid">
-            <div class="bc-field bc-field--full">
-                <h3 style="margin:10px 0 0;">Excepción por concesionaria (opcional)</h3>
-                <p class="bc-desc" style="margin:4px 0 0;">Para la concesionaria elegida, en vez de multiplicar, la comisión pasa a un monto fijo en USD por unidad.</p>
-            </div>
-
-            <div class="bc-field">
-                <label class="bc-label">Concesionaria</label>
-                <select name="excepcion_dealer_id" class="bc-select">
-                    <option value="0">— Ninguna —</option>
-                    <?php foreach ($dealers as $d): ?>
-                        <option value="<?php echo intval($d->ID); ?>" <?php selected($edit['excepcion_dealer_id'] ?? 0, $d->ID); ?>><?php echo esc_html($d->post_title); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="bc-field">
-                <label class="bc-label">Moneda del monto fijo</label>
-                <select name="excepcion_moneda" class="bc-select">
-                    <option value="USD" <?php selected($edit['excepcion_moneda'] ?? 'USD', 'USD'); ?>>Dólares (US$)</option>
-                    <option value="PEN" <?php selected($edit['excepcion_moneda'] ?? 'USD', 'PEN'); ?>>Soles (S/)</option>
-                </select>
-                <p class="bc-desc" style="margin:6px 0 0;">Si eliges dólares, se convierte con el tipo de cambio del catálogo.</p>
-            </div>
-            <div class="bc-field">
-                <label class="bc-label">Monto fijo por unidad (asesor)</label>
-                <input type="number" step="0.01" min="0" name="excepcion_usd" class="bc-input" value="<?php echo esc_attr($edit['excepcion_usd'] ?? 0); ?>">
-            </div>
-            <div class="bc-field">
-                <label class="bc-label">Monto fijo por unidad (jefe)</label>
-                <input type="number" step="0.01" min="0" name="excepcion_jefe_usd" class="bc-input" value="<?php echo esc_attr($edit['excepcion_jefe_usd'] ?? 0); ?>">
-            </div>
-            <div class="bc-field">
-                <label class="bc-label">Modo de la excepción</label>
-                <select name="excepcion_modo" class="bc-select">
-                    <option value="reemplazar" <?php selected($edit['excepcion_modo'] ?? 'reemplazar', 'reemplazar'); ?>>Reemplazar la comisión</option>
-                    <option value="sumar" <?php selected($edit['excepcion_modo'] ?? 'reemplazar', 'sumar'); ?>>Sumar a la comisión</option>
-                </select>
-                <p class="bc-desc" style="margin:6px 0 0;">Reemplazar: la comisión pasa a ser el monto fijo. Sumar: se suma el monto fijo a la comisión base (la excepción anula el multiplicador).</p>
-            </div>
-            <div class="bc-field bc-field--check">
-                <label><input type="checkbox" name="excepcion_desde_umbral" value="1" <?php checked($edit['excepcion_desde_umbral'] ?? 1, 1); ?>> La excepción aplica desde el umbral (si no, desde la 1.ª venta)</label>
-            </div>
-            </div><!-- /bc-tab-excepcion -->
             </div>
 
             <div class="bc-bonus-tabs__panel bc-field bc-field--full" id="bc-tab-banner" hidden>
@@ -1732,9 +1747,8 @@ function billetera_render_bonus_page() {
                 <tr>
                     <th>Aplica a</th>
                     <th style="width:80px;">Desde</th>
-                    <th style="width:90px;">Bono</th>
+                    <th style="width:130px;">Bono</th>
                     <th style="width:90px;">Este mes</th>
-                    <th>Excepción</th>
                     <th>Banner / vigencia</th>
                     <th style="width:80px;">Estado</th>
                     <th style="width:150px;">Acciones</th>
@@ -1743,22 +1757,12 @@ function billetera_render_bonus_page() {
             <tbody>
                 <?php foreach ($reglas as $r):
                     $r = billetera_bonus_normalize_regla($r);
-                    $describe = billetera_bonus_regla_describe($r);
+                    $describe = billetera_bonus_regla_describe($r) . ' · ' . billetera_bonus_efecto_txt($r);
                     $especifica = (intval($r['scope_subcategoria_id'] ?? 0) > 0 || intval($r['scope_dealer_id'] ?? 0) > 0) ? ' <span style="background:#e6f4ea;color:#146c43;border-radius:10px;padding:1px 8px;font-size:11px;">Específica</span>' : '';
                     $prio = intval($r['prioridad_manual'] ?? 0) > 0 ? ' <span title="Prioridad manual para desempatar">P' . intval($r['prioridad_manual']) . '</span>' : '';
                     $dry_row = billetera_bonus_admin_dry_run($r);
 
-                    if (!empty($r['excepcion_dealer_id'])) {
-                        $sim    = (($r['excepcion_moneda'] ?? 'USD') === 'PEN') ? 'S/ ' : 'US$';
-                        $excep  = get_the_title($r['excepcion_dealer_id']) ?: ('#' . intval($r['excepcion_dealer_id']));
-                        $excep .= ' · ' . ((($r['excepcion_modo'] ?? 'reemplazar') === 'sumar') ? 'suma' : 'reemplaza');
-                        $excep .= ' ' . $sim . number_format((float) $r['excepcion_usd'], 2) . ' / jefe ' . $sim . number_format((float) $r['excepcion_jefe_usd'], 2);
-                        $excep .= !empty($r['excepcion_desde_umbral']) ? ' (desde umbral)' : ' (desde 1.ª)';
-                    } else {
-                        $excep = '—';
-                    }
-
-                    $mult_txt = rtrim(rtrim(number_format((float) $r['multiplicador'], 2, '.', ''), '0'), '.');
+                    $efecto_txt = billetera_bonus_efecto_txt($r);
 
                     if (!empty($r['banner_activo']) && trim((string) ($r['banner_titulo'] ?? '')) !== '') {
                         $vig = trim(trim((string) ($r['banner_desde'] ?? ''), '-') . ' → ' . trim((string) ($r['banner_hasta'] ?? ''), '-'), ' →');
@@ -1779,9 +1783,8 @@ function billetera_render_bonus_page() {
                     <tr>
                         <td><strong><?php echo esc_html($r['nombre'] ?? $r['slug']); ?></strong><?php echo $especifica; ?><?php echo $prio; ?><br><span style="color:#50575e;font-size:12px;"><?php echo esc_html($describe); ?></span></td>
                         <td><?php echo intval($r['umbral']); ?> ventas</td>
-                        <td>×<?php echo esc_html($mult_txt); ?><?php echo !empty($r['aplica_jefe']) ? ' (+jefe)' : ''; ?></td>
+                        <td><?php echo esc_html($efecto_txt); ?></td>
                         <td title="Ventas de este mes dentro del alcance"><?php echo intval($dry_row['ventas']); ?> ventas</td>
-                        <td><?php echo esc_html($excep); ?></td>
                         <td><span title="<?php echo esc_attr($banner_title); ?>"><?php echo esc_html($banner_txt); ?></span></td>
                         <td><?php echo !empty($r['activo']) ? '<span style="color:#146C43;">Activa</span>' : '<span style="color:#b3352a;">Inactiva</span>'; ?></td>
                         <td>

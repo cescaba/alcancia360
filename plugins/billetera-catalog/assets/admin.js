@@ -100,11 +100,34 @@
         refresh();
     }
 
+    function initBonusEfecto() {
+        var form = document.getElementById('bc-bonus-form');
+        if (!form) return;
+        var radios = form.querySelectorAll('input[name="efecto_tipo"]');
+        if (!radios.length) return;
+        var mult = form.querySelector('#bc-efecto-mult');
+        var monto = form.querySelector('#bc-efecto-monto');
+        var moneda = form.querySelector('#bc-efecto-moneda');
+        var jefe = form.querySelector('#bc-efecto-jefe');
+        function refresh() {
+            var v = 'multiplicar';
+            radios.forEach(function (r) { if (r.checked) v = r.value; });
+            var isMult = (v === 'multiplicar');
+            if (mult) mult.hidden = !isMult;
+            if (monto) monto.hidden = isMult;
+            if (moneda) moneda.hidden = isMult;
+            if (jefe) jefe.hidden = isMult;
+        }
+        radios.forEach(function (r) { r.addEventListener('change', refresh); });
+        refresh();
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () { initAutoSlug(); initBonusTabs(); initBonusCascade(); });
+        document.addEventListener('DOMContentLoaded', function () { initAutoSlug(); initBonusTabs(); initBonusCascade(); initBonusEfecto(); });
     } else {
         initAutoSlug();
         initBonusTabs();
         initBonusCascade();
+        initBonusEfecto();
     }
 })();

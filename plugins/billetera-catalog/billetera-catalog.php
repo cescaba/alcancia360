@@ -871,7 +871,8 @@ function billetera_convert_to_sol($comision) {
 
 /**
  * Lee las reglas de bonificación (opción). Siembra las reglas por defecto la 1.ª vez.
- * Siempre devuelve reglas normalizadas a v2 (con scope_* y prioridad_manual).
+ * Siempre devuelve reglas normalizadas a v2 (con scope_* y prioridad_manual)
+ * y con las excepciones legacy migradas a reglas de tienda (efecto fijo/sumar).
  */
 function billetera_bonus_reglas() {
     $reglas = get_option('billetera_bonus_reglas', null);
@@ -893,10 +894,80 @@ function billetera_bonus_reglas() {
         }
         $out[] = $n;
     }
+    if (billetera_bonus_migrar_excepciones($out)) {
+        $dirty = true;
+    }
     if ($dirty) {
         update_option('billetera_bonus_reglas', $out, false);
     }
     return $out;
+}
+
+/**
+ * Migra excepciones legacy ("tienda X con monto fijo") a reglas aparte.
+ * La regla original queda como multiplicador general sin excepción; la nueva
+ * es específica de esa tienda con efecto fijo/sumar y el mismo umbral
+ * (o umbral 1 si la excepción aplicaba desde la 1.ª venta). Idempotente.
+ * Devuelve true si cambió el array.
+ */
+function billetera_bonus_migrar_excepciones(&$reglas) {
+    $dirty = false;
+    $ids = [];
+    foreach ($reglas as $r) {
+        if (isset($r['id'])) {
+            $ids[$r['id']] = true;
+        }
+    }
+    foreach ($reglas as $i => $r) {
+        if (!empty($r['excepcion_migrada'])) {
+            continue;
+        }
+        $dealer = intval($r['excepcion_dealer_id'] ?? 0);
+        $usd    = (float) ($r['excepcion_usd'] ?? 0);
+        if ($dealer <= 0 || $usd <= 0) {
+            // Nada que partir: se marca para no reprocesar.
+            if ($dealer > 0 || $usd > 0 || (float) ($r['excepcion_jefe_usd'] ?? 0) > 0) {
+                $reglas[$i]['excepcion_migrada'] = 1;
+                $dirty = true;
+            }
+            continue;
+        }
+        $modo = ((($r['excepcion_modo'] ?? 'reemplazar') === 'sumar') ? 'sumar' : 'fijo');
+        $desde_umbral = !empty($r['excepcion_desde_umbral']);
+        $nuevo_id = (string) ($r['id'] ?? 'r_x') . '_tienda';
+        $k = 2;
+        while (isset($ids[$nuevo_id])) {
+            $nuevo_id = (string) ($r['id'] ?? 'r_x') . '_tienda' . $k;
+            $k++;
+        }
+        $ids[$nuevo_id] = true;
+        $nueva = billetera_bonus_normalize_regla($r);
+        $nueva['id']                    = $nuevo_id;
+        $nueva['scope_dealer_id']       = $dealer;
+        $nueva['efecto_tipo']           = $modo;
+        $nueva['efecto_valor']          = $usd;
+        $nueva['efecto_moneda']         = (($r['excepcion_moneda'] ?? 'USD') === 'PEN') ? 'PEN' : 'USD';
+        $nueva['efecto_jefe_valor']     = (float) ($r['excepcion_jefe_usd'] ?? 0);
+        $nueva['umbral']                = $desde_umbral ? max(1, intval($r['umbral'] ?? 6)) : 1;
+        $nueva['banner_activo']         = 0;
+        $nueva['excepcion_dealer_id']   = 0;
+        $nueva['excepcion_usd']         = 0;
+        $nueva['excepcion_jefe_usd']    = 0;
+        $nueva['excepcion_migrada']     = 1;
+        $reglas[] = $nueva;
+
+        // La original queda como multiplicador general, sin excepción.
+        $reglas[$i]['efecto_tipo']         = 'multiplicar';
+        $reglas[$i]['efecto_valor']        = (float) ($r['multiplicador'] ?? 2);
+        $reglas[$i]['efecto_moneda']       = 'USD';
+        $reglas[$i]['efecto_jefe_valor']   = (float) ($r['multiplicador'] ?? 2);
+        $reglas[$i]['excepcion_dealer_id'] = 0;
+        $reglas[$i]['excepcion_usd']       = 0;
+        $reglas[$i]['excepcion_jefe_usd']  = 0;
+        $reglas[$i]['excepcion_migrada']   = 1;
+        $dirty = true;
+    }
+    return $dirty;
 }
 
 /**
@@ -939,6 +1010,17 @@ function billetera_bonus_normalize_regla($r) {
     }
     if (!isset($r['prioridad_manual'])) {
         $r['prioridad_manual'] = 0;
+    }
+    // Efecto del bono: multiplicar (×N) | fijo (US$ N en vez de la comisión)
+    // | sumar (comisión + US$ N). Las excepciones legacy ya vienen migradas.
+    if (!isset($r['efecto_tipo']) || !in_array($r['efecto_tipo'], ['multiplicar', 'fijo', 'sumar'], true)) {
+        $r['efecto_tipo'] = 'multiplicar';
+        $r['efecto_valor'] = (float) ($r['multiplicador'] ?? 2);
+        $r['efecto_moneda'] = 'USD';
+        $r['efecto_jefe_valor'] = (float) ($r['multiplicador'] ?? 2);
+    }
+    if (!isset($r['efecto_moneda']) || !in_array($r['efecto_moneda'], ['USD', 'PEN'], true)) {
+        $r['efecto_moneda'] = 'USD';
     }
     $r['scope_categoria_id']   = intval($r['scope_categoria_id']);
     $r['scope_marca_id']       = intval($r['scope_marca_id']);
@@ -1324,6 +1406,35 @@ function billetera_bonus_regla_describe($regla) {
 }
 
 /**
+ * Texto corto del efecto para la tabla del admin.
+ * Ej: "×2 (+jefe)" · "Fijo US$100/u" · "Base + S/50/u".
+ */
+function billetera_bonus_efecto_txt($regla) {
+    $regla = billetera_bonus_normalize_regla($regla);
+    $tipo  = (string) ($regla['efecto_tipo'] ?? 'multiplicar');
+    $sim   = ((($regla['efecto_moneda'] ?? 'USD') === 'PEN') ? 'S/' : 'US$');
+    $fmt   = function ($v) {
+        return rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
+    };
+    if ($tipo === 'fijo') {
+        $t = 'Fijo ' . $sim . $fmt($regla['efecto_valor'] ?? 0) . '/u';
+        if (!empty($regla['aplica_jefe']) && (float) ($regla['efecto_jefe_valor'] ?? 0) > 0) {
+            $t .= ' (jefe ' . $sim . $fmt($regla['efecto_jefe_valor']) . ')';
+        }
+        return $t;
+    }
+    if ($tipo === 'sumar') {
+        $t = 'Base + ' . $sim . $fmt($regla['efecto_valor'] ?? 0) . '/u';
+        if (!empty($regla['aplica_jefe']) && (float) ($regla['efecto_jefe_valor'] ?? 0) > 0) {
+            $t .= ' (jefe +' . $sim . $fmt($regla['efecto_jefe_valor']) . ')';
+        }
+        return $t;
+    }
+    $mult = $fmt($regla['efecto_valor'] ?? ($regla['multiplicador'] ?? 1));
+    return '×' . $mult . (!empty($regla['aplica_jefe']) ? ' (+jefe)' : '');
+}
+
+/**
  * Calcula la regla de bonificación para una venta y, si corresponde,
  * aplica el ajuste retroactivo de las ventas anteriores del mes.
  *
@@ -1393,43 +1504,42 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
     $califica = ($count >= $umbral - 1);
     $retro    = ($count === $umbral - 1);
 
-    $es_excepcion  = (intval($regla['excepcion_dealer_id']) > 0 && intval($dealer_id) === intval($regla['excepcion_dealer_id']));
-    $usa_excepcion = $es_excepcion && (!empty($regla['excepcion_desde_umbral']) ? $califica : true);
-    $tc            = billetera_get_tipo_cambio();
+    // Efecto de la regla ganadora (las excepciones legacy ya migraron a reglas
+    // de tienda con efecto fijo/sumar, así que aquí no hay casos especiales).
+    $tc       = billetera_get_tipo_cambio();
+    $tipo     = (string) ($regla['efecto_tipo'] ?? 'multiplicar');
+    if (!in_array($tipo, ['multiplicar', 'fijo', 'sumar'], true)) {
+        $tipo = 'multiplicar';
+    }
+    $con_jefe = !empty($regla['aplica_jefe']);
 
-    if ($usa_excepcion && (float) $regla['excepcion_usd'] > 0) {
-        $out['excepcion'] = true;
-        $modo       = (($regla['excepcion_modo'] ?? 'reemplazar') === 'sumar') ? 'sumar' : 'reemplazar';
-        $factor     = (($regla['excepcion_moneda'] ?? 'USD') === 'PEN') ? 1.0 : $tc;
-        $fixed      = round((float) $regla['excepcion_usd'] * $factor * $cantidad, 2);
-        $fixed_jefe = round((float) $regla['excepcion_jefe_usd'] * $factor * $cantidad, 2);
-        $con_jefe   = !empty($regla['aplica_jefe']);
-
-        if ($modo === 'sumar') {
-            // Excepción "sumar": la excepción anula el multiplicador, así que el
-            // monto queda como comisión base + monto fijo (base × 1 + fijo).
-            $out['multiplier'] = 1.0;
-            $out['add_sol']    = $fixed;
-
-            // El jefe también pierde el multiplicador: recibe su comisión base + su monto fijo.
-            // Si su monto fijo es 0, queda con su comisión normal (sin bono).
-            $jefe_fijo              = ($con_jefe && (float) $regla['excepcion_jefe_usd'] > 0) ? $fixed_jefe : null;
-            $out['jefe_multiplier'] = 1.0;
-            $out['jefe_add_sol']    = $jefe_fijo;
-        } else {
-            // Reemplaza la comisión por el monto fijo
-            $out['override_sol']      = $fixed;
-            $out['jefe_override_sol'] = ($con_jefe && (float) $regla['excepcion_jefe_usd'] > 0) ? $fixed_jefe : null;
-        }
-    } elseif ($califica) {
-        $out['multiplier']      = (float) $regla['multiplicador'];
-        $out['jefe_multiplier'] = !empty($regla['aplica_jefe']) ? (float) $regla['multiplicador'] : 1.0;
+    if ($tipo === 'fijo' && $califica) {
+        // Paga un monto fijo por unidad en vez de la comisión.
+        $factor     = (($regla['efecto_moneda'] ?? 'USD') === 'PEN') ? 1.0 : $tc;
+        $fixed      = round((float) ($regla['efecto_valor'] ?? 0) * $factor * $cantidad, 2);
+        $fixed_jefe = round((float) ($regla['efecto_jefe_valor'] ?? 0) * $factor * $cantidad, 2);
+        $out['excepcion']          = true;
+        $out['override_sol']       = $fixed;
+        $out['jefe_override_sol']  = ($con_jefe && (float) ($regla['efecto_jefe_valor'] ?? 0) > 0) ? $fixed_jefe : null;
+    } elseif ($tipo === 'sumar' && $califica) {
+        // Comisión base + un extra fijo por unidad (sin multiplicador).
+        $factor     = (($regla['efecto_moneda'] ?? 'USD') === 'PEN') ? 1.0 : $tc;
+        $fixed      = round((float) ($regla['efecto_valor'] ?? 0) * $factor * $cantidad, 2);
+        $fixed_jefe = round((float) ($regla['efecto_jefe_valor'] ?? 0) * $factor * $cantidad, 2);
+        $out['excepcion']       = true;
+        $out['multiplier']      = 1.0;
+        $out['add_sol']         = $fixed;
+        $out['jefe_multiplier'] = 1.0;
+        $out['jefe_add_sol']    = ($con_jefe && (float) ($regla['efecto_jefe_valor'] ?? 0) > 0) ? $fixed_jefe : null;
+    } elseif ($tipo === 'multiplicar' && $califica) {
+        $mult = (float) ($regla['efecto_valor'] ?? ($regla['multiplicador'] ?? 1));
+        $out['multiplier']      = $mult;
+        $out['jefe_multiplier'] = $con_jefe ? $mult : 1.0;
     }
 
-    // El retroactivo solo aplica cuando la regla "arranca" en esta venta
-    // (no cuando la excepción está activa desde la 1.ª venta).
-    $retro = $retro && !($es_excepcion && empty($regla['excepcion_desde_umbral']));
-    if ($retro && $aplicar_retro && ($califica || $usa_excepcion)) {
+    // El retroactivo se aplica una sola vez, cuando se alcanza el umbral.
+    // Con umbral 1 es un no-op seguro (aún no hay ventas previas que ajustar).
+    if ($retro && $aplicar_retro && $califica) {
         billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc);
     }
 
