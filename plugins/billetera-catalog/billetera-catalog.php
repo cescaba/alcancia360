@@ -41,7 +41,7 @@ register_deactivation_hook(__FILE__, 'billetera_summary_unschedule');
 add_action('plugins_loaded', 'billetera_maybe_upgrade_schema');
 
 function billetera_maybe_upgrade_schema() {
-    if (get_option('billetera_db_version') === '1.5') {
+    if (get_option('billetera_db_version') === '1.6') {
         return;
     }
 
@@ -61,6 +61,11 @@ function billetera_maybe_upgrade_schema() {
         if (!in_array('bonus_aplicado', $column_names)) {
             $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN bonus_aplicado tinyint(1) NOT NULL DEFAULT 0");
         }
+        // --- 1.6: TC congelado por venta (los fijos en USD del retroactivo usan
+        // el TC de cada venta, no el del día que se alcanza el umbral) ---
+        if (!in_array('tc_aplicado', $column_names)) {
+            $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN tc_aplicado decimal(10, 4) NULL");
+        }
     }
 
     // --- 1.3: líneas (hyu/hcv/gee/jmc) independientes de las marcas ---
@@ -72,7 +77,7 @@ function billetera_maybe_upgrade_schema() {
     // --- 1.4: tabla de cola del resumen semanal por correo ---
     billetera_summary_create_queue_table();
 
-    update_option('billetera_db_version', '1.5');
+    update_option('billetera_db_version', '1.6');
 }
 
 /**
@@ -397,6 +402,7 @@ function billetera_create_catalog_tables() {
             id_value varchar(255),
             bonus_multiplier decimal(3, 1) DEFAULT 1.0,
             bonus_aplicado tinyint(1) NOT NULL DEFAULT 0,
+            tc_aplicado decimal(10, 4) NULL,
             creado_en datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY usuario_id (usuario_id),
@@ -425,6 +431,10 @@ function billetera_create_catalog_tables() {
 
         if (!in_array('bonus_aplicado', $column_names)) {
             $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN bonus_aplicado tinyint(1) NOT NULL DEFAULT 0");
+        }
+
+        if (!in_array('tc_aplicado', $column_names)) {
+            $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN tc_aplicado decimal(10, 4) NULL");
         }
 
         if (!in_array('asesor_id', $column_names)) {
@@ -688,6 +698,12 @@ function billetera_ajax_register_sale_v2() {
     if ($fecha_timestamp === false) {
         wp_send_json_error(['message' => 'Fecha inválida']);
     }
+    // El asesor y el jefe registran con fecha de hoy (no pueden elegir ni
+    // modificar fechas). Solo el backoffice puede fechar ventas manualmente.
+    if (!current_user_can('manage_billetera_catalog')) {
+        $fecha = date('Y-m-d');
+        $fecha_timestamp = strtotime($fecha);
+    }
     $fecha_datetime = date('Y-m-d H:i:s', $fecha_timestamp);
 
     // Obtener rol del usuario
@@ -728,8 +744,10 @@ function billetera_ajax_register_sale_v2() {
     }
     $bonus_aplicado = ($bonus_multiplier > 1 || !empty($regla_bonus['excepcion'])) ? 1 : 0;
 
-    // Guardar venta en nueva tabla
+    // Guardar venta en nueva tabla (tc_aplicado congela el tipo de cambio del día:
+    // el retroactivo de montos fijos revaloriza cada venta con su propio TC).
     $ventas_table = $wpdb->prefix . 'billetera_ventas';
+    $tc_ins = billetera_get_tipo_cambio();
     $result = $wpdb->insert($ventas_table, [
         'usuario_id' => $user_id,
         'subcategoria_id' => $subcategoria_id,
@@ -739,8 +757,9 @@ function billetera_ajax_register_sale_v2() {
         'id_value' => $id_value,
         'bonus_multiplier' => $bonus_multiplier,
         'bonus_aplicado' => $bonus_aplicado,
+        'tc_aplicado' => $tc_ins,
         'creado_en' => $fecha_datetime,
-    ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f', '%d', '%s']);
+    ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f', '%d', '%f', '%s']);
 
     if ($result) {
         // Registrar la comisión del jefe de venta de la sucursal (con la misma regla de bonificación)
@@ -1011,6 +1030,12 @@ function billetera_bonus_normalize_regla($r) {
     if (!isset($r['prioridad_manual'])) {
         $r['prioridad_manual'] = 0;
     }
+    // Fecha de creación: el umbral cuenta ventas desde lo más tarde entre
+    // inicio de mes, vigencia y creación (las ventas anteriores a crear la
+    // regla no cuentan). Legacy: '' = comportamiento anterior.
+    if (!isset($r['creada_en'])) {
+        $r['creada_en'] = '';
+    }
     // Efecto del bono: multiplicar (×N) | fijo (US$ N en vez de la comisión)
     // | sumar (comisión + US$ N). Las excepciones legacy ya vienen migradas.
     if (!isset($r['efecto_tipo']) || !in_array($r['efecto_tipo'], ['multiplicar', 'fijo', 'sumar'], true)) {
@@ -1088,6 +1113,28 @@ function billetera_bonus_seed_reglas() {
 
     update_option('billetera_bonus_reglas', $reglas, false);
     return $reglas;
+}
+
+/**
+ * Inicio del conteo del umbral: lo más tarde entre inicio de mes, vigencia
+ * y creación de la regla. Las ventas anteriores a crear la regla no cuentan.
+ */
+function billetera_bonus_inicio_conteo($regla, $mes_inicio) {
+    $inicio = (string) $mes_inicio;
+    if (!empty($regla['banner_desde'])) {
+        $d = (string) $regla['banner_desde'] . ' 00:00:00';
+        if ($d > $inicio) {
+            $inicio = $d;
+        }
+    }
+    $creada = trim((string) ($regla['creada_en'] ?? ''));
+    if (preg_match('/^\d{4}-\d{2}-\d{2}/', $creada)) {
+        $c = substr($creada, 0, 10) . ' 00:00:00';
+        if ($c > $inicio) {
+            $inicio = $c;
+        }
+    }
+    return $inicio;
 }
 
 /**
@@ -1275,7 +1322,9 @@ function billetera_bonus_regla_match_score($regla, $ctx, $dealer_id) {
 
 /**
  * Mejor regla v2 para una venta: solo UNA gana, la más específica.
- * Empate: mayor prioridad_manual, luego la más reciente (última del array).
+ * El desempate manual SOLO desempat: primero manda la especificidad,
+ * luego el desempate, luego la más reciente (última del array). Nunca
+ * puede imponerse a una regla más específica.
  * Devuelve la regla normalizada o null.
  */
 function billetera_bonus_find_best_regla($subcategoria_id, $dealer_id = 0, $fecha_ymd = null) {
@@ -1302,10 +1351,9 @@ function billetera_bonus_find_best_regla($subcategoria_id, $dealer_id = 0, $fech
             continue;
         }
         $prio = intval($r['prioridad_manual'] ?? 0);
-        $total = $s + $prio;
-        if ($total > $best_score || ($total === $best_score && ($prio > $best_prio || ($prio === $best_prio && $idx >= $best_idx)))) {
+        if ($s > $best_score || ($s === $best_score && ($prio > $best_prio || ($prio === $best_prio && $idx >= $best_idx)))) {
             $best = billetera_bonus_normalize_regla($r);
-            $best_score = $total;
+            $best_score = $s;
             $best_prio = $prio;
             $best_idx = $idx;
         }
@@ -1483,12 +1531,9 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
     list($cond, $cond_params) = billetera_bonus_cond_v2($regla);
 
     $mes_inicio = substr($fecha_ymd, 0, 7) . '-01 00:00:00';
-    // El conteo del umbral solo suma ventas dentro de la vigencia.
-    $desde_vig = '';
-    if (!empty($regla['banner_desde'])) {
-        $desde_vig = (string) $regla['banner_desde'] . ' 00:00:00';
-    }
-    $inicio = $desde_vig !== '' && $desde_vig > $mes_inicio ? $desde_vig : $mes_inicio;
+    // El conteo del umbral solo suma ventas dentro de la vigencia y
+    // posteriores a la creación de la regla.
+    $inicio = billetera_bonus_inicio_conteo($regla, $mes_inicio);
     $params     = array_merge([$user_id], $cond_params, [$inicio]);
     $count      = (int) $wpdb->get_var($wpdb->prepare("
         SELECT COUNT(v.id)
@@ -1558,26 +1603,28 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
     $limite = max(1, (int) $regla['umbral'] - 1);
     list($cond, $cond_params) = billetera_bonus_cond_v2($regla);
 
-    // No tocar ventas anteriores a la vigencia.
-    $inicio = (string) $mes_inicio;
-    if (!empty($regla['banner_desde'])) {
-        $desde_dt = (string) $regla['banner_desde'] . ' 00:00:00';
-        if ($desde_dt > $inicio) {
-            $inicio = $desde_dt;
-        }
-    }
+    // No tocar ventas anteriores a la vigencia ni a la creación de la regla.
+    $inicio = billetera_bonus_inicio_conteo($regla, (string) $mes_inicio);
 
     $subcat_in = "(SELECT s.id FROM $sub s JOIN $cat c ON c.id = s.categoria_id WHERE $cond)";
 
-    $factor = (($regla['excepcion_moneda'] ?? 'USD') === 'PEN') ? 1.0 : $tc;
+    // TC congelado: cada venta reescrita usa su propio tc_aplicado (ventas
+    // antiguas sin la columna usan el TC actual como respaldo).
+    $es_pen = (($regla['efecto_moneda'] ?? 'USD') === 'PEN');
 
     if ($out['override_sol'] !== null) {
-        // Reemplazar: el monto pasa a ser el fijo (USD * TC * cantidad)
-        $usd    = (float) $regla['excepcion_usd'];
-        $params = array_merge([$usd * $factor, $user_id], $cond_params, [$inicio, $limite]);
+        // Fijo: el monto pasa a ser el fijo por unidad (USD * TC de cada venta * cantidad).
+        $usd = (float) ($regla['efecto_valor'] ?? 0);
+        if ($es_pen) {
+            $params = array_merge([$usd, $user_id], $cond_params, [$inicio, $limite]);
+            $set_monto = "v.monto_comision_sol = (%f * v.cantidad)";
+        } else {
+            $params = array_merge([$usd, $tc, $user_id], $cond_params, [$inicio, $limite]);
+            $set_monto = "v.monto_comision_sol = (%f * COALESCE(v.tc_aplicado, %f) * v.cantidad)";
+        }
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
-            SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
+            SET $set_monto, v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
             WHERE v.usuario_id = %d
               AND v.subcategoria_id IN $subcat_in
               AND v.creado_en >= %s
@@ -1586,24 +1633,36 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         ", ...$params));
 
         if ($out['jefe_override_sol'] !== null) {
-            $usd_j  = (float) $regla['excepcion_jefe_usd'];
-            $params = array_merge([$usd_j * $factor, $user_id], $cond_params, [$inicio]);
+            $usd_j = (float) ($regla['efecto_jefe_valor'] ?? 0);
+            if ($es_pen) {
+                $params = array_merge([$usd_j, $user_id], $cond_params, [$inicio]);
+                $set_monto = "v.monto_comision_sol = (%f * v.cantidad)";
+            } else {
+                $params = array_merge([$usd_j, $tc, $user_id], $cond_params, [$inicio]);
+                $set_monto = "v.monto_comision_sol = (%f * COALESCE(v.tc_aplicado, %f) * v.cantidad)";
+            }
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
-                SET v.monto_comision_sol = (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
+                SET $set_monto, v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
                 WHERE v.asesor_id = %d
                   AND v.subcategoria_id IN $subcat_in
                   AND v.creado_en >= %s
             ", ...$params));
         }
     } elseif ($out['add_sol'] !== null) {
-        // Sumar: monto = base + fijo (la excepción anula el multiplicador)
-        $mult   = (float) $out['multiplier'];
-        $usd    = (float) $regla['excepcion_usd'];
-        $params = array_merge([$mult, $usd * $factor, $user_id], $cond_params, [$inicio, $limite]);
+        // Sumar: monto = base + fijo (sin multiplicador), fijo con TC de cada venta.
+        $mult = (float) $out['multiplier'];
+        $usd  = (float) ($regla['efecto_valor'] ?? 0);
+        if ($es_pen) {
+            $params = array_merge([$mult, $usd, $user_id], $cond_params, [$inicio, $limite]);
+            $set_monto = "v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad)";
+        } else {
+            $params = array_merge([$mult, $usd, $tc, $user_id], $cond_params, [$inicio, $limite]);
+            $set_monto = "v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * COALESCE(v.tc_aplicado, %f) * v.cantidad)";
+        }
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
-            SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
+            SET $set_monto, v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
             WHERE v.usuario_id = %d
               AND v.subcategoria_id IN $subcat_in
               AND v.creado_en >= %s
@@ -1613,11 +1672,17 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
 
         if ($out['jefe_add_sol'] !== null) {
             $mult_j = (float) $out['jefe_multiplier'];
-            $usd_j  = (float) $regla['excepcion_jefe_usd'];
-            $params = array_merge([$mult_j, $usd_j * $factor, $user_id], $cond_params, [$inicio]);
+            $usd_j  = (float) ($regla['efecto_jefe_valor'] ?? 0);
+            if ($es_pen) {
+                $params = array_merge([$mult_j, $usd_j, $user_id], $cond_params, [$inicio]);
+                $set_monto = "v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad)";
+            } else {
+                $params = array_merge([$mult_j, $usd_j, $tc, $user_id], $cond_params, [$inicio]);
+                $set_monto = "v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * COALESCE(v.tc_aplicado, %f) * v.cantidad)";
+            }
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
-                SET v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad), v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
+                SET $set_monto, v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
                 WHERE v.asesor_id = %d
                   AND v.subcategoria_id IN $subcat_in
                   AND v.creado_en >= %s
@@ -1716,8 +1781,9 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
             'id_value' => $id_value,
             'bonus_multiplier' => $bm_jefe,
             'bonus_aplicado' => $bm_aplicado,
+            'tc_aplicado' => billetera_get_tipo_cambio(),
             'creado_en' => $fecha_datetime,
-        ], ['%d', '%d', '%d', '%d', '%f', '%s', '%s', '%f', '%d', '%s']);
+        ], ['%d', '%d', '%d', '%d', '%f', '%s', '%s', '%f', '%d', '%f', '%s']);
     }
 }
 
@@ -2010,13 +2076,8 @@ function billetera_campana_ventas_mes($user_id, $regla) {
     $now   = billetera_stats_local_now();
     $desde = $now->format('Y-m-01 00:00:00');
     $hasta = (clone $now)->modify('first day of next month')->format('Y-m-01 00:00:00');
-    // El conteo cuadra con el bono: solo dentro de la vigencia.
-    if (!empty($regla['banner_desde'])) {
-        $d = (string) $regla['banner_desde'] . ' 00:00:00';
-        if ($d > $desde) {
-            $desde = $d;
-        }
-    }
+    // El conteo cuadra con el bono: vigencia + creación de la regla.
+    $desde = billetera_bonus_inicio_conteo($regla, $desde);
     if (!empty($regla['banner_hasta'])) {
         $h = (new DateTime((string) $regla['banner_hasta'] . ' 00:00:00'))->modify('+1 day')->format('Y-m-d 00:00:00');
         if ($h < $hasta) {

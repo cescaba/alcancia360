@@ -1235,6 +1235,72 @@ function billetera_bonus_admin_vigencia_solapa($a, $b) {
 }
 
 /**
+ * ¿La regla $nueva queda muerta frente a $existente? Es decir: toda venta que
+ * caiga en $nueva también cae en $existente, con mayor especificidad y
+ * vigencia que se cruza → $nueva nunca aplicaría en ese cruce.
+ * Devuelve el texto del cruce o ''.
+ */
+function billetera_bonus_admin_muerta_por($nueva, $existente) {
+    $nueva = billetera_bonus_normalize_regla($nueva);
+    $existente = billetera_bonus_normalize_regla($existente);
+    if (!billetera_bonus_admin_vigencia_solapa($nueva, $existente)) {
+        return '';
+    }
+    // Cobertura: cada eje específico de $nueva debe coincidir en $existente
+    // (si $nueva es "Todas" en un eje, $existente lo cubre igual).
+    $ejes = ['scope_slug', 'scope_marca_id', 'scope_linea_codigo', 'scope_subcategoria_id', 'scope_dealer_id'];
+    foreach ($ejes as $e) {
+        $nv = $e === 'scope_slug' || $e === 'scope_linea_codigo'
+            ? strtolower(trim((string) ($nueva[$e] ?? '')))
+            : intval($nueva[$e] ?? 0);
+        $ev = $e === 'scope_slug' || $e === 'scope_linea_codigo'
+            ? strtolower(trim((string) ($existente[$e] ?? '')))
+            : intval($existente[$e] ?? 0);
+        $nwild = ($nv === '' || $nv === 0);
+        if (!$nwild && $nv !== $ev) {
+            return '';
+        }
+    }
+    // En el cruce, ¿$existente es estrictamente más específica?
+    // Se puntúa con un contexto representativo del alcance de $nueva.
+    global $wpdb;
+    list($cond_sql, $cond_params) = billetera_bonus_cond_v2($nueva);
+    $sub = $wpdb->prefix . 'billetera_subcategorias';
+    $cat = $wpdb->prefix . 'billetera_categorias';
+    $sid = intval($wpdb->get_var($wpdb->prepare(
+        "SELECT s.id FROM $sub s JOIN $cat c ON c.id = s.categoria_id WHERE ($cond_sql) ORDER BY s.id ASC LIMIT 1",
+        ...$cond_params
+    )));
+    if ($sid <= 0) {
+        return '';
+    }
+    $ctx = billetera_bonus_ctx($sid);
+    if (!$ctx) {
+        return '';
+    }
+    $dealer_probe = intval($nueva['scope_dealer_id'] ?? 0);
+    if ($dealer_probe <= 0) {
+        $dealer_probe = intval($existente['scope_dealer_id'] ?? 0);
+    }
+    $sn = billetera_bonus_regla_match_score($nueva, $ctx, $dealer_probe);
+    $se = billetera_bonus_regla_match_score($existente, $ctx, $dealer_probe);
+    if ($sn === false || $se === false || !($se > $sn)) {
+        return '';
+    }
+    $cruce = [];
+    foreach (['scope_slug' => 'categoría', 'scope_linea_codigo' => 'línea', 'scope_subcategoria_id' => 'subcategoría', 'scope_dealer_id' => 'tienda'] as $e => $lbl) {
+        $nv = $e === 'scope_slug' || $e === 'scope_linea_codigo'
+            ? strtolower(trim((string) ($nueva[$e] ?? '')))
+            : intval($nueva[$e] ?? 0);
+        if ($nv !== '' && $nv !== 0) {
+            $cruce[] = $lbl;
+        }
+    }
+    return '“' . ($existente['nombre'] ?? $existente['slug'] ?? $existente['id']) . '”'
+        . ($cruce ? ' en ' . implode(', ', $cruce) : '');
+}
+
+/**
  * Prueba de alcance: cuántas ventas y asesores del mes caen en el ámbito.
  * No guarda nada. Devuelve ['ventas'=>int, 'asesores'=>int, 'solapan'=>[descripciones]].
  */
@@ -1247,12 +1313,8 @@ function billetera_bonus_admin_dry_run($regla) {
     $now = billetera_stats_local_now();
     $desde = $now->format('Y-m-01 00:00:00');
     $hasta = (clone $now)->modify('first day of next month')->format('Y-m-01 00:00:00');
-    if (!empty($regla['banner_desde'])) {
-        $d = (string) $regla['banner_desde'] . ' 00:00:00';
-        if ($d > $desde) {
-            $desde = $d;
-        }
-    }
+    // Como el bono: vigencia + creación de la regla.
+    $desde = billetera_bonus_inicio_conteo($regla, $desde);
     if (!empty($regla['banner_hasta'])) {
         $h = (new DateTime((string) $regla['banner_hasta'] . ' 00:00:00'))->modify('+1 day')->format('Y-m-d 00:00:00');
         if ($h < $hasta) {
@@ -1297,6 +1359,7 @@ function billetera_render_bonus_page() {
     $cat_table = $wpdb->prefix . 'billetera_categorias';
     $msg = '';
     $err = '';
+    $warn = '';
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bc_action'])) {
         check_admin_referer('billetera_catalog');
@@ -1388,8 +1451,19 @@ function billetera_render_bonus_page() {
                             'activo' => isset($_POST['activo']) ? 1 : 0,
                         ]);
                     } else {
+                    // creada_en: las nuevas cuentan desde ahora; al editar se conserva.
+                    $creada_en = current_time('mysql');
+                    if ($rid !== '') {
+                        foreach (billetera_bonus_reglas() as $ro) {
+                            if (($ro['id'] ?? '') === $rid && !empty($ro['creada_en'])) {
+                                $creada_en = (string) $ro['creada_en'];
+                                break;
+                            }
+                        }
+                    }
                     $nueva = [
                         'id'                     => $rid !== '' ? $rid : ('r_' . wp_generate_password(8, false, false)),
+                        'creada_en'              => $creada_en,
                         // Legacy (informativo; el motor v2 usa scope_*/efecto_*).
                         'categoria_id'           => $legacy_cat_id,
                         'slug'                   => $scope_slug,
@@ -1433,14 +1507,30 @@ function billetera_render_bonus_page() {
                     ];
 
                     if ($action === 'dry_run') {
+                        // La regla aún no existe: la prueba ignora su fecha de creación.
+                        $nueva['creada_en'] = ($rid !== '') ? $nueva['creada_en'] : '';
                         $dry = billetera_bonus_admin_dry_run($nueva);
                         $msg = 'Prueba de alcance' . $nota_sub . ': este mes hay ' . $dry['ventas'] . ' ventas de ' . $dry['asesores'] . ' asesores dentro de este alcance (' . billetera_bonus_regla_describe($nueva) . ').'
-                            . ($dry['solapan'] ? ' Convive con: ' . implode('; ', $dry['solapan']) . '. La más específica tendrá prioridad.' : ' No se solapa con otra regla vigente.');
+                            . ($dry['solapan'] ? ' Convive con: ' . implode('; ', $dry['solapan']) . '. En cada venta gana la más específica; a igual especificidad decide el desempate.' : ' No se solapa con otra regla vigente.');
+                        foreach (billetera_bonus_reglas() as $r) {
+                            if (($r['id'] ?? '') === $nueva['id']) {
+                                continue;
+                            }
+                            if (empty($r['activo'])) {
+                                continue;
+                            }
+                            $m = billetera_bonus_admin_muerta_por($nueva, $r);
+                            if ($m !== '') {
+                                $warn = 'Ojo: esta regla nunca se aplicaría ' . $m . ', que es más específica y la cubre por completo. Revisa el alcance antes de crearla.';
+                                break;
+                            }
+                        }
                         $edit = $nueva; // conserva lo escrito para seguir ajustando
                     } else {
                         $reglas = billetera_bonus_reglas();
                         $exacto = false;
                         $avisos = [];
+                        $muertas = [];
                         foreach ($reglas as $r) {
                             if (($r['id'] ?? '') === $nueva['id']) {
                                 continue;
@@ -1458,7 +1548,12 @@ function billetera_render_bonus_page() {
                                 $exacto = true;
                                 break;
                             }
-                            $avisos[] = '“' . ($r['nombre'] ?? $r['slug'] ?? $r['id']) . '” (' . billetera_bonus_regla_describe($r) . ')';
+                            $m = billetera_bonus_admin_muerta_por($nueva, $r);
+                            if ($m !== '') {
+                                $muertas[] = $m;
+                            } else {
+                                $avisos[] = '“' . ($r['nombre'] ?? $r['slug'] ?? $r['id']) . '” (' . billetera_bonus_regla_describe($r) . ')';
+                            }
                         }
 
                         if ($exacto) {
@@ -1478,7 +1573,10 @@ function billetera_render_bonus_page() {
                             update_option('billetera_bonus_reglas', $reglas, false);
                             $msg = ($found ? 'Regla actualizada' : 'Regla creada') . $nota_sub . '. Aplica a: ' . billetera_bonus_regla_describe($nueva) . '.';
                             if ($avisos) {
-                                $msg .= ' Aviso: convive con ' . implode('; ', $avisos) . '. No se duplican: la regla más específica (subcategoría > tienda > categoría > línea > marca) tendrá prioridad en cada venta.';
+                                $msg .= ' Convive con ' . implode('; ', $avisos) . '. No se duplican: en cada venta gana la más específica (subcategoría > tienda > categoría > línea > marca); a igual especificidad decide el desempate.';
+                            }
+                            if ($muertas) {
+                                $warn = 'Ojo: esta regla nunca se aplicará ' . implode(' ni ', $muertas) . ', que ya la cubre por completo con mayor especificidad. Solo tiene sentido si la otra regla se desactiva o vence.';
                             }
                         }
                     }
@@ -1540,6 +1638,9 @@ function billetera_render_bonus_page() {
 
     billetera_bc_open('Reglas de bonificación', 'Elige a qué ventas aplica la regla (categoría, marca, línea, subcategoría y tienda), luego el bono y la vigencia. Si dos reglas coinciden en una venta, gana la más específica: subcategoría > tienda > categoría > línea > marca.');
     billetera_bc_notices($msg, $err);
+    if ($warn !== '') {
+        echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html($warn) . '</p></div>';
+    }
     ?>
     <div class="bc-card">
         <h2 class="bc-card__title"><?php echo $edit ? 'Editar regla' : 'Nueva regla'; ?></h2>
@@ -1625,9 +1726,13 @@ function billetera_render_bonus_page() {
             </div>
 
             <div class="bc-field">
-                <label class="bc-label">Prioridad manual (0–100)</label>
+                <label class="bc-label">Desempate (avanzado, 0–100)</label>
                 <input type="number" min="0" max="100" name="prioridad_manual" class="bc-input" value="<?php echo intval($edit['prioridad_manual'] ?? 0); ?>">
-                <p class="bc-desc" style="margin:6px 0 0;">Solo para desempatar dos reglas igual de específicas. Normalmente déjalo en 0.</p>
+                <p class="bc-desc" style="margin:6px 0 0;">Solo si dos reglas igual de específicas chocan: gana el número mayor. Déjalo en 0.</p>
+            </div>
+            <div class="bc-field bc-field--full">
+                <button type="submit" class="button" onclick="document.getElementById('bc-bonus-action').value='dry_run';" title="Calcula cuántas ventas de este mes caen en este alcance, sin guardar">Probar alcance</button>
+                <p class="bc-desc" style="margin:6px 0 0;">Pruébalo antes de seguir: te dice a cuántas ventas afecta y con qué reglas convive.</p>
             </div>
             </div><!-- /bc-tab-base -->
             </div>
@@ -1725,20 +1830,19 @@ function billetera_render_bonus_page() {
                 <label class="bc-label">Texto del botón</label>
                 <input type="text" name="banner_cta" class="bc-input" maxlength="20" value="<?php echo esc_attr($edit['banner_cta'] ?? 'VER BASES'); ?>">
             </div>
-            </div><!-- /bc-tab-banner -->
-            </div>
-
-            <div class="bc-field bc-field--actions">
+            <div class="bc-field bc-field--full">
                 <button type="submit" class="button button-primary" onclick="document.getElementById('bc-bonus-action').value='save_rule';"><?php echo $edit ? 'Guardar cambios' : 'Crear regla'; ?></button>
-                <button type="submit" class="button" onclick="document.getElementById('bc-bonus-action').value='dry_run';" title="Calcula cuántas ventas de este mes caen en este alcance, sin guardar">Probar alcance</button>
                 <?php if ($edit): ?><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=billetera_bonus_admin')); ?>">Cancelar</a><?php endif; ?>
+                <p class="bc-desc" style="margin:6px 0 0;">Revisa los 3 pasos antes de guardar: alcance, bono y vigencia.</p>
+            </div>
+            </div><!-- /bc-tab-banner -->
             </div>
         </form>
     </div>
 
     <div class="bc-card">
         <h2 class="bc-card__title">Reglas configuradas</h2>
-        <p class="bc-desc">Si una venta coincide con varias reglas, <strong>gana solo la más específica</strong> (subcategoría &gt; tienda &gt; categoría &gt; línea &gt; marca; luego prioridad manual). Nunca se suman ni se duplican.</p>
+        <p class="bc-desc">Si una venta coincide con varias reglas, <strong>gana solo la más específica</strong> (subcategoría &gt; tienda &gt; categoría &gt; línea &gt; marca; a igual especificidad decide el desempate). Nunca se suman ni se duplican.</p>
         <?php if (!$reglas): ?>
             <p>Aún no hay reglas. Crea la primera arriba.</p>
         <?php else: ?>
@@ -1759,7 +1863,7 @@ function billetera_render_bonus_page() {
                     $r = billetera_bonus_normalize_regla($r);
                     $describe = billetera_bonus_regla_describe($r) . ' · ' . billetera_bonus_efecto_txt($r);
                     $especifica = (intval($r['scope_subcategoria_id'] ?? 0) > 0 || intval($r['scope_dealer_id'] ?? 0) > 0) ? ' <span style="background:#e6f4ea;color:#146c43;border-radius:10px;padding:1px 8px;font-size:11px;">Específica</span>' : '';
-                    $prio = intval($r['prioridad_manual'] ?? 0) > 0 ? ' <span title="Prioridad manual para desempatar">P' . intval($r['prioridad_manual']) . '</span>' : '';
+                    $prio = intval($r['prioridad_manual'] ?? 0) > 0 ? ' <span title="Desempate: solo vale si empata en especificidad con otra regla">D' . intval($r['prioridad_manual']) . '</span>' : '';
                     $dry_row = billetera_bonus_admin_dry_run($r);
 
                     $efecto_txt = billetera_bonus_efecto_txt($r);
