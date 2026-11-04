@@ -233,38 +233,87 @@ function buildDeleteBtn(m, rowEl, reloadFn) {
     b.title = 'Eliminar esta venta';
     b.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1-2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg><span>Eliminar</span>';
     b.addEventListener('click', function () {
-        if (!confirm('¿Eliminar esta venta? Se restará de tu saldo y se recalcula el bono del mes.')) return;
-        b.disabled = true;
-        fetch(billetera.ajax_url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'action=billetera_delete_sale&nonce=' + encodeURIComponent(billetera.nonce_delete_sale) + '&venta_id=' + encodeURIComponent(m.venta_id)
-        })
-            .then(r => r.json())
-            .then(res => {
-                if (!res.success) {
-                    alert((res.data && res.data.message) || 'No se pudo eliminar');
-                    b.disabled = false;
-                    return;
-                }
-                fetch(billetera.ajax_url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'action=billetera_get_all_movements&nonce=' + encodeURIComponent(billetera.nonce_get_all_movements)
-                })
-                    .then(r => r.json())
-                    .then(res2 => {
-                        if (res2.success) {
-                            window._histMovs = res2.data.movements || [];
-                            render(window._histMovs);
-                        } else if (reloadFn) {
-                            reloadFn();
-                        }
-                    });
+        openDeleteModal(m, function (done) {
+            fetch(billetera.ajax_url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=billetera_delete_sale&nonce=' + encodeURIComponent(billetera.nonce_delete_sale) + '&venta_id=' + encodeURIComponent(m.venta_id)
             })
-            .catch(() => { b.disabled = false; });
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success) {
+                        done((res.data && res.data.message) || 'No se pudo eliminar');
+                        return;
+                    }
+                    done(null);
+                    fetch(billetera.ajax_url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'action=billetera_get_all_movements&nonce=' + encodeURIComponent(billetera.nonce_get_all_movements)
+                    })
+                        .then(r => r.json())
+                        .then(res2 => {
+                            if (res2.success) {
+                                window._histMovs = res2.data.movements || [];
+                                render(window._histMovs);
+                            } else if (reloadFn) {
+                                reloadFn();
+                            }
+                        });
+                })
+                .catch(() => { done('Error de conexión'); });
+        });
     });
     return b;
+}
+
+function openDeleteModal(m, onConfirm) {
+    closeDeleteModal();
+    const nombre = ((m.categoria ? m.categoria : '') + (m.subcategoria ? ' · ' + m.subcategoria : '')) || 'esta venta';
+    const ov = document.createElement('div');
+    ov.className = 'alc-modal-ov';
+    ov.id = 'alc-del-modal';
+    ov.innerHTML =
+        '<div class="alc-modal" role="dialog" aria-modal="true" aria-label="Eliminar venta">' +
+            '<div class="alc-modal__icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1-2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></div>' +
+            '<div class="alc-modal__title">¿Eliminar venta?</div>' +
+            '<div class="alc-modal__desc">' + escapeHtml(nombre) + ' · +' + fmt(Number(m.amount) || 0) + '</div>' +
+            '<div class="alc-modal__warn">Se restará de tu saldo y se recalcula el bono del mes.</div>' +
+            '<div class="alc-modal__err" hidden></div>' +
+            '<div class="alc-modal__actions">' +
+                '<button type="button" class="alc-modal__btn alc-modal__btn--ghost" data-act="cancel">Volver</button>' +
+                '<button type="button" class="alc-modal__btn alc-modal__btn--danger" data-act="ok">Eliminar</button>' +
+            '</div>' +
+        '</div>';
+    document.body.appendChild(ov);
+    const err = ov.querySelector('.alc-modal__err');
+    const btnOk = ov.querySelector('[data-act="ok"]');
+    ov.querySelector('[data-act="cancel"]').addEventListener('click', closeDeleteModal);
+    ov.addEventListener('click', function (e) { if (e.target === ov) closeDeleteModal(); });
+    btnOk.addEventListener('click', function () {
+        btnOk.disabled = true;
+        err.hidden = true;
+        onConfirm(function (msg) {
+            btnOk.disabled = false;
+            if (msg) {
+                err.textContent = msg;
+                err.hidden = false;
+                return;
+            }
+            closeDeleteModal();
+        });
+    });
+}
+
+function closeDeleteModal() {
+    const ov = document.getElementById('alc-del-modal');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
 }
 
 function catInitials(cat) {
