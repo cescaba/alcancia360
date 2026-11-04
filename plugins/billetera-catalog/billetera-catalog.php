@@ -880,7 +880,12 @@ function billetera_convert_to_sol($comision) {
 }
 
 // ============================================================================
-// REGLAS DE BONIFICACIÓN v2 (configurables desde el admin)
+// REGLAS DE BONIFICACIÓN v2 + ESCALERA (configurables desde el admin)
+// Alcance en 4 ejes independientes (0/'' = Todas): categoría, marca/línea,
+// subcategoría y concesionaria (scope_dealer_id). Entre distintos alcances
+// solo UNA gana (la más específica). Con idéntico alcance, las reglas
+// forman una escalera por umbral: aplica el tramo más alto alcanzado y al
+// subir de tramo se revalorizan las anteriores del mes.
 // Alcance en 4 ejes independientes (0/'' = Todas): categoría, marca/línea,
 // subcategoría y concesionaria (scope_dealer_id). Solo UNA regla gana por
 // venta: la más específica (mayor score). La general nunca se suma.
@@ -1159,69 +1164,6 @@ function billetera_regla_vigente_en($regla, $fecha_ymd) {
 }
 
 /**
- * Busca la regla activa que aplica a una categoría según su ámbito.
- *
- * Prioridad:
- *   1. Regla de ámbito "linea" cuya categoría coincide exactamente.
- *   2. Regla de ámbito "categoria" cuya categoría coincide exactamente.
- *   3. Regla de ámbito "categoria" que coincide por slug (se toma la última,
- *      es decir la más reciente, para que una regla nueva no quede
- *      ensombrecida por una regla por defecto con el mismo slug).
- */
-
-function billetera_bonus_find_regla($categoria_id, $slug, $fecha_ymd = null) {
-    $categoria_id = intval($categoria_id);
-    $slug         = strtolower((string) $slug);
-    if ($fecha_ymd === null) {
-        $fecha_ymd = billetera_stats_local_now()->format('Y-m-d');
-    }
-
-    $exact_cat = null;
-    $by_slug   = null;
-
-    foreach (billetera_bonus_reglas() as $r) {
-        if (empty($r['activo'])) {
-            continue;
-        }
-        if (!billetera_regla_vigente_en($r, $fecha_ymd)) {
-            continue;
-        }
-        $rid    = intval($r['categoria_id'] ?? 0);
-        $ambito = $r['ambito'] ?? 'categoria';
-
-        if ($ambito === 'linea') {
-            // La regla de línea exacta es la más específica: gana de inmediato.
-            if ($rid === $categoria_id) {
-                return $r;
-            }
-            continue;
-        }
-
-        if (strtolower($r['slug'] ?? '') === $slug) {
-            if ($rid === $categoria_id && $exact_cat === null) {
-                $exact_cat = $r;
-            }
-            $by_slug = $r; // nos quedamos con la última coincidencia
-        }
-    }
-
-    return $exact_cat !== null ? $exact_cat : $by_slug;
-}
-
-/**
- * Condición SQL de categoría para una regla: [sql, params].
- * 'categoria' = todas las líneas (por slug); 'linea' = solo esa categoría.
- * (Legacy: se mantiene por compatibilidad; el motor v2 usa billetera_bonus_cond_v2).
- */
-function billetera_bonus_cond($regla) {
-    if (($regla['ambito'] ?? 'categoria') === 'linea') {
-        return ['c.id = %d', [intval($regla['categoria_id'])]];
-    }
-    $m = strtolower($regla['slug'] ?? '');
-    return ['(LOWER(c.slug) = %s OR LOWER(c.nombre) = %s)', [$m, $m]];
-}
-
-/**
  * Contexto de una venta para el matcher v2: categoría, slug, línea y marca.
  * Devuelve null si la subcategoría no existe.
  */
@@ -1479,8 +1421,104 @@ function billetera_bonus_efecto_txt($regla) {
 }
 
 /**
+ * Clave de escalera: misma tupla de alcance = mismos tramos.
+ * Dos reglas con igual clave y distinto umbral/efecto forman una
+ * escalera (ej. umbral 4 ×2 y umbral 8 ×3); se evalúan juntas y
+ * aplica el tramo más alto alcanzado, con retro al subir de tramo.
+ */
+function billetera_bonus_escalera_key($regla) {
+    $regla = billetera_bonus_normalize_regla($regla);
+    return implode('|', [
+        strtolower(trim((string) ($regla['scope_slug'] ?? ''))),
+        intval($regla['scope_marca_id'] ?? 0),
+        strtolower(trim((string) ($regla['scope_linea_codigo'] ?? ''))),
+        intval($regla['scope_subcategoria_id'] ?? 0),
+        intval($regla['scope_dealer_id'] ?? 0),
+    ]);
+}
+
+/**
+ * Tramos de la escalera de una regla ganadora: misma clave, activas y
+ * vigentes a la fecha de la venta. Ordenados por umbral ascendente
+ * (a igual umbral, mayor efecto primero; desempate: más reciente).
+ */
+function billetera_bonus_escalera_grupo($ganadora, $fecha_ymd) {
+    $ganadora = billetera_bonus_normalize_regla($ganadora);
+    $key = billetera_bonus_escalera_key($ganadora);
+    $grupo = [];
+    foreach (billetera_bonus_reglas() as $r) {
+        if (empty($r['activo'])) {
+            continue;
+        }
+        if (!billetera_regla_vigente_en($r, $fecha_ymd)) {
+            continue;
+        }
+        $r = billetera_bonus_normalize_regla($r);
+        if (billetera_bonus_escalera_key($r) !== $key) {
+            continue;
+        }
+        $grupo[] = $r;
+    }
+    usort($grupo, function ($a, $b) {
+        $ua = max(1, intval($a['umbral'] ?? 1));
+        $ub = max(1, intval($b['umbral'] ?? 1));
+        if ($ua !== $ub) {
+            return $ua <=> $ub;
+        }
+        $ea = (float) ($a['efecto_valor'] ?? ($a['multiplicador'] ?? 1));
+        $eb = (float) ($b['efecto_valor'] ?? ($b['multiplicador'] ?? 1));
+        if ($ea !== $eb) {
+            return $eb <=> $ea;
+        }
+        return strcmp((string) ($a['id'] ?? ''), (string) ($b['id'] ?? ''));
+    });
+    return $grupo;
+}
+
+/**
+ * Inicio de conteo unificado de una escalera: el mes, la vigencia más
+ * exigente del grupo y la creación más antigua (para que un tramo creado
+ * después sí cuente las ventas del mismo mes ya registradas).
+ */
+function billetera_bonus_grupo_inicio($grupo, $mes_inicio) {
+    $inicio = (string) $mes_inicio;
+    $max_desde = '';
+    $min_creada = '';
+    foreach ($grupo as $r) {
+        $d = trim((string) ($r['banner_desde'] ?? ''));
+        if ($d !== '' && ($max_desde === '' || $d > $max_desde)) {
+            $max_desde = $d;
+        }
+        $c = trim((string) ($r['creada_en'] ?? ''));
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $c)) {
+            $c = substr($c, 0, 10);
+            if ($min_creada === '' || $c < $min_creada) {
+                $min_creada = $c;
+            }
+        }
+    }
+    if ($max_desde !== '') {
+        $d = $max_desde . ' 00:00:00';
+        if ($d > $inicio) {
+            $inicio = $d;
+        }
+    }
+    if ($min_creada !== '') {
+        $c = $min_creada . ' 00:00:00';
+        if ($c > $inicio) {
+            $inicio = $c;
+        }
+    }
+    return $inicio;
+}
+
+/**
  * Calcula la regla de bonificación para una venta y, si corresponde,
  * aplica el ajuste retroactivo de las ventas anteriores del mes.
+ *
+ * Escalera: las reglas con idéntico alcance forman tramos por umbral.
+ * Aplica el tramo más alto alcanzado (count >= umbral-1) y al subir de
+ * tramo revaloriza las anteriores al nuevo tramo.
  *
  * Devuelve:
  *   multiplier, override_sol (asesor) y jefe_multiplier, jefe_override_sol.
@@ -1516,20 +1554,25 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
     }
 
     $fecha_ymd = $fecha_datetime ? substr((string) $fecha_datetime, 0, 10) : billetera_stats_local_now()->format('Y-m-d');
-    // Motor v2: gana una sola regla, la más específica (subcat > dealer > cat > línea > marca).
-    $regla = billetera_bonus_find_best_regla($subcategoria_id, $dealer_id, $fecha_ymd);
-    if (!$regla) {
+    // Motor v2 + escalera: gana la más específica; las de idéntico alcance
+    // forman tramos por umbral y aplica el tramo más alto alcanzado.
+    $ganadora = billetera_bonus_find_best_regla($subcategoria_id, $dealer_id, $fecha_ymd);
+    if (!$ganadora) {
         return $out;
     }
-    $out['regla']            = $regla['id'];
-    $out['categoria_nombre'] = $regla['nombre'] ?? $catrow->nombre;
+    $grupo = billetera_bonus_escalera_grupo($ganadora, $fecha_ymd);
+    if (empty($grupo)) {
+        $grupo = [billetera_bonus_normalize_regla($ganadora)];
+    }
+    // El tramo se identifica por su id para el reporte.
+    $regla = end($grupo);
+    $out['categoria_nombre'] = $ganadora['nombre'] ?? $catrow->nombre;
 
-    list($cond, $cond_params) = billetera_bonus_cond_v2($regla);
+    list($cond, $cond_params) = billetera_bonus_cond_v2($ganadora);
 
     $mes_inicio = substr($fecha_ymd, 0, 7) . '-01 00:00:00';
-    // El conteo del umbral solo suma ventas dentro de la vigencia y
-    // posteriores a la creación de la regla.
-    $inicio = billetera_bonus_inicio_conteo($regla, $mes_inicio);
+    // Conteo unificado de la escalera (misma condición para todos los tramos).
+    $inicio = billetera_bonus_grupo_inicio($grupo, $mes_inicio);
     $params     = array_merge([$user_id], $cond_params, [$inicio]);
     $count      = (int) $wpdb->get_var($wpdb->prepare("
         SELECT COUNT(v.id)
@@ -1541,9 +1584,29 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
           AND v.creado_en >= %s
     ", ...$params));
 
+    // Tramo más alto alcanzado con la venta en curso (count = previas).
+    $tramo = null;
+    $prev  = null;
+    foreach ($grupo as $t) {
+        $u = max(1, (int) ($t['umbral'] ?? 1));
+        if ($count >= $u - 1) {
+            $tramo = $t;
+        }
+        if ($count - 1 >= $u - 1 && $count > 0) {
+            $prev = $t;
+        }
+    }
+    if (!$tramo) {
+        return $out;
+    }
+    $regla = $tramo;
+    $out['regla']            = $regla['id'];
+    $out['categoria_nombre'] = $regla['nombre'] ?? $out['categoria_nombre'];
+
     $umbral   = max(1, (int) $regla['umbral']);
-    $califica = ($count >= $umbral - 1);
-    $retro    = ($count === $umbral - 1);
+    $califica = true;
+    // Retro solo al estrenar tramo (al alcanzar su umbral exacto).
+    $retro = ($count === $umbral - 1) && (!$prev || (string) ($prev['id'] ?? '') !== (string) ($regla['id'] ?? ''));
 
     // Efecto de la regla ganadora (las excepciones legacy ya migraron a reglas
     // de tienda con efecto fijo/sumar, así que aquí no hay casos especiales).
@@ -1578,19 +1641,22 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
         $out['jefe_multiplier'] = $con_jefe ? $mult : 1.0;
     }
 
-    // El retroactivo se aplica una sola vez, cuando se alcanza el umbral.
+    // El retroactivo se aplica una sola vez por tramo, cuando se alcanza su umbral.
     // Con umbral 1 es un no-op seguro (aún no hay ventas previas que ajustar).
+    // Al subir de tramo revaloriza las anteriores al nuevo tramo.
     if ($retro && $aplicar_retro && $califica) {
-        billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc);
+        billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc, $prev, $inicio);
     }
 
     return $out;
 }
 
 /**
- * Ajusta retroactivamente las ventas anteriores del mes cuando se alcanza el umbral.
+ * Ajusta retroactivamente las ventas anteriores del mes cuando se alcanza
+ * un umbral (o se sube de tramo en una escalera).
+ * $max_id (opcional, recalc): solo toca filas con id menor (no posteriores).
  */
-function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
+function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc, $regla_prev = null, $inicio_override = null, $max_id = null) {
     global $wpdb;
     $ventas = $wpdb->prefix . 'billetera_ventas';
     $sub    = $wpdb->prefix . 'billetera_subcategorias';
@@ -1599,8 +1665,9 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
     $limite = max(1, (int) $regla['umbral'] - 1);
     list($cond, $cond_params) = billetera_bonus_cond_v2($regla);
 
-    // No tocar ventas anteriores a la vigencia ni a la creación de la regla.
-    $inicio = billetera_bonus_inicio_conteo($regla, (string) $mes_inicio);
+    // No tocar ventas anteriores a la vigencia ni a la creación (unificado
+    // por escalera cuando viene $inicio_override).
+    $inicio = $inicio_override !== null ? (string) $inicio_override : billetera_bonus_inicio_conteo($regla, (string) $mes_inicio);
 
     $subcat_in = "(SELECT s.id FROM $sub s JOIN $cat c ON c.id = s.categoria_id WHERE $cond)";
 
@@ -1608,14 +1675,21 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
     // antiguas sin la columna usan el TC actual como respaldo).
     $es_pen = (($regla['efecto_moneda'] ?? 'USD') === 'PEN');
 
+    $cap_sql = '';
+    $cap_params = [];
+    if ($max_id !== null) {
+        $cap_sql = ' AND v.id < %d';
+        $cap_params = [intval($max_id)];
+    }
+
     if ($out['override_sol'] !== null) {
         // Fijo: el monto pasa a ser el fijo por unidad (USD * TC de cada venta * cantidad).
         $usd = (float) ($regla['efecto_valor'] ?? 0);
         if ($es_pen) {
-            $params = array_merge([$usd, $user_id], $cond_params, [$inicio, $limite]);
+            $params = array_merge([$usd, $user_id], $cond_params, [$inicio], $cap_params, [$limite]);
             $set_monto = "v.monto_comision_sol = (%f * v.cantidad)";
         } else {
-            $params = array_merge([$usd, $tc, $user_id], $cond_params, [$inicio, $limite]);
+            $params = array_merge([$usd, $tc, $user_id], $cond_params, [$inicio], $cap_params, [$limite]);
             $set_monto = "v.monto_comision_sol = (%f * COALESCE(v.tc_aplicado, %f) * v.cantidad)";
         }
         $wpdb->query($wpdb->prepare("
@@ -1623,7 +1697,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
             SET $set_monto, v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
             WHERE v.usuario_id = %d
               AND v.subcategoria_id IN $subcat_in
-              AND v.creado_en >= %s
+              AND v.creado_en >= %s$cap_sql
             ORDER BY v.id DESC
             LIMIT %d
         ", ...$params));
@@ -1631,10 +1705,10 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         if ($out['jefe_override_sol'] !== null) {
             $usd_j = (float) ($regla['efecto_jefe_valor'] ?? 0);
             if ($es_pen) {
-                $params = array_merge([$usd_j, $user_id], $cond_params, [$inicio]);
+                $params = array_merge([$usd_j, $user_id], $cond_params, [$inicio], $cap_params);
                 $set_monto = "v.monto_comision_sol = (%f * v.cantidad)";
             } else {
-                $params = array_merge([$usd_j, $tc, $user_id], $cond_params, [$inicio]);
+                $params = array_merge([$usd_j, $tc, $user_id], $cond_params, [$inicio], $cap_params);
                 $set_monto = "v.monto_comision_sol = (%f * COALESCE(v.tc_aplicado, %f) * v.cantidad)";
             }
             $wpdb->query($wpdb->prepare("
@@ -1642,18 +1716,23 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
                 SET $set_monto, v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
                 WHERE v.asesor_id = %d
                   AND v.subcategoria_id IN $subcat_in
-                  AND v.creado_en >= %s
+                  AND v.creado_en >= %s$cap_sql
             ", ...$params));
         }
     } elseif ($out['add_sol'] !== null) {
-        // Sumar: monto = base + fijo (sin multiplicador), fijo con TC de cada venta.
+        // Sumar: subir de tramo aplica solo el delta (nuevo - previo) para no
+        // duplicar el extra ya pagado. Sin tramo previo, comportamiento base.
         $mult = (float) $out['multiplier'];
         $usd  = (float) ($regla['efecto_valor'] ?? 0);
+        $usd_prev = ($regla_prev && (($regla_prev['efecto_tipo'] ?? '') === 'sumar')) ? (float) ($regla_prev['efecto_valor'] ?? 0) : 0.0;
+        // Si el tramo previo era fijo, no se puede recuperar la base: se
+        // documenta no mezclar fijo con sumar en la misma escalera.
+        $delta = $usd - $usd_prev;
         if ($es_pen) {
-            $params = array_merge([$mult, $usd, $user_id], $cond_params, [$inicio, $limite]);
+            $params = array_merge([$mult, $delta, $user_id], $cond_params, [$inicio], $cap_params, [$limite]);
             $set_monto = "v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad)";
         } else {
-            $params = array_merge([$mult, $usd, $tc, $user_id], $cond_params, [$inicio, $limite]);
+            $params = array_merge([$mult, $delta, $tc, $user_id], $cond_params, [$inicio], $cap_params, [$limite]);
             $set_monto = "v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * COALESCE(v.tc_aplicado, %f) * v.cantidad)";
         }
         $wpdb->query($wpdb->prepare("
@@ -1661,7 +1740,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
             SET $set_monto, v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
             WHERE v.usuario_id = %d
               AND v.subcategoria_id IN $subcat_in
-              AND v.creado_en >= %s
+              AND v.creado_en >= %s$cap_sql
             ORDER BY v.id DESC
             LIMIT %d
         ", ...$params));
@@ -1669,11 +1748,13 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
         if ($out['jefe_add_sol'] !== null) {
             $mult_j = (float) $out['jefe_multiplier'];
             $usd_j  = (float) ($regla['efecto_jefe_valor'] ?? 0);
+            $usd_j_prev = ($regla_prev && (($regla_prev['efecto_tipo'] ?? '') === 'sumar')) ? (float) ($regla_prev['efecto_jefe_valor'] ?? 0) : 0.0;
+            $delta_j = $usd_j - $usd_j_prev;
             if ($es_pen) {
-                $params = array_merge([$mult_j, $usd_j, $user_id], $cond_params, [$inicio]);
+                $params = array_merge([$mult_j, $delta_j, $user_id], $cond_params, [$inicio], $cap_params);
                 $set_monto = "v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * v.cantidad)";
             } else {
-                $params = array_merge([$mult_j, $usd_j, $tc, $user_id], $cond_params, [$inicio]);
+                $params = array_merge([$mult_j, $delta_j, $tc, $user_id], $cond_params, [$inicio], $cap_params);
                 $set_monto = "v.monto_comision_sol = (v.monto_comision_sol * %f) + (%f * COALESCE(v.tc_aplicado, %f) * v.cantidad)";
             }
             $wpdb->query($wpdb->prepare("
@@ -1681,30 +1762,30 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc) {
                 SET $set_monto, v.bonus_multiplier = 1.0, v.bonus_aplicado = 1
                 WHERE v.asesor_id = %d
                   AND v.subcategoria_id IN $subcat_in
-                  AND v.creado_en >= %s
+                  AND v.creado_en >= %s$cap_sql
             ", ...$params));
         }
     } else {
         $mult   = (float) $out['multiplier'];
-        $params = array_merge([$mult, $user_id], $cond_params, [$inicio, $limite]);
+        $params = array_merge([$mult, $user_id], $cond_params, [$inicio], $cap_params, [$limite]);
         $wpdb->query($wpdb->prepare("
             UPDATE $ventas v
             SET v.bonus_multiplier = %f, v.bonus_aplicado = 1
             WHERE v.usuario_id = %d
               AND v.subcategoria_id IN $subcat_in
-              AND v.creado_en >= %s
+              AND v.creado_en >= %s$cap_sql
             ORDER BY v.id DESC
             LIMIT %d
         ", ...$params));
 
         if ($out['jefe_multiplier'] > 1.0) {
-            $params = array_merge([$out['jefe_multiplier'], $user_id], $cond_params, [$inicio]);
+            $params = array_merge([$out['jefe_multiplier'], $user_id], $cond_params, [$inicio], $cap_params);
             $wpdb->query($wpdb->prepare("
                 UPDATE $ventas v
                 SET v.bonus_multiplier = %f, v.bonus_aplicado = 1
                 WHERE v.asesor_id = %d
                   AND v.subcategoria_id IN $subcat_in
-                  AND v.creado_en >= %s
+                  AND v.creado_en >= %s$cap_sql
             ", ...$params));
         }
     }
@@ -1987,7 +2068,7 @@ function billetera_ajax_get_balance() {
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
     $filtro_ceros = billetera_usuario_incluye_ceros($user_id) ? "" : "AND (v.monto_comision_sol * v.bonus_multiplier) > 0";
     $movements = $wpdb->get_results($wpdb->prepare("
-        SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, v.bonus_aplicado, c.nombre as categoria, u.display_name as asesor_nombre
+        SELECT v.id as venta_id, ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, v.bonus_aplicado, c.nombre as categoria, u.display_name as asesor_nombre
         FROM $ventas_table v
         LEFT JOIN $subcategorias_table s ON v.subcategoria_id = s.id
         LEFT JOIN $categorias_table c ON s.categoria_id = c.id
@@ -2041,7 +2122,7 @@ function billetera_ajax_get_all_movements() {
     $filtro_ceros = billetera_usuario_incluye_ceros($user_id) ? "" : "AND (v.monto_comision_sol * v.bonus_multiplier) > 0";
 
     $movements = $wpdb->get_results($wpdb->prepare("
-        SELECT ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, v.bonus_aplicado, c.nombre as categoria, u.display_name as asesor_nombre
+        SELECT v.id as venta_id, ROUND(v.monto_comision_sol * v.bonus_multiplier, 2) as amount, v.id_type, v.id_value, v.creado_en as created_at, s.nombre as subcategoria, v.bonus_multiplier, v.bonus_aplicado, c.nombre as categoria, u.display_name as asesor_nombre
         FROM $ventas_table v
         LEFT JOIN $subcategorias_table s ON v.subcategoria_id = s.id
         LEFT JOIN $categorias_table c ON s.categoria_id = c.id
@@ -2055,6 +2136,303 @@ function billetera_ajax_get_all_movements() {
 }
 
 // ============================================================================
+// ELIMINAR VENTA PROPIA + RECÁLCULO DEL BONO DEL MES
+// Solo ventas propias (asesor_id IS NULL) del mes en curso. Borra el espejo
+// del jefe y repropaga tramos (mult/fijo; sumar usa delta con base del catálogo).
+// ============================================================================
+
+function billetera_base_para_fila($fila) {
+    $sub_id = intval($fila->subcategoria_id ?? 0);
+    $cant   = max(1, intval($fila->cantidad ?? 1));
+    if ($sub_id <= 0) {
+        return null;
+    }
+    $owner_id = intval($fila->usuario_id ?? 0);
+    $es_espejo = !empty($fila->asesor_id);
+    if ($es_espejo) {
+        $rol = 'jefe_venta';
+    } else {
+        $u = $owner_id ? get_userdata($owner_id) : null;
+        $roles = $u ? (array) $u->roles : ['asesor'];
+        $rol = in_array('jefe_venta', $roles, true) ? 'jefe_venta' : 'asesor';
+    }
+    $tienda_id = $owner_id ? get_user_meta($owner_id, '_tienda_asociada', true) : 0;
+    $dealer_id = $tienda_id ? get_post_meta($tienda_id, '_dealer_id', true) : null;
+    $com = billetera_find_comision($sub_id, $dealer_id, $rol);
+    if (!$com) {
+        return null;
+    }
+    $tc_fila = isset($fila->tc_aplicado) && floatval($fila->tc_aplicado) > 0 ? floatval($fila->tc_aplicado) : billetera_get_tipo_cambio();
+    $factor = (($com->moneda ?? 'PEN') === 'USD') ? $tc_fila : 1.0;
+    return round(floatval($com->monto) * $factor * $cant, 2);
+}
+
+/**
+ * Repropaga el bono del mes para las ventas propias de un usuario.
+ * 1) Resetea (mult>1 → mult=1; bonus con mult=1 → recomputa base).
+ * 2) Reproduce en orden cronológico con el mismo motor de tramos + retro.
+ * Solo toca filas propias (asesor_id IS NULL); los espejos del jefe no se retocan aquí.
+ */
+function billetera_bonus_recalcular_usuario_mes($user_id, $fecha_ref_ymd) {
+    global $wpdb;
+    $ventas = $wpdb->prefix . 'billetera_ventas';
+    $user_id = intval($user_id);
+    if ($user_id <= 0) {
+        return;
+    }
+    $mes_inicio = substr((string) $fecha_ref_ymd, 0, 7) . '-01 00:00:00';
+    $mes_fin_dt = new DateTime($mes_inicio);
+    $mes_fin_dt->modify('first day of next month');
+    $mes_fin = $mes_fin_dt->format('Y-m-d H:i:s');
+
+    $filas = $wpdb->get_results($wpdb->prepare("
+        SELECT v.* FROM $ventas v
+        WHERE v.usuario_id = %d AND v.asesor_id IS NULL
+          AND v.creado_en >= %s AND v.creado_en < %s
+        ORDER BY v.creado_en ASC, v.id ASC
+    ", $user_id, $mes_inicio, $mes_fin));
+    if (empty($filas)) {
+        return;
+    }
+
+    // 1) Reset a base.
+    foreach ($filas as $f) {
+        if ((float) ($f->bonus_multiplier ?? 1) > 1.0) {
+            $wpdb->update($ventas, ['bonus_multiplier' => 1.0, 'bonus_aplicado' => 0], ['id' => intval($f->id)], ['%f', '%d'], ['%d']);
+        } elseif (intval($f->bonus_aplicado ?? 0) === 1) {
+            $base = billetera_base_para_fila($f);
+            if ($base !== null) {
+                $wpdb->update($ventas, ['monto_comision_sol' => $base, 'bonus_multiplier' => 1.0, 'bonus_aplicado' => 0], ['id' => intval($f->id)], ['%f', '%f', '%d'], ['%d']);
+            } else {
+                $wpdb->update($ventas, ['bonus_multiplier' => 1.0, 'bonus_aplicado' => 0], ['id' => intval($f->id)], ['%f', '%d'], ['%d']);
+            }
+        }
+    }
+
+    // 2) Replay con el motor de tramos (conteo DB con tope en la fila actual
+    // para no contar ventas posteriores, incluidos espejos del jefe).
+    $tienda_id = get_user_meta($user_id, '_tienda_asociada', true);
+    $dealer_id = $tienda_id ? get_post_meta($tienda_id, '_dealer_id', true) : 0;
+    $tc = billetera_get_tipo_cambio();
+    $sub = $wpdb->prefix . 'billetera_subcategorias';
+    $cat = $wpdb->prefix . 'billetera_categorias';
+
+    foreach ($filas as $f) {
+        $fid = intval($f->id);
+        $fecha_ymd = substr((string) $f->creado_en, 0, 10);
+        $ganadora = billetera_bonus_find_best_regla(intval($f->subcategoria_id), $dealer_id, $fecha_ymd);
+        if (!$ganadora) {
+            continue;
+        }
+        $grupo = billetera_bonus_escalera_grupo($ganadora, $fecha_ymd);
+        if (empty($grupo)) {
+            $grupo = [billetera_bonus_normalize_regla($ganadora)];
+        }
+        list($cond, $cond_params) = billetera_bonus_cond_v2($ganadora);
+        $inicio = billetera_bonus_grupo_inicio($grupo, $mes_inicio);
+        if ((string) $f->creado_en < $inicio) {
+            continue;
+        }
+        $params = array_merge([$user_id, (string) $f->creado_en, $fid], $cond_params, [$inicio]);
+        $count = (int) $wpdb->get_var($wpdb->prepare("
+            SELECT COUNT(v.id) FROM $ventas v
+            JOIN $sub s ON v.subcategoria_id = s.id
+            JOIN $cat c ON s.categoria_id = c.id
+            WHERE v.usuario_id = %d
+              AND (v.creado_en < %s OR (v.creado_en = %s AND v.id < %d))
+              AND $cond AND v.creado_en >= %s
+        ", ...$params));
+
+        $tramo = null;
+        $prev  = null;
+        foreach ($grupo as $t) {
+            $u = max(1, intval($t['umbral'] ?? 1));
+            if ($count >= $u - 1) {
+                $tramo = $t;
+            }
+            if ($count - 1 >= $u - 1 && $count > 0) {
+                $prev = $t;
+            }
+        }
+        if (!$tramo) {
+            continue;
+        }
+        $tipo = (string) ($tramo['efecto_tipo'] ?? 'multiplicar');
+        if (!in_array($tipo, ['multiplicar', 'fijo', 'sumar'], true)) {
+            $tipo = 'multiplicar';
+        }
+        $cant = max(1, intval($f->cantidad ?? 1));
+        $tc_fila = (isset($f->tc_aplicado) && floatval($f->tc_aplicado) > 0) ? floatval($f->tc_aplicado) : $tc;
+        $out = ['multiplier' => 1.0, 'override_sol' => null, 'add_sol' => null, 'jefe_multiplier' => 1.0, 'jefe_override_sol' => null, 'jefe_add_sol' => null];
+        $con_jefe = !empty($tramo['aplica_jefe']);
+        if ($tipo === 'fijo') {
+            $factor = (($tramo['efecto_moneda'] ?? 'USD') === 'PEN') ? 1.0 : $tc_fila;
+            $out['override_sol'] = round((float) ($tramo['efecto_valor'] ?? 0) * $factor * $cant, 2);
+            $fj = round((float) ($tramo['efecto_jefe_valor'] ?? 0) * $factor * $cant, 2);
+            $out['jefe_override_sol'] = ($con_jefe && (float) ($tramo['efecto_jefe_valor'] ?? 0) > 0) ? $fj : null;
+        } elseif ($tipo === 'sumar') {
+            $factor = (($tramo['efecto_moneda'] ?? 'USD') === 'PEN') ? 1.0 : $tc_fila;
+            $out['add_sol'] = round((float) ($tramo['efecto_valor'] ?? 0) * $factor * $cant, 2);
+            $fj = round((float) ($tramo['efecto_jefe_valor'] ?? 0) * $factor * $cant, 2);
+            $out['jefe_add_sol'] = ($con_jefe && (float) ($tramo['efecto_jefe_valor'] ?? 0) > 0) ? $fj : null;
+        } else {
+            $mult = (float) ($tramo['efecto_valor'] ?? ($tramo['multiplicador'] ?? 1));
+            $out['multiplier'] = $mult;
+            $out['jefe_multiplier'] = $con_jefe ? $mult : 1.0;
+        }
+
+        if ($tipo === 'fijo' && $out['override_sol'] !== null) {
+            $wpdb->update($ventas, ['monto_comision_sol' => $out['override_sol'], 'bonus_multiplier' => 1.0, 'bonus_aplicado' => 1], ['id' => $fid], ['%f', '%f', '%d'], ['%d']);
+        } elseif ($tipo === 'sumar' && $out['add_sol'] !== null) {
+            $wpdb->query($wpdb->prepare("UPDATE $ventas SET monto_comision_sol = monto_comision_sol + %f, bonus_multiplier = 1.0, bonus_aplicado = 1 WHERE id = %d", (float) $out['add_sol'], $fid));
+        } elseif ($tipo === 'multiplicar') {
+            $wpdb->update($ventas, ['bonus_multiplier' => (float) $out['multiplier'], 'bonus_aplicado' => 1], ['id' => $fid], ['%f', '%d'], ['%d']);
+        }
+
+        $es_nuevo_tramo = ($count === max(1, (int) ($tramo['umbral'] ?? 1)) - 1) && (!$prev || (string) ($prev['id'] ?? '') !== (string) ($tramo['id'] ?? ''));
+        if ($es_nuevo_tramo) {
+            billetera_bonus_retroactivo($tramo, $user_id, $mes_inicio, $out, $tc, $prev, $inicio, $fid);
+        }
+    }
+}
+
+add_action('wp_ajax_billetera_delete_sale', 'billetera_ajax_delete_sale');
+
+function billetera_ajax_delete_sale() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_delete_sale')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+    $user_id = get_current_user_id();
+    $u = wp_get_current_user();
+    if (!array_intersect(['asesor', 'administrator', 'jefe_venta'], (array) $u->roles)) {
+        wp_send_json_error(['message' => 'No tienes permiso']);
+    }
+    $venta_id = intval($_POST['venta_id'] ?? 0);
+    if ($venta_id <= 0) {
+        wp_send_json_error(['message' => 'Venta inválida']);
+    }
+    global $wpdb;
+    $ventas = $wpdb->prefix . 'billetera_ventas';
+    $v = $wpdb->get_row($wpdb->prepare("SELECT * FROM $ventas WHERE id = %d", $venta_id));
+    if (!$v) {
+        wp_send_json_error(['message' => 'Venta no encontrada']);
+    }
+    if (intval($v->usuario_id) !== $user_id && !in_array('administrator', (array) $u->roles, true)) {
+        wp_send_json_error(['message' => 'Solo puedes eliminar tus propias ventas']);
+    }
+    if (!empty($v->asesor_id)) {
+        wp_send_json_error(['message' => 'Esta comisión es espejo del jefe y se elimina con la venta del asesor']);
+    }
+    $now = billetera_stats_local_now();
+    $mes_inicio = $now->format('Y-m-01 00:00:00');
+    if ((string) $v->creado_en < $mes_inicio) {
+        wp_send_json_error(['message' => 'Solo puedes eliminar ventas del mes en curso. Para meses cerrados contacta a backoffice']);
+    }
+
+    $owner_id = intval($v->usuario_id);
+    $mes_ref = substr((string) $v->creado_en, 0, 10);
+    $mes_ini_v = substr((string) $v->creado_en, 0, 7) . '-01 00:00:00';
+    $mes_fin_v = (new DateTime($mes_ini_v))->modify('first day of next month')->format('Y-m-d H:i:s');
+    $tienda_id = get_user_meta($owner_id, '_tienda_asociada', true);
+
+    $wpdb->query('START TRANSACTION');
+
+    $espejos = $wpdb->get_col($wpdb->prepare("
+        SELECT DISTINCT usuario_id FROM $ventas
+        WHERE asesor_id = %d AND subcategoria_id = %d AND creado_en = %s
+          AND id_type = %s AND id_value = %s
+    ", $owner_id, intval($v->subcategoria_id), (string) $v->creado_en, (string) ($v->id_type ?? ''), (string) ($v->id_value ?? '')));
+    $jefes = array_values(array_filter(array_map('intval', (array) $espejos)));
+
+    $wpdb->delete($ventas, [
+        'asesor_id' => $owner_id,
+        'subcategoria_id' => intval($v->subcategoria_id),
+        'creado_en' => (string) $v->creado_en,
+        'id_type' => (string) ($v->id_type ?? ''),
+        'id_value' => (string) ($v->id_value ?? ''),
+    ], ['%d', '%d', '%s', '%s', '%s']);
+    $del = $wpdb->delete($ventas, ['id' => $venta_id], ['%d']);
+    if (!$del) {
+        $wpdb->query('ROLLBACK');
+        wp_send_json_error(['message' => 'No se pudo eliminar']);
+    }
+
+    billetera_bonus_recalcular_usuario_mes($owner_id, $mes_ref);
+
+    if ($tienda_id) {
+        $restantes = $wpdb->get_results($wpdb->prepare("
+            SELECT * FROM $ventas
+            WHERE usuario_id = %d AND asesor_id IS NULL AND creado_en >= %s AND creado_en < %s
+            ORDER BY creado_en ASC, id ASC
+        ", $owner_id, $mes_ini_v, $mes_fin_v));
+        $wpdb->query($wpdb->prepare("DELETE FROM $ventas WHERE asesor_id = %d AND creado_en >= %s AND creado_en < %s", $owner_id, $mes_ini_v, $mes_fin_v));
+        $dealer_id = get_post_meta($tienda_id, '_dealer_id', true);
+        foreach ($restantes as $r) {
+            $fymd = substr((string) $r->creado_en, 0, 10);
+            $gan = billetera_bonus_find_best_regla(intval($r->subcategoria_id), $dealer_id, $fymd);
+            if (!$gan) {
+                billetera_register_jefe_comision($tienda_id, intval($r->subcategoria_id), max(1, intval($r->cantidad ?? 1)), $dealer_id, (string) ($r->id_type ?? ''), (string) ($r->id_value ?? ''), $owner_id, (string) $r->creado_en, 1.0, null, null);
+                continue;
+            }
+            $grupo = billetera_bonus_escalera_grupo($gan, $fymd);
+            if (empty($grupo)) {
+                $grupo = [billetera_bonus_normalize_regla($gan)];
+            }
+            $inicio = billetera_bonus_grupo_inicio($grupo, $mes_ini_v);
+            list($cond, $cp) = billetera_bonus_cond_v2($gan);
+            $sub = $wpdb->prefix . 'billetera_subcategorias';
+            $cat = $wpdb->prefix . 'billetera_categorias';
+            $cnt_params = array_merge([$owner_id, (string) $r->creado_en, (string) $r->creado_en, intval($r->id)], $cp, [$inicio]);
+            $cnt = (int) $wpdb->get_var($wpdb->prepare("
+                SELECT COUNT(v2.id) FROM $ventas v2
+                JOIN $sub s ON v2.subcategoria_id = s.id
+                JOIN $cat c ON s.categoria_id = c.id
+                WHERE v2.usuario_id = %d AND (v2.creado_en < %s OR (v2.creado_en = %s AND v2.id < %d))
+                  AND $cond AND v2.creado_en >= %s
+            ", ...$cnt_params));
+            $tr = null;
+            foreach ($grupo as $t) {
+                if ($cnt >= max(1, intval($t['umbral'] ?? 1)) - 1) {
+                    $tr = $t;
+                }
+            }
+            $jm = 1.0;
+            $jo = null;
+            $ja = null;
+            if ($tr) {
+                $tt = (string) ($tr['efecto_tipo'] ?? 'multiplicar');
+                $cj = !empty($tr['aplica_jefe']);
+                $tcf = (isset($r->tc_aplicado) && floatval($r->tc_aplicado) > 0) ? floatval($r->tc_aplicado) : billetera_get_tipo_cambio();
+                $fac = (($tr['efecto_moneda'] ?? 'USD') === 'PEN') ? 1.0 : $tcf;
+                $cant = max(1, intval($r->cantidad ?? 1));
+                if ($tt === 'fijo') {
+                    $fj = round((float) ($tr['efecto_jefe_valor'] ?? 0) * $fac * $cant, 2);
+                    $jo = ($cj && (float) ($tr['efecto_jefe_valor'] ?? 0) > 0) ? $fj : null;
+                } elseif ($tt === 'sumar') {
+                    $fj = round((float) ($tr['efecto_jefe_valor'] ?? 0) * $fac * $cant, 2);
+                    $ja = ($cj && (float) ($tr['efecto_jefe_valor'] ?? 0) > 0) ? $fj : null;
+                } else {
+                    $m = (float) ($tr['efecto_valor'] ?? ($tr['multiplicador'] ?? 1));
+                    $jm = $cj ? $m : 1.0;
+                }
+            }
+            billetera_register_jefe_comision($tienda_id, intval($r->subcategoria_id), max(1, intval($r->cantidad ?? 1)), $dealer_id, (string) ($r->id_type ?? ''), (string) ($r->id_value ?? ''), $owner_id, (string) $r->creado_en, $jm, $jo, $ja);
+        }
+        foreach ($jefes as $jid) {
+            billetera_bonus_recalcular_usuario_mes($jid, $mes_ref);
+        }
+    }
+
+    $wpdb->query('COMMIT');
+    billetera_rank_cache_bust();
+
+    wp_send_json_success(['message' => 'Venta eliminada y bono recalculado']);
+}
+
+// ============================================================================
 // BANNERS DE CAMPAÑA (enlazados a reglas de bonificación, editables en admin)
 // Se muestran en "Mi desempeño". Sin montos sensibles: solo textos del admin
 // + conteo de ventas del mes en el ámbito de la regla.
@@ -2062,6 +2440,7 @@ function billetera_ajax_get_all_movements() {
 
 /**
  * Ventas del mes actual del usuario dentro del ámbito de una regla.
+ * Usa el inicio unificado de su escalera para cuadrar con el bono.
  */
 function billetera_campana_ventas_mes($user_id, $regla) {
     global $wpdb;
@@ -2072,8 +2451,13 @@ function billetera_campana_ventas_mes($user_id, $regla) {
     $now   = billetera_stats_local_now();
     $desde = $now->format('Y-m-01 00:00:00');
     $hasta = (clone $now)->modify('first day of next month')->format('Y-m-01 00:00:00');
-    // El conteo cuadra con el bono: vigencia + creación de la regla.
-    $desde = billetera_bonus_inicio_conteo($regla, $desde);
+    // El conteo cuadra con el bono: inicio unificado de la escalera.
+    $grupo_r = billetera_bonus_escalera_grupo($regla, $now->format('Y-m-d'));
+    if (!empty($grupo_r)) {
+        $desde = billetera_bonus_grupo_inicio($grupo_r, $desde);
+    } else {
+        $desde = billetera_bonus_inicio_conteo($regla, $desde);
+    }
     if (!empty($regla['banner_hasta'])) {
         $h = (new DateTime((string) $regla['banner_hasta'] . ' 00:00:00'))->modify('+1 day')->format('Y-m-d 00:00:00');
         if ($h < $hasta) {
@@ -2117,6 +2501,7 @@ function billetera_campanas_para_usuario($user_id) {
         if (trim((string) ($r['banner_titulo'] ?? '')) === '') {
             continue;
         }
+        $r = billetera_bonus_normalize_regla($r);
         $scope_dealer = intval($r['scope_dealer_id'] ?? 0);
         if ($scope_dealer > 0 && $user_dealer !== $scope_dealer) {
             continue;
@@ -2129,6 +2514,13 @@ function billetera_campanas_para_usuario($user_id) {
         if ($hasta !== '' && $hoy > $hasta) {
             continue;
         }
+        // Clave sin dealer: la regla de tienda tapa a la general para ese usuario.
+        $key_sin_dealer = implode('|', [
+            strtolower(trim((string) ($r['scope_slug'] ?? ''))),
+            intval($r['scope_marca_id'] ?? 0),
+            strtolower(trim((string) ($r['scope_linea_codigo'] ?? ''))),
+            intval($r['scope_subcategoria_id'] ?? 0),
+        ]);
         $out[] = [
             'id'       => (string) ($r['id'] ?? ''),
             'etiqueta' => trim((string) ($r['banner_etiqueta'] ?? '')) !== '' ? (string) $r['banner_etiqueta'] : 'CAMPAÑA · EVENTO',
@@ -2140,8 +2532,28 @@ function billetera_campanas_para_usuario($user_id) {
             'umbral'   => intval($r['umbral'] ?? 0),
             'ventas'   => billetera_campana_ventas_mes($user_id, $r),
             'orden'    => intval($r['banner_orden'] ?? 0),
+            '_key_sin_dealer' => $key_sin_dealer,
+            '_dealer'  => $scope_dealer,
         ];
     }
+
+    // Si el usuario tiene regla de tienda y general del mismo alcance, solo
+    // ve la de su tienda (la que realmente le aplica el bono). El resto ve la general.
+    $con_especifica = [];
+    foreach ($out as $b) {
+        if (intval($b['_dealer'] ?? 0) > 0) {
+            $con_especifica[$b['_key_sin_dealer']] = true;
+        }
+    }
+    if (!empty($con_especifica)) {
+        $out = array_values(array_filter($out, function ($b) use ($con_especifica) {
+            return !(intval($b['_dealer'] ?? 0) === 0 && isset($con_especifica[$b['_key_sin_dealer']]));
+        }));
+    }
+    foreach ($out as &$b) {
+        unset($b['_key_sin_dealer'], $b['_dealer']);
+    }
+    unset($b);
 
     usort($out, function ($a, $b) {
         if ($a['orden'] !== $b['orden']) {

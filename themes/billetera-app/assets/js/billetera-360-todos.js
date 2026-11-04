@@ -52,6 +52,7 @@ function groupByMonth(movements) {
 }
 
 function render(movements) {
+    window._histMovs = movements || [];
     const groups = groupByMonth(movements);
 
     if (!movements.length) {
@@ -111,6 +112,7 @@ function renderDesktop(groups) {
                 '<div class="hist-desk__td">' + ((window.billetera && window.billetera.es_jefe) ? 'Asesor' : 'Identificador') + '</div>' +
                 '<div class="hist-desk__td">Fecha</div>' +
                 '<div class="hist-desk__td hist-desk__td--right">Comisión</div>' +
+                '<div class="hist-desk__td hist-desk__td--acc"></div>' +
             '</div>';
 
         g.items.forEach(function (m) {
@@ -165,6 +167,8 @@ function buildMov(m) {
     row.appendChild(badge);
     row.appendChild(body);
     row.appendChild(amt);
+    const del = buildDeleteBtn(m, row, function () { render(window._histMovs || []); });
+    if (del) row.appendChild(del);
 
     return row;
 }
@@ -210,8 +214,57 @@ function buildDeskRow(m) {
     row.appendChild(id);
     row.appendChild(fechaEl);
     row.appendChild(amt);
+    const del = buildDeleteBtn(m, row, function () { render(window._histMovs || []); });
+    if (del) {
+        const cell = document.createElement('div');
+        cell.className = 'hist-desk__td hist-desk__td--acc';
+        cell.appendChild(del);
+        row.appendChild(cell);
+    }
 
     return row;
+}
+
+function buildDeleteBtn(m, rowEl, reloadFn) {
+    if (!m.venta_id || m.asesor_nombre) return null;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'alc-del';
+    b.title = 'Eliminar esta venta';
+    b.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 4h11M6.5 4V2.8c0-.4.3-.8.8-.8h1.4c.4 0 .8.4.8.8V4m2.5 0-.7 9.2c-.1.8-.7 1.3-1.5 1.3H6.7c-.8 0-1.4-.5-1.5-1.3L4.5 4"/></svg><span>Eliminar</span>';
+    b.addEventListener('click', function () {
+        if (!confirm('¿Eliminar esta venta? Se restará de tu saldo y se recalcula el bono del mes.')) return;
+        b.disabled = true;
+        fetch(billetera.ajax_url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=billetera_delete_sale&nonce=' + encodeURIComponent(billetera.nonce_delete_sale) + '&venta_id=' + encodeURIComponent(m.venta_id)
+        })
+            .then(r => r.json())
+            .then(res => {
+                if (!res.success) {
+                    alert((res.data && res.data.message) || 'No se pudo eliminar');
+                    b.disabled = false;
+                    return;
+                }
+                fetch(billetera.ajax_url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'action=billetera_get_all_movements&nonce=' + encodeURIComponent(billetera.nonce_get_all_movements)
+                })
+                    .then(r => r.json())
+                    .then(res2 => {
+                        if (res2.success) {
+                            window._histMovs = res2.data.movements || [];
+                            render(window._histMovs);
+                        } else if (reloadFn) {
+                            reloadFn();
+                        }
+                    });
+            })
+            .catch(() => { b.disabled = false; });
+    });
+    return b;
 }
 
 function catInitials(cat) {

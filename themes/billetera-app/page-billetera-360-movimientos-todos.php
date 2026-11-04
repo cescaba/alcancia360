@@ -97,7 +97,8 @@ $registro_url  = get_page_by_template('page-billetera-360-responsive.php');
 window.billetera = {
     ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
     es_jefe: <?php echo $es_jefe ? 'true' : 'false'; ?>,
-    nonce_get_all_movements: '<?php echo wp_create_nonce('billetera_get_all_movements'); ?>'
+    nonce_get_all_movements: '<?php echo wp_create_nonce('billetera_get_all_movements'); ?>',
+    nonce_delete_sale: '<?php echo wp_create_nonce('billetera_delete_sale'); ?>'
 };
 </script>
 <script src="<?php echo get_template_directory_uri(); ?>/assets/js/billetera-360-todos.js"></script>

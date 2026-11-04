@@ -1527,6 +1527,8 @@ function billetera_render_bonus_page() {
                     } else {
                         $reglas = billetera_bonus_reglas();
                         $exacto = false;
+                        $es_tramo = false;
+                        $tramo_mixto = false;
                         $avisos = [];
                         $muertas = [];
                         foreach ($reglas as $r) {
@@ -1543,8 +1545,22 @@ function billetera_render_bonus_page() {
                                 continue;
                             }
                             if (billetera_bonus_admin_mismo_alcance($r, $nueva)) {
-                                $exacto = true;
-                                break;
+                                // Escalera: mismo alcance + distinto umbral = tramo válido.
+                                // Solo es duplicado si coincide umbral y efecto.
+                                $mismo_umbral = (max(1, intval($r['umbral'] ?? 1)) === max(1, intval($nueva['umbral'] ?? 1)));
+                                $rn = billetera_bonus_normalize_regla($r);
+                                $mismo_efecto = (($rn['efecto_tipo'] ?? 'multiplicar') === ($nueva['efecto_tipo'] ?? 'multiplicar'))
+                                    && ((float) ($rn['efecto_valor'] ?? 0) === (float) ($nueva['efecto_valor'] ?? 0))
+                                    && (($rn['efecto_moneda'] ?? 'USD') === ($nueva['efecto_moneda'] ?? 'USD'));
+                                if ($mismo_umbral && $mismo_efecto) {
+                                    $exacto = true;
+                                    break;
+                                }
+                                $es_tramo = true;
+                                if (($rn['efecto_tipo'] ?? 'multiplicar') !== ($nueva['efecto_tipo'] ?? 'multiplicar')) {
+                                    $tramo_mixto = true;
+                                }
+                                continue;
                             }
                             $m = billetera_bonus_admin_muerta_por($nueva, $r);
                             if ($m !== '') {
@@ -1570,6 +1586,12 @@ function billetera_render_bonus_page() {
                             }
                             update_option('billetera_bonus_reglas', $reglas, false);
                             $msg = ($found ? 'Regla actualizada' : 'Regla creada') . $nota_sub . '. Aplica a: ' . billetera_bonus_regla_describe($nueva) . '.';
+                            if ($es_tramo) {
+                                $msg .= ' Tramo de escalera: al alcanzar este umbral se revalorizan las ventas del mes al tramo más alto (ej. ×2 en 4 y ×3 en 8).';
+                                if ($tramo_mixto) {
+                                    $warn = 'Ojo: esta escalera mezcla tipos de efecto (multiplicar/fijo/sumar). Usa el mismo tipo en todos los tramos; mezclar fijo con otros no revaloriza bien.';
+                                }
+                            }
                             if ($avisos) {
                                 $msg .= ' Convive con ' . implode('; ', $avisos) . '. No se duplican: en cada venta gana la más específica (subcategoría > tienda > categoría > línea > marca); a igual especificidad gana la más reciente.';
                             }
@@ -1634,7 +1656,7 @@ function billetera_render_bonus_page() {
     $sel_sub    = intval($edit['scope_subcategoria_id'] ?? 0);
     $sel_dealer = intval($edit['scope_dealer_id'] ?? 0);
 
-    billetera_bc_open('Reglas de bonificación', 'Elige a qué ventas aplica la regla (categoría, marca, línea, subcategoría y tienda), luego el bono y la vigencia. Si dos reglas coinciden en una venta, gana la más específica: subcategoría > tienda > categoría > línea > marca.');
+    billetera_bc_open('Reglas de bonificación', 'Elige a qué ventas aplica la regla (categoría, marca, línea, subcategoría y tienda), luego el bono y la vigencia. Entre distintos alcances gana la más específica: subcategoría > tienda > categoría > línea > marca. Con el mismo alcance y distinto umbral se crea una escalera (ej. ×2 en 4 y ×3 en 8): aplica el tramo más alto y revaloriza las anteriores.');
     billetera_bc_notices($msg, $err);
     if ($warn !== '') {
         echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html($warn) . '</p></div>';
@@ -1835,7 +1857,7 @@ function billetera_render_bonus_page() {
 
     <div class="bc-card">
         <h2 class="bc-card__title">Reglas configuradas</h2>
-        <p class="bc-desc">Si una venta coincide con varias reglas, <strong>gana solo la más específica</strong> (subcategoría &gt; tienda &gt; categoría &gt; línea &gt; marca; a igual especificidad gana la más reciente). Nunca se suman ni se duplican.</p>
+        <p class="bc-desc">Entre distintos alcances, <strong>gana solo la más específica</strong> (subcategoría &gt; tienda &gt; categoría &gt; línea &gt; marca; a igual especificidad gana la más reciente). Con <strong>idéntico alcance y distinto umbral</strong> forman escalera: aplica el tramo más alto y revaloriza las anteriores. Nunca se suman ni se duplican.</p>
         <?php if (!$reglas): ?>
             <p>Aún no hay reglas. Crea la primera arriba.</p>
         <?php else: ?>

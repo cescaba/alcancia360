@@ -214,6 +214,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                                     <div class="alc-desk__td"><?php echo $es_jefe ? 'Asesor' : 'Identificador'; ?></div>
                                     <div class="alc-desk__td">Fecha</div>
                                     <div class="alc-desk__td alc-desk__td--right">Comisión</div>
+                                    <div class="alc-desk__td alc-desk__td--acc"></div>
                                 </div>
                                 <div id="desk-movs-list"></div>
                             </div>
@@ -232,7 +233,8 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
 window.billetera = {
     ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
     nonce_get_balance: '<?php echo wp_create_nonce('billetera_get_balance'); ?>',
-    nonce_get_all_movements: '<?php echo wp_create_nonce('billetera_get_all_movements'); ?>'
+    nonce_get_all_movements: '<?php echo wp_create_nonce('billetera_get_all_movements'); ?>',
+    nonce_delete_sale: '<?php echo wp_create_nonce('billetera_delete_sale'); ?>'
 };
 </script>
 <script src="<?php echo get_template_directory_uri(); ?>/assets/js/billetera-360-movimientos.js"></script>

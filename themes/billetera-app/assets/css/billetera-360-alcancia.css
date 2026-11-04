@@ -395,6 +395,27 @@
     padding: 24px 16px;
 }
 
+/* Eliminar venta propia (texto + icono, al final de la fila) */
+.alc-del {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    padding: 4px 2px;
+    margin: 0;
+    font-family: Barlow, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: #b3352a;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.alc-del svg { flex-shrink: 0; }
+.alc-del:hover { text-decoration: underline; }
+.alc-del:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
+.alc-desk__td--acc { text-align: right; }
+
 /* ---------- Animaciones ---------- */
 @keyframes alcIdleBob {
     0%, 100% { transform: translateY(0); }

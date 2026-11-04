@@ -219,7 +219,6 @@ function renderMovements(movements) {
 function buildRow(m, isLatest) {
     const row = document.createElement('div');
     row.className = 'alc-mov' + (isLatest ? ' alc-mov--latest' : '');
-
     const color = catColor(m.categoria || '');
     const nombre = (m.categoria ? m.categoria : '') + (m.subcategoria ? ' · ' + m.subcategoria : '');
     const ident = m.asesor_nombre ? m.asesor_nombre : ((ID_LABELS[m.id_type] || (m.id_type || '').toUpperCase()) + ' ' + (m.id_value || ''));
@@ -260,8 +259,40 @@ function buildRow(m, isLatest) {
     row.appendChild(badge);
     row.appendChild(body);
     row.appendChild(amt);
+    const del = buildDeleteBtn(m, row);
+    if (del) row.appendChild(del);
 
     return row;
+}
+
+function buildDeleteBtn(m, rowEl) {
+    if (!m.venta_id || m.asesor_nombre) return null;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'alc-del';
+    b.title = 'Eliminar esta venta';
+    b.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 4h11M6.5 4V2.8c0-.4.3-.8.8-.8h1.4c.4 0 .8.4.8.8V4m2.5 0-.7 9.2c-.1.8-.7 1.3-1.5 1.3H6.7c-.8 0-1.4-.5-1.5-1.3L4.5 4"/></svg><span>Eliminar</span>';
+    b.addEventListener('click', function () {
+        if (!confirm('¿Eliminar esta venta? Se restará de tu saldo y se recalcula el bono del mes.')) return;
+        b.disabled = true;
+        fetch(billetera.ajax_url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=billetera_delete_sale&nonce=' + encodeURIComponent(billetera.nonce_delete_sale) + '&venta_id=' + encodeURIComponent(m.venta_id)
+        })
+            .then(r => r.json())
+            .then(res => {
+                if (!res.success) {
+                    alert((res.data && res.data.message) || 'No se pudo eliminar');
+                    b.disabled = false;
+                    return;
+                }
+                if (rowEl && rowEl.parentNode) rowEl.parentNode.removeChild(rowEl);
+                loadUserData();
+            })
+            .catch(() => { b.disabled = false; });
+    });
+    return b;
 }
 
 function buildDeskRow(m) {
@@ -305,6 +336,13 @@ function buildDeskRow(m) {
     row.appendChild(id);
     row.appendChild(fechaEl);
     row.appendChild(amt);
+    const del = buildDeleteBtn(m, row);
+    if (del) {
+        const cell = document.createElement('div');
+        cell.className = 'alc-desk__td alc-desk__td--acc';
+        cell.appendChild(del);
+        row.appendChild(cell);
+    }
 
     return row;
 }
