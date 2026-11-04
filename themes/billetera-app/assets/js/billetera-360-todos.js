@@ -231,7 +231,7 @@ function buildDeleteBtn(m, rowEl, reloadFn) {
     b.type = 'button';
     b.className = 'alc-del';
     b.title = 'Eliminar esta venta';
-    b.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 4h11M6.5 4V2.8c0-.4.3-.8.8-.8h1.4c.4 0 .8.4.8.8V4m2.5 0-.7 9.2c-.1.8-.7 1.3-1.5 1.3H6.7c-.8 0-1.4-.5-1.5-1.3L4.5 4"/></svg><span>Eliminar</span>';
+    b.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1-2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg><span>Eliminar</span>';
     b.addEventListener('click', function () {
         if (!confirm('¿Eliminar esta venta? Se restará de tu saldo y se recalcula el bono del mes.')) return;
         b.disabled = true;
