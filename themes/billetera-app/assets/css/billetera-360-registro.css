@@ -633,7 +633,12 @@
     }
 
     .reg-desk__cantidad {
-        margin-bottom: 18px;
+        margin-top: 18px;
+        margin-bottom: 0;
+    }
+
+    .reg-desk__form > .reg-add {
+        margin-top: 18px;
     }
 
     .reg-desk__cantidad input[type="number"] {
@@ -901,4 +906,355 @@
         color: #8494a6;
         text-align: center;
     }
+}
+
+/* ============================================================================
+   Carrito de productos (venta multi-producto)
+   ========================================================================== */
+.reg-add {
+    width: 100%;
+    background: #fff;
+    color: #0a6cb4;
+    border: 1px dashed #0a6cb4;
+    border-radius: 2px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.reg-add:hover:not(:disabled) {
+    background: #f0f7fd;
+}
+
+.reg-add:disabled {
+    background: #f5f8fb;
+    color: #8494a6;
+    border-color: #c9d4e0;
+    cursor: default;
+}
+
+.reg-cart {
+    background: #fff;
+    border: 1px solid #dce3eb;
+    border-left-width: 3px;
+    border-left-color: #0a6cb4;
+    margin-bottom: 16px;
+}
+
+.reg-cart__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid #e4eaf1;
+    font-family: Barlow, sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+.reg-cart__count {
+    background: #0a6cb4;
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 700;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+}
+
+.reg-cart__list {
+    display: flex;
+    flex-direction: column;
+}
+
+.reg-cart__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #eef2f6;
+}
+
+.reg-cart__row:last-child {
+    border-bottom: none;
+}
+
+.reg-cart__info {
+    flex: 1;
+    min-width: 0;
+}
+
+.reg-cart__name {
+    font-family: Barlow, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0e2438;
+    line-height: 1.3;
+}
+
+.reg-cart__meta {
+    font-family: Barlow, sans-serif;
+    font-size: 11px;
+    color: #8494a6;
+    margin-top: 2px;
+}
+
+.reg-cart__amt {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: #1b6e46;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.reg-cart__rm {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: #fdecea;
+    border: 1px solid #f3c1bb;
+    color: #b3352a;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.18s, border-color 0.18s;
+}
+
+.reg-cart__rm:hover {
+    background: #fadbd6;
+    border-color: #e8a79e;
+}
+
+.reg-cart__total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 14px;
+    background: #f5f8fb;
+    border-top: 1px solid #e4eaf1;
+    font-family: Barlow, sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    color: #5b6b80;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+.reg-cart__total span:last-child {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0a6cb4;
+    letter-spacing: 0;
+}
+
+/* ============================================================================
+   Modal de confirmaci�n/aviso (tema app)
+   ========================================================================== */
+.alc-modal-ov {
+    position: fixed;
+    inset: 0;
+    background: rgba(12, 45, 82, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 20px;
+    animation: alcFadeIn 0.18s ease;
+}
+
+.alc-modal {
+    background: #fff;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 360px;
+    padding: 22px 20px 18px;
+    text-align: center;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+    animation: alcPopIn 0.25s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+
+.alc-modal__title {
+    font-family: Poppins, sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: #0e2438;
+}
+
+.alc-modal__desc {
+    font-family: Barlow, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0e2438;
+    margin-top: 6px;
+}
+
+.alc-modal__warn {
+    font-family: Barlow, sans-serif;
+    font-size: 12px;
+    color: #5b6b80;
+    margin-top: 4px;
+}
+
+.alc-modal__actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.alc-modal__btn {
+    flex: 1;
+    padding: 12px 8px;
+    border-radius: 6px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.alc-modal__btn--ghost {
+    background: #fff;
+    border: 1px solid #dce3eb;
+    color: #0e2438;
+}
+
+.alc-modal__btn--danger {
+    background: #b3352a;
+    border: 1px solid #b3352a;
+    color: #fff;
+}
+
+@keyframes alcFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes alcPopIn { from { opacity: 0; transform: scale(0.92) translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ============================================================================
+   Stepper de cantidad (- / +)
+   ========================================================================== */
+.reg-qty {
+    display: flex;
+    align-items: stretch;
+    background: #fff;
+    border: 1px solid #c9d4e0;
+    border-radius: 2px;
+    overflow: hidden;
+    transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.reg-qty:focus-within {
+    border-color: #0a6cb4;
+    box-shadow: 0 0 0 2px rgba(10, 108, 180, 0.15);
+}
+
+.reg-qty__btn {
+    width: 46px;
+    flex-shrink: 0;
+    border: none;
+    background: #f5f8fb;
+    color: #0a6cb4;
+    font-family: Barlow, sans-serif;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s, color 0.15s;
+}
+
+.reg-qty__btn:hover:not(:disabled) {
+    background: #e8f1f9;
+}
+
+.reg-qty__btn:disabled {
+    color: #b9c4d0;
+    cursor: default;
+}
+
+.reg-qty input[type="number"] {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: #fff;
+    text-align: center;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #0e2438;
+    padding: 12px 4px;
+    outline: none;
+    -moz-appearance: textfield;
+}
+
+.reg-qty input[type="number"]::-webkit-outer-spin-button,
+.reg-qty input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Stepper dentro del carrito */
+.reg-cart__qty {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 4px;
+}
+
+.reg-cart__qty button {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid #c9d4e0;
+    background: #fff;
+    color: #0a6cb4;
+    font-family: Barlow, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.reg-cart__qty button:hover:not(:disabled) {
+    background: #f0f7fd;
+    border-color: #0a6cb4;
+}
+
+.reg-cart__qty button:disabled {
+    color: #b9c4d0;
+    border-color: #dce3eb;
+    cursor: default;
+}
+
+.reg-cart__qty span {
+    font-family: Barlow, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0e2438;
+    min-width: 14px;
+    text-align: center;
 }

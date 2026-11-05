@@ -132,8 +132,26 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
                     <!-- Cantidad -->
                     <div id="cantidad-wrap" style="display: none;">
                         <p class="reg-label">Cantidad</p>
-                        <div class="reg-field">
+                        <div class="reg-field reg-qty">
+                            <button type="button" class="reg-qty__btn" id="cantidad-minus" aria-label="Quitar una unidad">−</button>
                             <input type="number" id="cantidad-input" min="1" value="1">
+                            <button type="button" class="reg-qty__btn" id="cantidad-plus" aria-label="Agregar una unidad">+</button>
+                        </div>
+                    </div>
+
+                    <!-- Agregar producto a la venta -->
+                    <button type="button" class="reg-add" id="add-item-btn" disabled>Agregar a la venta</button>
+
+                    <!-- Carrito: productos de esta venta -->
+                    <div class="reg-cart" id="reg-cart" hidden>
+                        <div class="reg-cart__head">
+                            <span>Productos en esta venta</span>
+                            <span class="reg-cart__count" id="cart-count">0</span>
+                        </div>
+                        <div class="reg-cart__list" id="cart-list"></div>
+                        <div class="reg-cart__total">
+                            <span>Total</span>
+                            <span id="cart-total">S/ 0.00</span>
                         </div>
                     </div>
 
@@ -202,7 +220,26 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
 
                         <div class="reg-desk__cantidad" id="desk-cantidad-wrap" style="display: none;">
                             <div class="reg-desk__label">Cantidad</div>
-                            <input type="number" id="desk-cantidad-input" min="1" value="1">
+                            <div class="reg-qty">
+                                <button type="button" class="reg-qty__btn" id="desk-cantidad-minus" aria-label="Quitar una unidad">−</button>
+                                <input type="number" id="desk-cantidad-input" min="1" value="1">
+                                <button type="button" class="reg-qty__btn" id="desk-cantidad-plus" aria-label="Agregar una unidad">+</button>
+                            </div>
+                        </div>
+
+                        <button type="button" class="reg-add" id="desk-add-item-btn" disabled>Agregar a la venta</button>
+
+                        <!-- Carrito: productos de esta venta -->
+                        <div class="reg-cart" id="desk-cart" hidden>
+                            <div class="reg-cart__head">
+                                <span>Productos en esta venta</span>
+                                <span class="reg-cart__count" id="desk-cart-count">0</span>
+                            </div>
+                            <div class="reg-cart__list" id="desk-cart-list"></div>
+                            <div class="reg-cart__total">
+                                <span>Total</span>
+                                <span id="desk-cart-total">S/ 0.00</span>
+                            </div>
                         </div>
 
                         <div class="reg-desk__foot">

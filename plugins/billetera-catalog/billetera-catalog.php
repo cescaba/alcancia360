@@ -731,18 +731,7 @@ function billetera_ajax_register_sale_v2() {
 
     // Aplicar reglas de bonificación (categoría, umbral, multiplicador y excepción)
     $regla_bonus = billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $distribuidor_id, $cantidad, true, $fecha_datetime);
-    if ($regla_bonus['override_sol'] !== null) {
-        // Excepción "reemplazar"
-        $monto_total_sol  = $regla_bonus['override_sol'];
-        $bonus_multiplier = 1.0;
-    } elseif ($regla_bonus['add_sol'] !== null) {
-        // Excepción "sumar": comisión base + fijo (sin multiplicador)
-        $monto_total_sol  = ($monto_total_sol * $regla_bonus['multiplier']) + $regla_bonus['add_sol'];
-        $bonus_multiplier = 1.0;
-    } else {
-        $bonus_multiplier = $regla_bonus['multiplier'];
-    }
-    $bonus_aplicado = ($bonus_multiplier > 1 || !empty($regla_bonus['excepcion'])) ? 1 : 0;
+    list($monto_total_sol, $bonus_multiplier, $bonus_aplicado) = billetera_venta_monto_con_bonus($monto_total_sol, $regla_bonus);
 
     // Guardar venta en nueva tabla (tc_aplicado congela el tipo de cambio del día:
     // el retroactivo de montos fijos revaloriza cada venta con su propio TC).
@@ -776,11 +765,232 @@ function billetera_ajax_register_sale_v2() {
             'id_value' => $id_value,
             'bonus_multiplier' => floatval($bonus_multiplier),
             'bonus_categoria' => $regla_bonus['categoria_nombre'],
-            'bonus_aplicado' => ($regla_bonus['multiplier'] > 1 || !empty($regla_bonus['excepcion'])) ? 1 : 0,
+            'bonus_aplicado' => $bonus_aplicado,
         ]);
     } else {
         wp_send_json_error(['message' => 'Error al registrar venta']);
     }
+}
+
+/**
+ * Aplica el efecto de la regla de bono al monto base de una venta.
+ * Devuelve [monto_a_guardar, bonus_multiplier, bonus_aplicado].
+ * En multiplicar: monto base + multiplier (el total se calcula al leer).
+ * En fijo/sumar: el monto ya incluye el bono y multiplier queda 1.0.
+ */
+function billetera_venta_monto_con_bonus($monto_base_sol, $regla_bonus) {
+    if ($regla_bonus['override_sol'] !== null) {
+        return [(float) $regla_bonus['override_sol'], 1.0, 1];
+    }
+    if ($regla_bonus['add_sol'] !== null) {
+        $monto = ((float) $monto_base_sol * (float) $regla_bonus['multiplier']) + (float) $regla_bonus['add_sol'];
+        return [$monto, 1.0, 1];
+    }
+    $mult = (float) $regla_bonus['multiplier'];
+    $aplicado = ($mult > 1 || !empty($regla_bonus['excepcion'])) ? 1 : 0;
+    return [(float) $monto_base_sol, $mult, $aplicado];
+}
+
+// AJAX: Registrar venta multi-producto (un identificador/fecha, N ítems).
+// Atómico: si algún producto falla la validación, no se registra nada.
+// Los ítems se insertan en secuencia para que el bono y su retroactivo
+// se activen dentro de la misma venta (igual que registrarlos uno a uno).
+add_action('wp_ajax_billetera_register_sale_multi', 'billetera_ajax_register_sale_multi');
+
+function billetera_ajax_register_sale_multi() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_register_sale')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
+    $user_id = get_current_user_id();
+    $current_user = wp_get_current_user();
+    $allowed_roles = ['asesor', 'administrator', 'jefe_venta'];
+
+    if (!array_intersect($allowed_roles, $current_user->roles)) {
+        wp_send_json_error(['message' => 'No tienes permiso']);
+    }
+
+    global $wpdb;
+    $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
+    $categorias_table = $wpdb->prefix . 'billetera_categorias';
+    $ventas_table = $wpdb->prefix . 'billetera_ventas';
+
+    $id_type  = sanitize_text_field($_POST['id_type'] ?? '');
+    $id_value = sanitize_text_field($_POST['id_value'] ?? '');
+    $fecha    = sanitize_text_field($_POST['fecha'] ?? date('Y-m-d'));
+    $items_raw = $_POST['items'] ?? '';
+    $items     = is_string($items_raw) ? json_decode(wp_unslash($items_raw), true) : null;
+
+    if (!$id_type || !$id_value || !is_array($items) || empty($items)) {
+        wp_send_json_error(['message' => 'Datos incompletos']);
+    }
+    if (count($items) > 20) {
+        wp_send_json_error(['message' => 'Máximo 20 productos por venta']);
+    }
+
+    // Validar fecha (igual que v2): válida, no futura; solo backoffice fecha atrás.
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+        wp_send_json_error(['message' => 'Formato de fecha inválido']);
+    }
+    $fecha_timestamp = strtotime($fecha);
+    if ($fecha_timestamp === false) {
+        wp_send_json_error(['message' => 'Fecha inválida']);
+    }
+    if ($fecha_timestamp > strtotime(date('Y-m-d'))) {
+        wp_send_json_error(['message' => 'No puedes registrar ventas futuras']);
+    }
+    if (!current_user_can('manage_billetera_catalog')) {
+        $fecha = date('Y-m-d');
+        $fecha_timestamp = strtotime($fecha);
+    }
+    $fecha_datetime = date('Y-m-d H:i:s', $fecha_timestamp);
+
+    $user_role = $current_user->roles[0];
+
+    // Distribuidor del usuario (para comisiones específicas y reglas de tienda).
+    $tienda_id = get_user_meta($user_id, '_tienda_asociada', true);
+    $distribuidor_id = null;
+    if ($tienda_id) {
+        $distribuidor_id = get_post_meta($tienda_id, '_dealer_id', true);
+    }
+
+    $lineas_permitidas = billetera_get_lineas_permitidas($user_id);
+    $codigos_permitidos = array_column($lineas_permitidas, 'codigo');
+
+    // ---- Fase 1: prevalidar todo SIN escribir (todo o nada) ----
+    $validados = [];
+    $errores = [];
+    foreach ($items as $it) {
+        if (!is_array($it)) {
+            $errores[] = 'Producto inválido en la lista';
+            continue;
+        }
+        $sub_id = intval($it['subcategoria_id'] ?? 0);
+        $cant   = max(1, intval($it['cantidad'] ?? 1));
+        if (!$sub_id) {
+            $errores[] = 'Producto inválido en la lista';
+            continue;
+        }
+
+        $sub_row = $wpdb->get_row($wpdb->prepare("
+            SELECT s.nombre, c.linea_codigo
+            FROM $subcategorias_table s
+            INNER JOIN $categorias_table c ON s.categoria_id = c.id
+            WHERE s.id = %d
+        ", $sub_id));
+
+        if (!$sub_row) {
+            $errores[] = 'Producto no encontrado (ID ' . $sub_id . ')';
+            continue;
+        }
+        if (!in_array($sub_row->linea_codigo, $codigos_permitidos, true)) {
+            $errores[] = '“' . $sub_row->nombre . '”: no tienes permiso para esa línea';
+            continue;
+        }
+
+        $comision = billetera_find_comision($sub_id, $distribuidor_id, $user_role);
+        if (!$comision) {
+            $errores[] = '“' . $sub_row->nombre . '”: sin comisión configurada';
+            continue;
+        }
+
+        $validados[] = [
+            'sub_id'   => $sub_id,
+            'cant'     => $cant,
+            'comision' => $comision,
+        ];
+    }
+
+    if ($errores || empty($validados)) {
+        $unicos = array_slice(array_unique($errores), 0, 4);
+        wp_send_json_error(['message' => 'No se registró nada. ' . implode('. ', $unicos) . '.']);
+    }
+
+    // ---- Fase 2: insertar en secuencia dentro de una transacción ----
+    $wpdb->query('START TRANSACTION');
+
+    $total     = 0.0;
+    $bonus_max = 1.0;
+    $bonus_cat = null;
+    $bonus_any = 0;
+    $first_id  = null;
+
+    foreach ($validados as $it) {
+        $monto_total_sol = billetera_convert_to_sol($it['comision']) * $it['cant'];
+
+        $regla_bonus = billetera_aplicar_regla_bonus($it['sub_id'], $user_id, $distribuidor_id, $it['cant'], true, $fecha_datetime);
+        list($monto_total_sol, $bonus_multiplier, $bonus_aplicado) = billetera_venta_monto_con_bonus($monto_total_sol, $regla_bonus);
+
+        $tc_ins = billetera_get_tipo_cambio();
+        $result = $wpdb->insert($ventas_table, [
+            'usuario_id' => $user_id,
+            'subcategoria_id' => $it['sub_id'],
+            'cantidad' => $it['cant'],
+            'monto_comision_sol' => $monto_total_sol,
+            'id_type' => $id_type,
+            'id_value' => $id_value,
+            'bonus_multiplier' => $bonus_multiplier,
+            'bonus_aplicado' => $bonus_aplicado,
+            'tc_aplicado' => $tc_ins,
+            'creado_en' => $fecha_datetime,
+        ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f', '%d', '%f', '%s']);
+
+        if (!$result) {
+            $wpdb->query('ROLLBACK');
+            wp_send_json_error(['message' => 'Error al registrar la venta']);
+        }
+        if ($first_id === null) {
+            $first_id = (int) $wpdb->insert_id;
+        }
+
+        // Espejo del jefe por ítem (con la misma regla de bonificación).
+        billetera_register_jefe_comision($tienda_id, $it['sub_id'], $it['cant'], $distribuidor_id, $id_type, $id_value, $user_id, $fecha_datetime, $regla_bonus['jefe_multiplier'], $regla_bonus['jefe_override_sol'], $regla_bonus['jefe_add_sol']);
+
+        if ($bonus_aplicado) {
+            $bonus_any = 1;
+            if ($bonus_multiplier > $bonus_max) {
+                $bonus_max = $bonus_multiplier;
+            }
+            if ($bonus_cat === null && !empty($regla_bonus['categoria_nombre'])) {
+                $bonus_cat = $regla_bonus['categoria_nombre'];
+            }
+        }
+    }
+
+    // Total real de la venta: se lee de la BD (dentro de la transacción) porque
+    // un ítem posterior pudo disparar un retroactivo sobre ítems anteriores
+    // de esta misma venta.
+    if ($first_id !== null) {
+        $total = (float) $wpdb->get_var($wpdb->prepare("
+            SELECT COALESCE(SUM(monto_comision_sol * bonus_multiplier), 0)
+            FROM $ventas_table
+            WHERE usuario_id = %d
+              AND id >= %d
+              AND creado_en = %s
+              AND id_type = %s
+              AND id_value = %s
+        ", $user_id, $first_id, $fecha_datetime, $id_type, $id_value));
+    }
+
+    $wpdb->query('COMMIT');
+
+    // El ranking del mes cambió: invalida la caché
+    billetera_rank_cache_bust();
+
+    wp_send_json_success([
+        'message' => 'Venta registrada',
+        'amount' => round($total, 2),
+        'items' => count($validados),
+        'id_type_label' => ucfirst($id_type),
+        'id_value' => $id_value,
+        'bonus_multiplier' => floatval($bonus_max),
+        'bonus_categoria' => $bonus_cat,
+        'bonus_aplicado' => $bonus_any,
+    ]);
 }
 
 function billetera_get_tipo_cambio() {

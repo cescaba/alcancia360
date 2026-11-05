@@ -25,6 +25,13 @@ let state = {
     fillPercent: 0
 };
 
+// Carrito de la venta actual: [{subId, nombre, cant, amount}]
+let cart = [];
+// Último preview de comisión del producto en edición (null si no hay)
+let lastPreview = null;
+// Token para descartar respuestas tardías de preview
+let previewReq = 0;
+
 let marcasData = {};
 let categoriesData = {};
 let subcategoriesData = {};
@@ -39,6 +46,13 @@ const catSelect = document.getElementById('cat-select');
 const subSelect = document.getElementById('sub-select');
 const cantidadWrap = document.getElementById('cantidad-wrap');
 const cantidadInput = document.getElementById('cantidad-input');
+const cantidadMinus = document.getElementById('cantidad-minus');
+const cantidadPlus = document.getElementById('cantidad-plus');
+const addItemBtn = document.getElementById('add-item-btn');
+const cartWrap = document.getElementById('reg-cart');
+const cartList = document.getElementById('cart-list');
+const cartCount = document.getElementById('cart-count');
+const cartTotal = document.getElementById('cart-total');
 const previewAmt = document.getElementById('preview-amt');
 const regComision = document.getElementById('reg-comision');
 const submitBtn = document.getElementById('submit-btn');
@@ -63,6 +77,9 @@ function init() {
     catSelect.addEventListener('change', handleCategoryChange);
     subSelect.addEventListener('change', handleSubcategoryChange);
     cantidadInput.addEventListener('input', handleCantidadChange);
+    if (cantidadMinus) cantidadMinus.addEventListener('click', function () { stepCantidad(-1); });
+    if (cantidadPlus) cantidadPlus.addEventListener('click', function () { stepCantidad(1); });
+    if (addItemBtn) addItemBtn.addEventListener('click', handleAddItem);
     submitBtn.addEventListener('click', handleSubmit);
     if (continueBtn) continueBtn.addEventListener('click', goToMovimientos);
 
@@ -98,13 +115,38 @@ function handleIdTypeChange(e) {
 }
 
 function handleMarcaChange() {
-    const marcaId = marcaSelect.value;
+    const newMarca = marcaSelect.value;
+    // Cambiar de marca con productos agregados vacía la venta: confirmar.
+    if (cart.length && newMarca !== state.marca) {
+        const prevMarca = state.marca;
+        openRegModal({
+            title: '¿Cambiar de marca?',
+            desc: 'Hay ' + cart.length + ' producto' + (cart.length > 1 ? 's' : '') + ' agregado' + (cart.length > 1 ? 's' : '') + ' a esta venta.',
+            warn: 'Se quitarán de la venta si cambias de marca.',
+            okLabel: 'Cambiar y vaciar',
+            onOk: function () {
+                cart = [];
+                renderCart();
+                applyMarcaChange(newMarca);
+            },
+            onCancel: function () {
+                marcaSelect.value = prevMarca;
+            }
+        });
+        return;
+    }
+    applyMarcaChange(newMarca);
+}
+
+function applyMarcaChange(marcaId) {
     state.marca = marcaId;
     const lineaCodigo = marcaId;
     catSelect.innerHTML = '';
     subSelect.innerHTML = '';
     subcategoriesData = {};
     categoriesData = {};
+    lastPreview = null;
+    previewReq++;
 
     if (!marcaId) {
         catSelect.disabled = true;
@@ -188,6 +230,7 @@ function handleCategoryChange() {
 function handleSubcategoryChange() {
     const subId = subSelect.value;
     state.subcategory = subId;
+    lastPreview = null;
 
     if (subId && subcategoriesData[subId] && Number(subcategoriesData[subId].por_unidad) === 1) {
         cantidadWrap.style.display = 'block';
@@ -202,15 +245,27 @@ function handleSubcategoryChange() {
 }
 
 function handleCantidadChange() {
+    lastPreview = null;
     loadComision();
     validate();
 }
 
+function stepCantidad(delta) {
+    const current = Math.max(1, parseInt(cantidadInput.value) || 1);
+    const next = Math.max(1, current + delta);
+    if (next === current) return;
+    cantidadInput.value = next;
+    handleCantidadChange();
+}
+
 function loadComision() {
     const subId = subSelect.value;
+    const req = ++previewReq;
     if (!subId) {
         previewAmt.textContent = 'S/ 0.00';
         if (regComision) regComision.classList.remove('is-ready');
+        lastPreview = null;
+        updateAddBtn();
         return;
     }
 
@@ -222,22 +277,178 @@ function loadComision() {
     })
         .then(r => r.json())
         .then(res => {
+            if (req !== previewReq) return;
             if (res.success) {
                 previewAmt.textContent = res.data.amount_formatted;
                 if (regComision) regComision.classList.add('is-ready');
+                lastPreview = { amount: Number(res.data.amount) || 0, formatted: res.data.amount_formatted };
             } else {
                 previewAmt.textContent = 'S/ 0.00';
                 if (regComision) regComision.classList.remove('is-ready');
+                lastPreview = null;
             }
+            updateAddBtn();
         });
 }
 
+function updateAddBtn() {
+    if (!addItemBtn) return;
+    const subId = subSelect.value;
+    const idOk = idInput.value.trim().length > 2;
+    const canAdd = subId && idOk && lastPreview !== null;
+    addItemBtn.disabled = !canAdd;
+    if (canAdd) {
+        addItemBtn.textContent = 'Agregar · ' + lastPreview.formatted;
+    } else {
+        addItemBtn.textContent = 'Agregar a la venta';
+    }
+}
+
+function handleAddItem() {
+    const subId = subSelect.value;
+    if (!subId || !lastPreview) return;
+    if (idInput.value.trim().length <= 2) return;
+
+    const catNombre = (categoriesData[state.category] && categoriesData[state.category].nombre) || '';
+    const subNombre = (subcategoriesData[subId] && subcategoriesData[subId].nombre) || '';
+    const cant = Math.max(1, parseInt(cantidadInput.value) || 1);
+    const porUnidad = !!(subcategoriesData[subId] && Number(subcategoriesData[subId].por_unidad) === 1);
+    const unitAmount = lastPreview.amount / cant;
+
+    // Mismo producto "por unidad": en vez de duplicar la fila, suma cantidad.
+    const existing = porUnidad
+        ? cart.find(function (it) { return String(it.subId) === String(subId) && it.porUnidad; })
+        : null;
+
+    if (existing) {
+        existing.cant += cant;
+        existing.amount = existing.unitAmount * existing.cant;
+    } else {
+        cart.push({
+            subId: subId,
+            nombre: (catNombre ? catNombre + ' · ' : '') + subNombre,
+            cant: cant,
+            unitAmount: unitAmount,
+            amount: lastPreview.amount,
+            porUnidad: porUnidad
+        });
+    }
+
+    renderCart();
+
+    // Deja la cascada lista para el siguiente producto (misma marca).
+    catSelect.value = '';
+    handleCategoryChange();
+    cantidadWrap.style.display = 'none';
+    cantidadInput.value = 1;
+    previewAmt.textContent = 'S/ 0.00';
+    if (regComision) regComision.classList.remove('is-ready');
+    lastPreview = null;
+    updateAddBtn();
+    validate();
+}
+
+function removeCartItem(idx) {
+    cart.splice(idx, 1);
+    renderCart();
+    validate();
+}
+
+function changeCartQty(idx, delta) {
+    const item = cart[idx];
+    if (!item || !item.porUnidad) return;
+    const next = Math.max(1, item.cant + delta);
+    if (next === item.cant) return;
+    item.cant = next;
+    item.amount = item.unitAmount * next;
+    renderCart();
+    validate();
+}
+
+function buildQtyStepper(idx, item) {
+    const wrap = document.createElement('div');
+    wrap.className = 'reg-cart__qty';
+
+    const minus = document.createElement('button');
+    minus.type = 'button';
+    minus.textContent = '−';
+    minus.disabled = item.cant <= 1;
+    minus.setAttribute('aria-label', 'Quitar una unidad');
+    minus.addEventListener('click', function () { changeCartQty(idx, -1); });
+
+    const num = document.createElement('span');
+    num.textContent = String(item.cant);
+
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.textContent = '+';
+    plus.setAttribute('aria-label', 'Agregar una unidad');
+    plus.addEventListener('click', function () { changeCartQty(idx, 1); });
+
+    wrap.appendChild(minus);
+    wrap.appendChild(num);
+    wrap.appendChild(plus);
+    return wrap;
+}
+
+function renderCart() {
+    if (!cartWrap || !cartList) return;
+    cartWrap.hidden = cart.length === 0;
+    cartList.innerHTML = '';
+
+    let total = 0;
+    cart.forEach(function (item, idx) {
+        total += item.amount;
+        const row = document.createElement('div');
+        row.className = 'reg-cart__row';
+
+        const info = document.createElement('div');
+        info.className = 'reg-cart__info';
+        const name = document.createElement('div');
+        name.className = 'reg-cart__name';
+        name.textContent = item.nombre;
+        const meta = document.createElement('div');
+        meta.className = 'reg-cart__meta';
+        if (item.porUnidad) {
+            meta.appendChild(buildQtyStepper(idx, item));
+        } else {
+            meta.textContent = 'Cantidad 1';
+        }
+        info.appendChild(name);
+        info.appendChild(meta);
+
+        const amt = document.createElement('div');
+        amt.className = 'reg-cart__amt';
+        amt.textContent = 'S/ ' + Number(item.amount).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'reg-cart__rm';
+        rm.title = 'Quitar de la venta';
+        rm.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>';
+        rm.addEventListener('click', function () { removeCartItem(idx); });
+
+        row.appendChild(info);
+        row.appendChild(amt);
+        row.appendChild(rm);
+        cartList.appendChild(row);
+    });
+
+    if (cartCount) cartCount.textContent = String(cart.length);
+    if (cartTotal) cartTotal.textContent = 'S/ ' + total.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    updateSubmitLabel();
+}
+
+function updateSubmitLabel() {
+    if (!submitBtn) return;
+    submitBtn.textContent = cart.length > 0 ? ('Registrar venta (' + cart.length + ')') : 'Registrar venta';
+}
+
 function validate() {
-    const sub = subSelect.value;
     const idOk = idInput.value.trim().length > 2;
 
-    const isValid = sub && idOk;
-
+    // Submit: requiere carrito con al menos 1 producto + identificador.
+    const isValid = cart.length > 0 && idOk;
     if (isValid) {
         submitBtn.classList.add('is-ready');
         submitBtn.disabled = false;
@@ -245,21 +456,27 @@ function validate() {
         submitBtn.classList.remove('is-ready');
         submitBtn.disabled = true;
     }
+
+    updateAddBtn();
 }
 
 function handleSubmit() {
     if (!submitBtn.classList.contains('is-ready')) return;
+    if (!cart.length) return;
 
-    const subId = subSelect.value;
-    const cantidad = Math.max(1, parseInt(cantidadInput.value) || 1);
     const idType = state.idType;
     const idVal = idInput.value.trim();
     const fecha = fechaInput ? fechaInput.value : new Date().toISOString().split('T')[0];
+    const items = cart.map(function (it) {
+        return { subcategoria_id: parseInt(it.subId, 10), cantidad: parseInt(it.cant, 10) || 1 };
+    });
+
+    submitBtn.disabled = true;
 
     fetch(billetera.ajax_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=billetera_register_sale_v2&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha
+        body: 'action=billetera_register_sale_multi&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha + '&items=' + encodeURIComponent(JSON.stringify(items))
     })
         .then(r => r.json())
         .then(data => {
@@ -292,7 +509,24 @@ function handleSubmit() {
                 setTimeout(() => {
                     loadUserData();
                 }, 1500);
+            } else {
+                submitBtn.disabled = false;
+                openRegModal({
+                    title: 'No se pudo registrar',
+                    desc: (data.data && data.data.message) || 'Intenta de nuevo.',
+                    okLabel: 'Entendido',
+                    single: true
+                });
             }
+        })
+        .catch(() => {
+            submitBtn.disabled = false;
+            openRegModal({
+                title: 'Error de conexión',
+                desc: 'No se pudo registrar la venta. Intenta de nuevo.',
+                okLabel: 'Entendido',
+                single: true
+            });
         });
 }
 
@@ -343,7 +577,57 @@ function resetForm() {
     cantidadInput.value = 1;
     previewAmt.textContent = 'S/ 0.00';
     if (regComision) regComision.classList.remove('is-ready');
+    state.marca = '';
+    state.category = '';
+    state.subcategory = '';
+    cart = [];
+    lastPreview = null;
+    previewReq++;
+    renderCart();
     validate();
+}
+
+// Modal de confirmación/aviso con el tema de la app (mismo estilo que el de eliminar venta).
+function openRegModal(opts) {
+    closeRegModal();
+    const ov = document.createElement('div');
+    ov.className = 'alc-modal-ov';
+    ov.id = 'reg-modal';
+    const warn = opts.warn ? '<div class="alc-modal__warn">' + opts.warn + '</div>' : '';
+    const actions = opts.single
+        ? '<button type="button" class="alc-modal__btn alc-modal__btn--danger" data-act="ok">' + (opts.okLabel || 'Entendido') + '</button>'
+        : '<button type="button" class="alc-modal__btn alc-modal__btn--ghost" data-act="cancel">Volver</button>' +
+          '<button type="button" class="alc-modal__btn alc-modal__btn--danger" data-act="ok">' + (opts.okLabel || 'Confirmar') + '</button>';
+    ov.innerHTML =
+        '<div class="alc-modal" role="dialog" aria-modal="true">' +
+            '<div class="alc-modal__title">' + (opts.title || '') + '</div>' +
+            '<div class="alc-modal__desc">' + (opts.desc || '') + '</div>' +
+            warn +
+            '<div class="alc-modal__actions">' + actions + '</div>' +
+        '</div>';
+    document.body.appendChild(ov);
+    ov.querySelector('[data-act="ok"]').addEventListener('click', function () {
+        closeRegModal();
+        if (opts.onOk) opts.onOk();
+    });
+    const cancel = ov.querySelector('[data-act="cancel"]');
+    if (cancel) {
+        cancel.addEventListener('click', function () {
+            closeRegModal();
+            if (opts.onCancel) opts.onCancel();
+        });
+    }
+    ov.addEventListener('click', function (e) {
+        if (e.target === ov) {
+            closeRegModal();
+            if (opts.onCancel) opts.onCancel();
+        }
+    });
+}
+
+function closeRegModal() {
+    const ov = document.getElementById('reg-modal');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
 }
 
 function loadUserData() {

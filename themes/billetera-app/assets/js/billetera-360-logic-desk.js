@@ -15,6 +15,8 @@
     var subSelect = document.getElementById('desk-sub-select');
     var cantidadWrap = document.getElementById('desk-cantidad-wrap');
     var cantidadInput = document.getElementById('desk-cantidad-input');
+    var cantidadMinus = document.getElementById('desk-cantidad-minus');
+    var cantidadPlus = document.getElementById('desk-cantidad-plus');
     var previewAmt = document.getElementById('desk-preview-amt');
     var previewHint = document.getElementById('desk-preview-hint');
     var comisionBox = document.getElementById('desk-comision');
@@ -32,6 +34,19 @@
     var segButtons = seg.querySelectorAll('button');
     var idType = 'factura';
     var subcategoriesData = {};
+    var categoriesData = {};
+
+    // Carrito de la venta actual + preview del producto en edición.
+    var cart = [];
+    var lastPreview = null;
+    var previewReq = 0;
+    var curMarca = '';
+
+    var addItemBtn = document.getElementById('desk-add-item-btn');
+    var cartWrap = document.getElementById('desk-cart');
+    var cartList = document.getElementById('desk-cart-list');
+    var cartCount = document.getElementById('desk-cart-count');
+    var cartTotal = document.getElementById('desk-cart-total');
 
     function fmt(n) {
         return 'S/ ' + Number(n).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -80,10 +95,37 @@
     }
 
     function handleMarcaChange() {
-        var marcaId = marcaSelect.value;
+        var newMarca = marcaSelect.value;
+        // Cambiar de marca con productos agregados vacía la venta: confirmar.
+        if (cart.length && newMarca !== curMarca) {
+            var prevMarca = curMarca;
+            openRegModal({
+                title: '¿Cambiar de marca?',
+                desc: 'Hay ' + cart.length + ' producto' + (cart.length > 1 ? 's' : '') + ' agregado' + (cart.length > 1 ? 's' : '') + ' a esta venta.',
+                warn: 'Se quitarán de la venta si cambias de marca.',
+                okLabel: 'Cambiar y vaciar',
+                onOk: function () {
+                    cart = [];
+                    renderCart();
+                    applyMarcaChange(newMarca);
+                },
+                onCancel: function () {
+                    marcaSelect.value = prevMarca;
+                }
+            });
+            return;
+        }
+        applyMarcaChange(newMarca);
+    }
+
+    function applyMarcaChange(marcaId) {
+        curMarca = marcaId;
         catSelect.innerHTML = '';
         subSelect.innerHTML = '';
         subcategoriesData = {};
+        categoriesData = {};
+        lastPreview = null;
+        previewReq++;
         resetPreview();
 
         if (!marcaId) {
@@ -114,6 +156,7 @@
             .then(function (res) {
                 if (res.success) {
                     res.data.forEach(function (cat) {
+                        categoriesData[cat.id] = cat;
                         var opt = document.createElement('option');
                         opt.value = cat.id;
                         opt.textContent = cat.nombre;
@@ -189,19 +232,32 @@
         }
         if (cantidadInput) cantidadInput.value = 1;
 
+        lastPreview = null;
         loadComision();
         validate();
     }
 
     function handleCantidadChange() {
+        lastPreview = null;
         loadComision();
         validate();
     }
 
+    function stepCantidad(delta) {
+        var current = getCantidad();
+        var next = Math.max(1, current + delta);
+        if (next === current) return;
+        if (cantidadInput) cantidadInput.value = next;
+        handleCantidadChange();
+    }
+
     function loadComision() {
         var subId = subSelect.value;
+        var req = ++previewReq;
         if (!subId) {
             resetPreview();
+            lastPreview = null;
+            updateAddBtn();
             return;
         }
 
@@ -213,34 +269,197 @@
         })
             .then(function (r) { return r.json(); })
             .then(function (res) {
+                if (req !== previewReq) return;
                 if (res.success) {
                     previewAmt.textContent = res.data.amount_formatted;
                     previewHint.textContent = 'Comisión calculada según catálogo oficial.';
                     comisionBox.classList.add('is-ready');
+                    lastPreview = { amount: Number(res.data.amount) || 0, formatted: res.data.amount_formatted };
                 } else {
                     resetPreview();
+                    lastPreview = null;
                 }
+                updateAddBtn();
                 validate();
             });
     }
 
-    function validate() {
-        var sub = subSelect.value;
+    function updateAddBtn() {
+        if (!addItemBtn) return;
+        var subId = subSelect.value;
         var idOk = idInput.value.trim().length > 2;
-        submitBtn.disabled = !(sub && idOk);
+        var canAdd = subId && idOk && lastPreview !== null;
+        addItemBtn.disabled = !canAdd;
+        addItemBtn.textContent = canAdd ? ('Agregar · ' + lastPreview.formatted) : 'Agregar a la venta';
+    }
+
+    function handleAddItem() {
+        var subId = subSelect.value;
+        if (!subId || !lastPreview) return;
+        if (idInput.value.trim().length <= 2) return;
+
+        var catId = catSelect.value;
+        var catNombre = (categoriesData[catId] && categoriesData[catId].nombre) || '';
+        var subNombre = (subcategoriesData[subId] && subcategoriesData[subId].nombre) || '';
+        var cant = getCantidad();
+        var porUnidad = !!(subcategoriesData[subId] && Number(subcategoriesData[subId].por_unidad) === 1);
+        var unitAmount = lastPreview.amount / cant;
+
+        // Mismo producto "por unidad": en vez de duplicar la fila, suma cantidad.
+        var existing = null;
+        if (porUnidad) {
+            for (var i = 0; i < cart.length; i++) {
+                if (String(cart[i].subId) === String(subId) && cart[i].porUnidad) {
+                    existing = cart[i];
+                    break;
+                }
+            }
+        }
+
+        if (existing) {
+            existing.cant += cant;
+            existing.amount = existing.unitAmount * existing.cant;
+        } else {
+            cart.push({
+                subId: subId,
+                nombre: (catNombre ? catNombre + ' · ' : '') + subNombre,
+                cant: cant,
+                unitAmount: unitAmount,
+                amount: lastPreview.amount,
+                porUnidad: porUnidad
+            });
+        }
+
+        renderCart();
+
+        // Deja la cascada lista para el siguiente producto (misma marca).
+        catSelect.value = '';
+        handleCatChange();
+        if (cantidadWrap) cantidadWrap.style.display = 'none';
+        if (cantidadInput) cantidadInput.value = 1;
+        lastPreview = null;
+        resetPreview();
+        updateAddBtn();
+        validate();
+    }
+
+    function removeCartItem(idx) {
+        cart.splice(idx, 1);
+        renderCart();
+        validate();
+    }
+
+    function changeCartQty(idx, delta) {
+        var item = cart[idx];
+        if (!item || !item.porUnidad) return;
+        var next = Math.max(1, item.cant + delta);
+        if (next === item.cant) return;
+        item.cant = next;
+        item.amount = item.unitAmount * next;
+        renderCart();
+        validate();
+    }
+
+    function buildQtyStepper(idx, item) {
+        var wrap = document.createElement('div');
+        wrap.className = 'reg-cart__qty';
+
+        var minus = document.createElement('button');
+        minus.type = 'button';
+        minus.textContent = '−';
+        minus.disabled = item.cant <= 1;
+        minus.setAttribute('aria-label', 'Quitar una unidad');
+        minus.addEventListener('click', function () { changeCartQty(idx, -1); });
+
+        var num = document.createElement('span');
+        num.textContent = String(item.cant);
+
+        var plus = document.createElement('button');
+        plus.type = 'button';
+        plus.textContent = '+';
+        plus.setAttribute('aria-label', 'Agregar una unidad');
+        plus.addEventListener('click', function () { changeCartQty(idx, 1); });
+
+        wrap.appendChild(minus);
+        wrap.appendChild(num);
+        wrap.appendChild(plus);
+        return wrap;
+    }
+
+    function renderCart() {
+        if (!cartWrap || !cartList) return;
+        cartWrap.hidden = cart.length === 0;
+        cartList.innerHTML = '';
+
+        var total = 0;
+        cart.forEach(function (item, idx) {
+            total += item.amount;
+            var row = document.createElement('div');
+            row.className = 'reg-cart__row';
+
+            var info = document.createElement('div');
+            info.className = 'reg-cart__info';
+            var name = document.createElement('div');
+            name.className = 'reg-cart__name';
+            name.textContent = item.nombre;
+            var meta = document.createElement('div');
+            meta.className = 'reg-cart__meta';
+            if (item.porUnidad) {
+                meta.appendChild(buildQtyStepper(idx, item));
+            } else {
+                meta.textContent = 'Cantidad 1';
+            }
+            info.appendChild(name);
+            info.appendChild(meta);
+
+            var amt = document.createElement('div');
+            amt.className = 'reg-cart__amt';
+            amt.textContent = fmt(item.amount);
+
+            var rm = document.createElement('button');
+            rm.type = 'button';
+            rm.className = 'reg-cart__rm';
+            rm.title = 'Quitar de la venta';
+            rm.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>';
+            rm.addEventListener('click', function () { removeCartItem(idx); });
+
+            row.appendChild(info);
+            row.appendChild(amt);
+            row.appendChild(rm);
+            cartList.appendChild(row);
+        });
+
+        if (cartCount) cartCount.textContent = String(cart.length);
+        if (cartTotal) cartTotal.textContent = fmt(total);
+        updateSubmitLabel();
+    }
+
+    function updateSubmitLabel() {
+        if (!submitBtn) return;
+        submitBtn.textContent = cart.length > 0 ? ('Registrar venta (' + cart.length + ')') : 'Registrar venta';
+    }
+
+    function validate() {
+        var idOk = idInput.value.trim().length > 2;
+        submitBtn.disabled = !(cart.length > 0 && idOk);
+        updateAddBtn();
     }
 
     function handleSubmit() {
         if (submitBtn.disabled) return;
-        var subId = subSelect.value;
-        var cantidad = getCantidad();
+        if (!cart.length) return;
         var idVal = idInput.value.trim();
         var fecha = fechaInput ? fechaInput.value : new Date().toISOString().split('T')[0];
+        var items = cart.map(function (it) {
+            return { subcategoria_id: parseInt(it.subId, 10), cantidad: parseInt(it.cant, 10) || 1 };
+        });
+
+        submitBtn.disabled = true;
 
         fetch(billetera.ajax_url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'action=billetera_register_sale_v2&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha
+            body: 'action=billetera_register_sale_multi&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha + '&items=' + encodeURIComponent(JSON.stringify(items))
         })
             .then(function (r) { return r.json(); })
             .then(function (data) {
@@ -269,8 +488,67 @@
                     spawnCoins(burstZone);
                     resetForm();
                     setTimeout(loadUserData, 1500);
+                } else {
+                    submitBtn.disabled = false;
+                    openRegModal({
+                        title: 'No se pudo registrar',
+                        desc: (data.data && data.data.message) || 'Intenta de nuevo.',
+                        okLabel: 'Entendido',
+                        single: true
+                    });
                 }
+            })
+            .catch(function () {
+                submitBtn.disabled = false;
+                openRegModal({
+                    title: 'Error de conexión',
+                    desc: 'No se pudo registrar la venta. Intenta de nuevo.',
+                    okLabel: 'Entendido',
+                    single: true
+                });
             });
+    }
+
+    function openRegModal(opts) {
+        closeRegModal();
+        var ov = document.createElement('div');
+        ov.className = 'alc-modal-ov';
+        ov.id = 'reg-modal';
+        var warn = opts.warn ? '<div class="alc-modal__warn">' + opts.warn + '</div>' : '';
+        var actions = opts.single
+            ? '<button type="button" class="alc-modal__btn alc-modal__btn--danger" data-act="ok">' + (opts.okLabel || 'Entendido') + '</button>'
+            : '<button type="button" class="alc-modal__btn alc-modal__btn--ghost" data-act="cancel">Volver</button>' +
+              '<button type="button" class="alc-modal__btn alc-modal__btn--danger" data-act="ok">' + (opts.okLabel || 'Confirmar') + '</button>';
+        ov.innerHTML =
+            '<div class="alc-modal" role="dialog" aria-modal="true">' +
+                '<div class="alc-modal__title">' + (opts.title || '') + '</div>' +
+                '<div class="alc-modal__desc">' + (opts.desc || '') + '</div>' +
+                warn +
+                '<div class="alc-modal__actions">' + actions + '</div>' +
+            '</div>';
+        document.body.appendChild(ov);
+        ov.querySelector('[data-act="ok"]').addEventListener('click', function () {
+            closeRegModal();
+            if (opts.onOk) opts.onOk();
+        });
+        var cancel = ov.querySelector('[data-act="cancel"]');
+        if (cancel) {
+            cancel.addEventListener('click', function () {
+                closeRegModal();
+                if (opts.onCancel) opts.onCancel();
+            });
+        }
+        ov.addEventListener('click', function (e) {
+            if (e.target === ov) {
+                closeRegModal();
+                if (opts.onCancel) opts.onCancel();
+            }
+        });
+    }
+
+    function closeRegModal() {
+        var ov = document.getElementById('reg-modal');
+        if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
     }
 
     function spawnCoins(zone) {
@@ -301,6 +579,12 @@
         subSelect.innerHTML = '<option value="">Primero elige una categoría</option>';
         subSelect.disabled = true;
         subcategoriesData = {};
+        categoriesData = {};
+        curMarca = '';
+        cart = [];
+        lastPreview = null;
+        previewReq++;
+        renderCart();
         if (cantidadWrap) cantidadWrap.style.display = 'none';
         if (cantidadInput) cantidadInput.value = 1;
         resetPreview();
@@ -358,6 +642,9 @@
     catSelect.addEventListener('change', handleCatChange);
     subSelect.addEventListener('change', handleSubChange);
     if (cantidadInput) cantidadInput.addEventListener('input', handleCantidadChange);
+    if (cantidadMinus) cantidadMinus.addEventListener('click', function () { stepCantidad(-1); });
+    if (cantidadPlus) cantidadPlus.addEventListener('click', function () { stepCantidad(1); });
+    if (addItemBtn) addItemBtn.addEventListener('click', handleAddItem);
     submitBtn.addEventListener('click', handleSubmit);
     clearBtn.addEventListener('click', resetForm);
 
