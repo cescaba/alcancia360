@@ -89,6 +89,35 @@
     }
 
     function resetPreview() {
+        updateCommissionBox();
+    }
+
+    // Caja "Comisión a registrar": con productos en el carrito muestra el total
+    // de la venta; sin carrito muestra el preview del producto en edición.
+    function updateCommissionBox() {
+        if (!previewAmt) return;
+
+        var total = 0;
+        for (var i = 0; i < cart.length; i++) {
+            total += cart[i].amount;
+        }
+
+        if (cart.length > 0) {
+            previewAmt.textContent = fmt(total);
+            var hint = cart.length + ' producto' + (cart.length > 1 ? 's' : '') + ' en esta venta';
+            if (lastPreview) hint += ' · En edición: ' + lastPreview.formatted;
+            previewHint.textContent = hint;
+            comisionBox.classList.add('is-ready');
+            return;
+        }
+
+        if (lastPreview) {
+            previewAmt.textContent = lastPreview.formatted;
+            previewHint.textContent = 'Comisión calculada según catálogo oficial.';
+            comisionBox.classList.add('is-ready');
+            return;
+        }
+
         previewAmt.textContent = 'S/ 0.00';
         previewHint.textContent = 'Elige categoría y subcategoría para ver el monto.';
         comisionBox.classList.remove('is-ready');
@@ -171,6 +200,7 @@
         var catId = catSelect.value;
         subSelect.innerHTML = '';
         subcategoriesData = {};
+        lastPreview = null;
         resetPreview();
 
         if (!catId) {
@@ -219,6 +249,7 @@
         if (!subId) {
             if (cantidadWrap) cantidadWrap.style.display = 'none';
             if (cantidadInput) cantidadInput.value = 1;
+            lastPreview = null;
             resetPreview();
             validate();
             return;
@@ -255,8 +286,8 @@
         var subId = subSelect.value;
         var req = ++previewReq;
         if (!subId) {
-            resetPreview();
             lastPreview = null;
+            resetPreview();
             updateAddBtn();
             return;
         }
@@ -271,14 +302,11 @@
             .then(function (res) {
                 if (req !== previewReq) return;
                 if (res.success) {
-                    previewAmt.textContent = res.data.amount_formatted;
-                    previewHint.textContent = 'Comisión calculada según catálogo oficial.';
-                    comisionBox.classList.add('is-ready');
                     lastPreview = { amount: Number(res.data.amount) || 0, formatted: res.data.amount_formatted };
                 } else {
-                    resetPreview();
                     lastPreview = null;
                 }
+                updateCommissionBox();
                 updateAddBtn();
                 validate();
             });
@@ -432,6 +460,7 @@
         if (cartCount) cartCount.textContent = String(cart.length);
         if (cartTotal) cartTotal.textContent = fmt(total);
         updateSubmitLabel();
+        updateCommissionBox();
     }
 
     function updateSubmitLabel() {

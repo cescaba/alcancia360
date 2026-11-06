@@ -147,6 +147,7 @@ function applyMarcaChange(marcaId) {
     categoriesData = {};
     lastPreview = null;
     previewReq++;
+    updateCommissionBox();
 
     if (!marcaId) {
         catSelect.disabled = true;
@@ -191,6 +192,7 @@ function handleCategoryChange() {
     const catId = catSelect.value;
     state.category = catId;
     subSelect.innerHTML = '';
+    lastPreview = null;
 
     if (!catId) {
         subSelect.disabled = true;
@@ -262,9 +264,8 @@ function loadComision() {
     const subId = subSelect.value;
     const req = ++previewReq;
     if (!subId) {
-        previewAmt.textContent = 'S/ 0.00';
-        if (regComision) regComision.classList.remove('is-ready');
         lastPreview = null;
+        updateCommissionBox();
         updateAddBtn();
         return;
     }
@@ -279,14 +280,11 @@ function loadComision() {
         .then(res => {
             if (req !== previewReq) return;
             if (res.success) {
-                previewAmt.textContent = res.data.amount_formatted;
-                if (regComision) regComision.classList.add('is-ready');
                 lastPreview = { amount: Number(res.data.amount) || 0, formatted: res.data.amount_formatted };
             } else {
-                previewAmt.textContent = 'S/ 0.00';
-                if (regComision) regComision.classList.remove('is-ready');
                 lastPreview = null;
             }
+            updateCommissionBox();
             updateAddBtn();
         });
 }
@@ -302,6 +300,30 @@ function updateAddBtn() {
     } else {
         addItemBtn.textContent = 'Agregar a la venta';
     }
+}
+
+// Caja "Comisión a registrar": con productos en el carrito muestra el total
+// de la venta; sin carrito muestra el preview del producto en edición.
+function updateCommissionBox() {
+    if (!previewAmt) return;
+
+    let total = 0;
+    cart.forEach(item => total += item.amount);
+
+    if (cart.length > 0) {
+        previewAmt.textContent = 'S/ ' + total.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        if (regComision) regComision.classList.add('is-ready');
+        return;
+    }
+
+    if (lastPreview) {
+        previewAmt.textContent = lastPreview.formatted;
+        if (regComision) regComision.classList.add('is-ready');
+        return;
+    }
+
+    previewAmt.textContent = 'S/ 0.00';
+    if (regComision) regComision.classList.remove('is-ready');
 }
 
 function handleAddItem() {
@@ -341,9 +363,8 @@ function handleAddItem() {
     handleCategoryChange();
     cantidadWrap.style.display = 'none';
     cantidadInput.value = 1;
-    previewAmt.textContent = 'S/ 0.00';
-    if (regComision) regComision.classList.remove('is-ready');
     lastPreview = null;
+    updateCommissionBox();
     updateAddBtn();
     validate();
 }
@@ -437,6 +458,7 @@ function renderCart() {
     if (cartCount) cartCount.textContent = String(cart.length);
     if (cartTotal) cartTotal.textContent = 'S/ ' + total.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     updateSubmitLabel();
+    updateCommissionBox();
 }
 
 function updateSubmitLabel() {
