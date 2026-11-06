@@ -504,6 +504,7 @@ function billetera_get_lineas_permitidas($user_id = null) {
         'billetera_hcv' => 'hcv',
         'billetera_gee' => 'gee',
         'billetera_jmc' => 'jmc',
+        'billetera_mul' => 'mul',
     ];
 
     $codigos = [];

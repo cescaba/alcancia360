@@ -14,6 +14,7 @@ function billetera_user_custom_fields($user) {
     $hcv = get_user_meta($user->ID, 'billetera_hcv', true);
     $gee = get_user_meta($user->ID, 'billetera_gee', true);
     $jmc = get_user_meta($user->ID, 'billetera_jmc', true);
+    $mul = get_user_meta($user->ID, 'billetera_mul', true);
     $tipo = get_user_meta($user->ID, 'billetera_tipo', true);
     ?>
     <h3><?php _e('Campos Billetera'); ?></h3>
@@ -47,6 +48,13 @@ function billetera_user_custom_fields($user) {
             </td>
         </tr>
         <tr>
+            <th><label for="billetera_mul"><?php _e('MUL'); ?></label></th>
+            <td>
+                <input type="checkbox" name="billetera_mul" id="billetera_mul" value="1" <?php checked($mul, 1); ?> />
+                <label for="billetera_mul"><?php _e('Habilitado'); ?></label>
+            </td>
+        </tr>
+        <tr>
             <th><label for="billetera_tipo"><?php _e('Tipo'); ?></label></th>
             <td>
                 <select name="billetera_tipo" id="billetera_tipo">
@@ -75,6 +83,7 @@ function billetera_save_user_custom_fields($user_id) {
     update_user_meta($user_id, 'billetera_hcv', isset($_POST['billetera_hcv']) ? 1 : 0);
     update_user_meta($user_id, 'billetera_gee', isset($_POST['billetera_gee']) ? 1 : 0);
     update_user_meta($user_id, 'billetera_jmc', isset($_POST['billetera_jmc']) ? 1 : 0);
+    update_user_meta($user_id, 'billetera_mul', isset($_POST['billetera_mul']) ? 1 : 0);
 
     // Guardar campo select
     if (isset($_POST['billetera_tipo'])) {
