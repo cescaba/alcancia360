@@ -102,7 +102,7 @@ function billetera_catalog_admin_assets() {
 
     $base = defined('BILLETERA_CATALOG_URL') ? BILLETERA_CATALOG_URL : plugin_dir_url(dirname(__DIR__) . '/billetera-catalog.php');
     wp_enqueue_style('billetera-catalog-admin', $base . 'assets/admin.css', [], '1.2');
-    wp_enqueue_script('billetera-catalog-admin', $base . 'assets/admin.js', [], '1.3', true);
+    wp_enqueue_script('billetera-catalog-admin', $base . 'assets/admin.js', [], '1.4', true);
 }
 
 // ---------------------------------------------------------------------------
@@ -180,7 +180,7 @@ function billetera_bc_categorias_options($selected = 0) {
     $html = '';
     foreach ($rows as $r) {
         $label = ($r->linea_nombre ?: $r->linea_codigo) . ' · ' . $r->nombre;
-        $html .= '<option value="' . intval($r->id) . '"' . selected($selected, $r->id, false) . '>' . esc_html($label) . '</option>';
+        $html .= '<option value="' . intval($r->id) . '" data-linea="' . esc_attr($r->linea_codigo ?? '') . '"' . selected($selected, $r->id, false) . '>' . esc_html($label) . '</option>';
     }
     return $html;
 }
@@ -188,7 +188,7 @@ function billetera_bc_categorias_options($selected = 0) {
 function billetera_bc_subcategorias_options($selected = 0) {
     global $wpdb;
     $rows = $wpdb->get_results("
-        SELECT s.id, s.nombre, c.nombre AS categoria, l.nombre AS linea
+        SELECT s.id, s.nombre, c.id AS categoria_id, c.nombre AS categoria, c.linea_codigo, l.nombre AS linea
         FROM {$wpdb->prefix}billetera_subcategorias s
         JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
         LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
@@ -197,9 +197,16 @@ function billetera_bc_subcategorias_options($selected = 0) {
     $html = '';
     foreach ($rows as $r) {
         $label = ($r->linea ?: '—') . ' · ' . $r->categoria . ' · ' . $r->nombre;
-        $html .= '<option value="' . intval($r->id) . '"' . selected($selected, $r->id, false) . '>' . esc_html($label) . '</option>';
+        $html .= '<option value="' . intval($r->id) . '" data-cat="' . intval($r->categoria_id) . '" data-linea="' . esc_attr($r->linea_codigo ?? '') . '"' . selected($selected, $r->id, false) . '>' . esc_html($label) . '</option>';
     }
     return $html;
+}
+
+// Código de línea válido desde GET ('' si no existe).
+function billetera_bc_filtro_linea() {
+    $codigos = array_map('strval', array_column(billetera_bc_lineas(), 'codigo'));
+    $filtro  = isset($_GET['linea_codigo']) ? sanitize_text_field(wp_unslash($_GET['linea_codigo'])) : '';
+    return in_array($filtro, $codigos, true) ? $filtro : '';
 }
 
 // ===========================================================================
@@ -402,14 +409,22 @@ function billetera_render_subcategorias_page() {
         $edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id = %d", intval($_GET['id'])));
     }
 
-    $rows = $wpdb->get_results("
+    // Filtro por línea (código válido desde GET).
+    $lineas       = billetera_bc_lineas();
+    $filtro_linea = billetera_bc_filtro_linea();
+
+    $rows_sql_base = "
         SELECT s.*, c.nombre AS categoria, l.nombre AS linea,
                (SELECT COUNT(*) FROM {$wpdb->prefix}billetera_comisiones co WHERE co.subcategoria_id = s.id) AS total_com
         FROM $table s
         JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
         LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
-        ORDER BY c.linea_codigo, c.orden_display, s.orden_display, s.nombre
-    ");
+    ";
+    $rows_orden = "ORDER BY c.linea_codigo, c.orden_display, s.orden_display, s.nombre";
+    $rows = ($filtro_linea !== '')
+        ? $wpdb->get_results($wpdb->prepare(
+            $rows_sql_base . " WHERE c.linea_codigo = %s $rows_orden", $filtro_linea))
+        : $wpdb->get_results($rows_sql_base . $rows_orden);
 
     billetera_bc_open('Subcategorías', 'Las subcategorías son los productos/servicios que reciben comisión.');
     billetera_bc_notices($msg, $err);
@@ -450,6 +465,28 @@ function billetera_render_subcategorias_page() {
     </div>
 
     <div class="bc-card">
+        <div class="bc-table-tools">
+            <form method="get" class="bc-filter">
+                <input type="hidden" name="page" value="billetera_subcategorias">
+                <?php if ($edit): ?>
+                    <input type="hidden" name="action" value="edit">
+                    <input type="hidden" name="id" value="<?php echo intval($edit->id); ?>">
+                <?php endif; ?>
+                <div class="bc-filter__group">
+                    <label class="bc-label">Línea</label>
+                    <select name="linea_codigo" class="bc-select">
+                        <option value="">— Todas —</option>
+                        <?php foreach ($lineas as $l): ?>
+                            <option value="<?php echo esc_attr($l->codigo); ?>" <?php echo selected($filtro_linea, $l->codigo, false); ?>><?php echo esc_html($l->nombre); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <button type="submit" class="button">Filtrar</button>
+                <a class="button" href="<?php echo esc_url($edit
+                    ? add_query_arg(['page' => 'billetera_subcategorias', 'action' => 'edit', 'id' => $edit->id], admin_url('admin.php'))
+                    : admin_url('admin.php?page=billetera_subcategorias')); ?>">Limpiar</a>
+            </form>
+        </div>
         <table class="wp-list-table widefat fixed striped">
             <thead>
                 <tr>
@@ -562,9 +599,14 @@ function billetera_render_comisiones_page() {
     $filtro_sub  = isset($_GET['subcategoria_id']) ? intval($_GET['subcategoria_id']) : 0;
     $filtro_cat  = isset($_GET['categoria_id']) ? intval($_GET['categoria_id']) : 0;
     $filtro_dist = isset($_GET['distribuidor_id']) ? sanitize_text_field(wp_unslash($_GET['distribuidor_id'])) : '';
+    $filtro_linea = billetera_bc_filtro_linea();
 
     $wheres = [];
     $params = [];
+    if ($filtro_linea !== '') {
+        $wheres[] = 'c.linea_codigo = %s';
+        $params[] = $filtro_linea;
+    }
     if ($filtro_sub) {
         $wheres[] = 'co.subcategoria_id = %d';
         $params[] = $filtro_sub;
@@ -663,15 +705,25 @@ function billetera_render_comisiones_page() {
             <form method="get" class="bc-filter">
                 <input type="hidden" name="page" value="billetera_comisiones_admin">
                 <div class="bc-filter__group">
+                    <label class="bc-label">Línea</label>
+                    <?php $lineas = billetera_bc_lineas(); ?>
+                    <select name="linea_codigo" id="bc-f-linea" class="bc-select">
+                        <option value="">— Todas —</option>
+                        <?php foreach ($lineas as $l): ?>
+                            <option value="<?php echo esc_attr($l->codigo); ?>" <?php echo selected($filtro_linea, $l->codigo, false); ?>><?php echo esc_html($l->nombre); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="bc-filter__group">
                     <label class="bc-label">Categoría</label>
-                    <select name="categoria_id" class="bc-select">
+                    <select name="categoria_id" id="bc-f-categoria" class="bc-select">
                         <option value="0">— Todas —</option>
                         <?php echo billetera_bc_categorias_options($filtro_cat); ?>
                     </select>
                 </div>
                 <div class="bc-filter__group">
                     <label class="bc-label">Subcategoría</label>
-                    <select name="subcategoria_id" class="bc-select">
+                    <select name="subcategoria_id" id="bc-f-subcategoria" class="bc-select">
                         <option value="0">— Todas —</option>
                         <?php echo billetera_bc_subcategorias_options($filtro_sub); ?>
                     </select>
@@ -734,6 +786,7 @@ function billetera_render_comisiones_page() {
                 <?php
                 $pag_base = add_query_arg([
                     'page'            => 'billetera_comisiones_admin',
+                    'linea_codigo'    => $filtro_linea,
                     'categoria_id'    => $filtro_cat,
                     'subcategoria_id' => $filtro_sub,
                     'distribuidor_id' => $filtro_dist,

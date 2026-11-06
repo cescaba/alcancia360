@@ -128,12 +128,53 @@
 
     function safe(fn) { try { fn(); } catch (e) { if (window.console) console.warn(e); } }
 
+    // Cascada del filtro de Comisiones: Línea → Categorías de esa línea,
+    // y Subcategorías según lo elegido (línea, categoría, o ambas).
+    function initComisionesCascade() {
+        var linSel  = document.getElementById('bc-f-linea');
+        var catSel  = document.getElementById('bc-f-categoria');
+        var subSel  = document.getElementById('bc-f-subcategoria');
+        if (!linSel || !catSel || !subSel) return;
+
+        function filterCats() {
+            var lin = linSel.value;
+            Array.prototype.forEach.call(catSel.options, function (o) {
+                if (!o.value || o.value === '0') { o.hidden = false; return; }
+                o.hidden = (lin !== '' && (o.getAttribute('data-linea') || '') !== lin);
+            });
+            var cur = catSel.options[catSel.selectedIndex];
+            if (cur && cur.hidden) catSel.value = '0';
+        }
+
+        function filterSubs() {
+            var lin = linSel.value;
+            var cat = catSel.value;
+            Array.prototype.forEach.call(subSel.options, function (o) {
+                if (!o.value || o.value === '0') { o.hidden = false; return; }
+                var ok = true;
+                // Con categoría elegida manda la categoría; solo con línea
+                // filtra todas las subcategorías de esa línea.
+                if (cat && cat !== '0' && (o.getAttribute('data-cat') || '') !== cat) ok = false;
+                if (lin && (o.getAttribute('data-linea') || '') !== lin) ok = false;
+                o.hidden = !ok;
+            });
+            var cur = subSel.options[subSel.selectedIndex];
+            if (cur && cur.hidden) subSel.value = '0';
+        }
+
+        function refresh() { filterCats(); filterSubs(); }
+        linSel.addEventListener('change', refresh);
+        catSel.addEventListener('change', filterSubs);
+        refresh();
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () { safe(initAutoSlug); safe(initBonusTabs); safe(initBonusCascade); safe(initBonusEfecto); });
+        document.addEventListener('DOMContentLoaded', function () { safe(initAutoSlug); safe(initBonusTabs); safe(initBonusCascade); safe(initBonusEfecto); safe(initComisionesCascade); });
     } else {
         safe(initAutoSlug);
         safe(initBonusTabs);
         safe(initBonusCascade);
         safe(initBonusEfecto);
+        safe(initComisionesCascade);
     }
 })();
