@@ -1,0 +1,503 @@
+/* ============================================================
+   MI EQUIPO (jefe de venta) - complemento de billetera-360-stats.css
+   Reutiliza: st-banner, st-kpis5, st-row, st-goal, st-chart*,
+   st-vista, st-empty, st-period, st-stepper.
+   ============================================================ */
+
+.st-row--eq {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 22px;
+    align-items: stretch;
+}
+
+/* Caja: aporta de cada vendedor (al lado del pocito).
+   Mismo ancho que .st-need en "Mi desempeño": se estira junto al pocito. */
+.eq-aporta {
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #DCE3EB;
+    border-radius: 10px;
+    overflow: hidden;
+    min-height: 329px;
+}
+
+.eq-aporta__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 10px;
+}
+
+.eq-aporta__title {
+    font-family: Inter, sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: #0E2438;
+}
+
+.eq-aporta__mes {
+    font-family: Inter, sans-serif;
+    font-size: 11px;
+    color: #8494A6;
+    text-transform: capitalize;
+}
+
+.eq-aporta__colhead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 18px;
+    background: #F3F6FA;
+    font-family: Inter, sans-serif;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 1.14px;
+    color: #5B6B80;
+    text-transform: uppercase;
+}
+
+#eq-aporta-list { flex: 1; }
+
+.eq-aporta__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 18px;
+    border-bottom: 1px solid #EEF2F6;
+}
+
+#eq-aporta-list .eq-aporta__row:nth-child(2n + 1) { background: #F5F8FB; }
+
+.eq-aporta__name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.eq-aporta__ini {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    border-radius: 50%;
+    background: rgba(10, 108, 180, 0.1);
+    border: 1px solid rgba(10, 108, 180, 0.3);
+    color: #0A6CB4;
+    font-family: Inter, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.eq-aporta__nom {
+    font-family: Inter, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0E2438;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.eq-aporta__ventas {
+    font-family: Inter, sans-serif;
+    font-size: 11px;
+    color: #8494A6;
+    margin-top: 1px;
+}
+
+.eq-aporta__amt {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 21px;
+    font-weight: 700;
+    color: #1B6E46;
+    white-space: nowrap;
+}
+
+.eq-aporta__more {
+    padding: 8px 18px;
+    font-family: Inter, sans-serif;
+    font-size: 11.5px;
+    color: #5B6B80;
+    border-bottom: 1px solid #EEF2F6;
+}
+
+.eq-aporta__foot {
+    margin-top: auto;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 18px 12px;
+    border-top: 1px solid #E4EAF1;
+    font-family: Inter, sans-serif;
+    font-size: 11px;
+    color: #5B6B80;
+}
+
+.eq-aporta__note { color: #8494A6; text-align: right; }
+
+/* Mix ¿Qué vende tu equipo?
+   Reutiliza el mismo markup/CSS del aside de Mi desempeño:
+   .st-prod, .st-prod__head, .st-prod__title, .st-prod__total,
+   .st-vista + .st-breakdown con filas .st-bd__*.
+   Ajustes del equipo: máx. 4 filas visibles con scroll;
+   la derecha muestra la cantidad de ventas (bold), no montos. */
+#eq-mix-list {
+    max-height: 200px;   /* 4 filas + separaciones (regla .st-breakdown) */
+    overflow-y: auto;
+}
+
+#eq-mix-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+#eq-mix-list::-webkit-scrollbar-track { background: transparent; }
+
+#eq-mix-list::-webkit-scrollbar-thumb {
+    background: #DCE3EB;
+    border-radius: 999px;
+}
+
+/* Top vendedores */
+.eq-top {
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid #DCE3EB;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.eq-top__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+}
+
+.eq-top__title {
+    font-family: Inter, sans-serif;
+    font-size: 10px;
+    letter-spacing: 1.4px;
+    color: #5B6B80;
+    text-transform: uppercase;
+}
+
+.eq-top__toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: Inter, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0A6CB4;
+    cursor: pointer;
+}
+
+.eq-top__toggle:hover { text-decoration: underline; }
+
+.eq-top__colhead {
+    display: grid;
+    grid-template-columns: 34px 1fr 140px 70px;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 18px;
+    background: #F3F6FA;
+    font-family: Inter, sans-serif;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 1.1px;
+    color: #5B6B80;
+    text-transform: uppercase;
+}
+
+.eq-top__c4, .eq-top__vts { text-align: right; }
+
+.eq-top__row {
+    display: grid;
+    grid-template-columns: 34px 1fr 140px 70px;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    border-bottom: 1px solid #EEF2F6;
+}
+
+.eq-top__row--alt { background: #F5F8FB; }
+.eq-top__row--gold { background: #FBF6EA; }
+
+.eq-top__puesto {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid #DCE3EB;
+    color: #5B6B80;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.eq-top__puesto--gold {
+    background: linear-gradient(180deg, #F8D27A 0%, #C98A1E 100%);
+    border-color: #B77C16;
+    color: #5A3D06;
+}
+
+.eq-top__nom {
+    font-family: Inter, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0E2438;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 8px;
+}
+
+.eq-top__suc {
+    font-family: Inter, sans-serif;
+    font-size: 12px;
+    color: #5B6B80;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.eq-top__vts {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    color: #0E2438;
+}
+
+.eq-top__vts--gold { color: #8A5F0F; }
+
+.eq-top__note {
+    padding: 11px 18px 13px;
+    font-family: Inter, sans-serif;
+    font-size: 11px;
+    color: #8494A6;
+}
+
+/* Alertas del equipo */
+.eq-alerts {
+    box-sizing: border-box;
+    background: #fff;
+    border: 1px solid #DCE3EB;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.eq-alerts__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+}
+
+.eq-alerts__title {
+    font-family: Inter, sans-serif;
+    font-weight: 400;
+    font-size: 10px;
+    line-height: 12px;
+    letter-spacing: 1.4px;
+    color: #5B6B80;
+    text-transform: uppercase;
+}
+
+.eq-alerts__pend {
+    font-family: Inter, sans-serif;
+    font-size: 12px;
+    line-height: 15px;
+    font-weight: 600;
+    color: #B3352A;
+}
+
+.eq-alerts__row {
+    display: flex;
+    align-items: stretch;
+    border-top: 1px solid #EEF2F6;
+}
+
+.eq-alert {
+    box-sizing: border-box;
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 16px 18px;
+}
+
+.eq-alert__top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.eq-alert__bar {
+    flex: none;
+    width: 3px;
+    height: 16px;
+    border-radius: 2px;
+}
+
+.eq-alert__bar--danger { background: #B3352A; }
+.eq-alert__bar--blue { background: #0A6CB4; }
+
+.eq-alert__t {
+    font-family: Inter, sans-serif;
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 16px;
+    color: #0E2438;
+}
+
+.eq-alert__d {
+    align-self: stretch;
+    font-family: Inter, sans-serif;
+    font-size: 12px;
+    line-height: 15px;
+    color: #5B6B80;
+}
+
+.eq-alert__cta {
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 14px;
+    letter-spacing: 1.2px;
+    color: #B3352A;
+    cursor: pointer;
+}
+
+#eq-alert-ritmo .eq-alert__cta { color: #0A6CB4; }
+
+.eq-alert__cta:hover { text-decoration: underline; }
+
+/* Selector de sucursal (header, a la izquierda del segmented) */
+.eq-sucursal { position: relative; }
+
+.eq-sucursal__btn {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 14px;
+    gap: 14px;
+    width: auto;
+    min-width: 164px;
+    height: 38px;
+    background: #FFFFFF;
+    border: 1px solid #DCE3EB;
+    cursor: pointer;
+}
+
+.eq-sucursal__label {
+    font-family: 'Barlow', Inter, sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 14px;
+    color: #8494A6;
+    white-space: nowrap;
+}
+
+.eq-sucursal__val {
+    font-family: 'Barlow', Inter, sans-serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    line-height: 15px;
+    color: #5B6B80;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+}
+
+.eq-sucursal__chev {
+    font-family: 'Barlow', Inter, sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    line-height: 13px;
+    color: #DCE3EB;
+}
+
+.eq-sucursal__menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 40;
+    min-width: 100%;
+    box-sizing: border-box;
+    background: #FFFFFF;
+    border: 1px solid #DCE3EB;
+    box-shadow: 0 8px 20px rgba(14, 36, 56, 0.12);
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.eq-sucursal__opt {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 9px 14px;
+    font-family: 'Barlow', Inter, sans-serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    line-height: 15px;
+    color: #5B6B80;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.eq-sucursal__opt:hover { background: #F3F6FA; }
+
+.eq-sucursal__opt.is-active { color: #0A6CB4; background: #F3F6FA; }
+
+/* Responsive (mismo breakpoint que .st-row en "Mi desempeño") */
+@media (max-width: 1024px) {
+    .st-row--eq { grid-template-columns: 1fr; }
+    .eq-alerts__row { flex-direction: column; }
+}
+
+@media (max-width: 720px) {
+    .st-row--eq { gap: 14px; }
+    .eq-sucursal { width: 100%; }
+    .eq-sucursal__btn { width: 100%; }
+    .st-head__actions { width: 100%; }
+    .st-period { flex: 1 1 auto; }
+    .eq-top__colhead, .eq-top__row { grid-template-columns: 30px 1fr 60px; }
+    .eq-top__c3, .eq-top__suc { display: none; }
+    .eq-aporta__row { padding: 9px 12px; }
+    .eq-aporta__colhead { padding: 7px 12px; }
+    .eq-aporta__foot { flex-direction: column; gap: 2px; }
+    .eq-aporta__note { text-align: left; }
+    .eq-mix__name { white-space: normal; }
+}
+
+@media (min-width: 1025px) {
+    body.page-template-page-billetera-360-equipo { background: #F5F7FB; }
+    /* Mismo marco de escritorio que "Mi desempeño" */
+    body.page-template-page-billetera-360-equipo .main-content {
+        padding: 24px 26px 34px !important;
+    }
+    .st-wrap { max-width: none; margin: 0; padding: 0; }
+}

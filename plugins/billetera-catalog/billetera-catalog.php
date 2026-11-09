@@ -2864,6 +2864,424 @@ function billetera_ajax_get_mi_stats() {
 }
 
 /**
+ * Desglose del equipo por categoría o subcategoría para el periodo (y base).
+ * Cuenta ventas propias de los asesores (usuarios del equipo).
+ */
+function billetera_stats_desglose_equipo($ids, $periodo, $tipo, $base) {
+    global $wpdb;
+    $v   = $wpdb->prefix . 'billetera_ventas';
+    $sub = $wpdb->prefix . 'billetera_subcategorias';
+    $cat = $wpdb->prefix . 'billetera_categorias';
+
+    list($desde, $hasta) = billetera_stats_rango($periodo, $base);
+    $h = $ids ? ('v.usuario_id IN (' . implode(',', array_map('intval', $ids)) . ')') : '1=0';
+    $p = [];
+    if ($desde !== null) {
+        $h .= ' AND v.creado_en >= %s';
+        $p[] = $desde;
+    }
+    if ($hasta !== null) {
+        $h .= ' AND v.creado_en < %s';
+        $p[] = $hasta;
+    }
+
+    if ($tipo === 'subcategoria') {
+        $select = 's.nombre AS label';
+        $group  = 's.id';
+    } else {
+        $select = 'c.nombre AS label';
+        $group  = 'c.id';
+    }
+
+    $sql = "SELECT $select,
+                   COUNT(*) AS ventas,
+                   SUM(v.monto_comision_sol * v.bonus_multiplier) AS total
+            FROM $v v
+            JOIN $sub s ON s.id = v.subcategoria_id
+            JOIN $cat c ON c.id = s.categoria_id
+            WHERE $h
+            GROUP BY $group
+            ORDER BY ventas DESC, total DESC
+            LIMIT 30";
+
+    if (!$ids) {
+        return [];
+    }
+    $rows = $wpdb->get_results($wpdb->prepare($sql, ...$p));
+
+    $out = [];
+    foreach ((array) $rows as $r) {
+        $out[] = [
+            'label'  => (string) $r->label,
+            'ventas' => intval($r->ventas),
+            'total'  => round(floatval($r->total), 2),
+        ];
+    }
+    return $out;
+}
+
+// ============================================================================
+// MI EQUIPO (jefe de venta): agregados del propio equipo de la tienda
+// ============================================================================
+
+add_action('wp_ajax_billetera_get_mi_equipo', 'billetera_ajax_get_mi_equipo');
+
+function billetera_ajax_get_mi_equipo() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_get_mi_equipo')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
+    $current_user = wp_get_current_user();
+    $user_id = get_current_user_id();
+
+    if (!array_intersect(['jefe_venta', 'administrator'], (array) $current_user->roles)) {
+        wp_send_json_error(['message' => 'Solo los jefes de venta pueden ver Mi equipo']);
+    }
+
+    // --- Sucursales donde este usuario es jefe de venta (multi-sucursal) ---
+    $tienda_ids = [];
+    $tiendas_all = get_posts([
+        'post_type'   => 'tienda',
+        'numberposts' => -1,
+        'post_status' => 'publish',
+    ]);
+    foreach ($tiendas_all as $t) {
+        $jefes = get_post_meta($t->ID, '_jefes_venta_asociados', true);
+        if (!is_array($jefes)) {
+            $jefes = $jefes ? [$jefes] : [];
+        }
+        if (in_array((string) $user_id, array_map('strval', $jefes), true)) {
+            $tienda_ids[] = intval($t->ID);
+        }
+    }
+    if (!$tienda_ids) {
+        // Fallback: sucursal guardada en el perfil del jefe.
+        $tid_jefe = intval(get_user_meta($user_id, '_tienda_asociada', true));
+        if ($tid_jefe) {
+            $tienda_ids = [$tid_jefe];
+        }
+    }
+    if (!$tienda_ids) {
+        wp_send_json_error(['message' => 'No eres jefe de ninguna sucursal']);
+    }
+
+    // Filtro del selector de sucursal del header (0 = todas).
+    $tienda_sel = isset($_POST['tienda']) ? intval($_POST['tienda']) : 0;
+    if ($tienda_sel && in_array($tienda_sel, $tienda_ids, true)) {
+        $tienda_ids = [$tienda_sel];
+    } elseif ($tienda_sel) {
+        wp_send_json_error(['message' => 'No eres jefe de esa sucursal']);
+    }
+    $tienda_ids = array_values(array_unique($tienda_ids));
+
+    // Equipo: asesores de las sucursales del jefe (no espejos del jefe).
+    $asesores = get_users([
+        'meta_query' => [[
+            'key'     => '_tienda_asociada',
+            'value'   => $tienda_ids,
+            'compare' => 'IN',
+        ]],
+        'role__in'   => ['asesor'],
+        'number'     => -1,
+        'orderby'    => 'display_name',
+        'order'      => 'ASC',
+    ]);
+    $ids = [];
+    foreach ($asesores as $a) {
+        $ids[] = intval($a->ID);
+    }
+    $nombres = [];
+    foreach ($asesores as $a) {
+        $nombres[intval($a->ID)] = $a->display_name;
+    }
+
+    // Periodo + base (misma convención que Mi desempeño).
+    $now = billetera_stats_local_now();
+    $periodo = isset($_POST['periodo']) ? sanitize_text_field($_POST['periodo']) : 'mes';
+    if (!in_array($periodo, ['mes', 'ano', 'historico'], true)) {
+        $periodo = 'mes';
+    }
+    $base = clone $now;
+    if ($periodo === 'mes') {
+        $mes_param = isset($_POST['mes']) ? sanitize_text_field(wp_unslash($_POST['mes'])) : '';
+        if (preg_match('/^(\d{4})-(\d{2})$/', $mes_param, $m)) {
+            try {
+                $cand = new DateTime(sprintf('%04d-%02d-01 00:00:00', $m[1], $m[2]), wp_timezone());
+                if ($cand <= $now) {
+                    $base = $cand;
+                }
+            } catch (Exception $e) {
+            }
+        }
+    } elseif ($periodo === 'ano') {
+        $ano_param = isset($_POST['ano']) ? sanitize_text_field(wp_unslash($_POST['ano'])) : '';
+        if (preg_match('/^(\d{4})$/', $ano_param, $m)) {
+            try {
+                $cand = new DateTime(sprintf('%04d-01-01 00:00:00', $m[1]), wp_timezone());
+                if ($cand <= $now) {
+                    $base = $cand;
+                }
+            } catch (Exception $e) {
+            }
+        }
+    }
+
+    $meses_es = [1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'];
+    $base_label = ($periodo === 'ano')
+        ? $base->format('Y')
+        : $meses_es[intval($base->format('n'))] . ' ' . $base->format('Y');
+    $es_actual = ($base->format('Y-m') === $now->format('Y-m'));
+
+    list($desde, $hasta) = billetera_stats_rango($periodo, $base);
+
+    global $wpdb;
+    $v = $wpdb->prefix . 'billetera_ventas';
+    $sub = $wpdb->prefix . 'billetera_subcategorias';
+    $cat = $wpdb->prefix . 'billetera_categorias';
+
+    $in    = $ids ? implode(',', array_fill(0, count($ids), '%d')) : '0';
+    $h_ids = $ids ? 'v.usuario_id IN (' . implode(',', array_map('intval', $ids)) . ')' : '1=0';
+    $h_rng = '';
+    $p_rng = [];
+    if ($desde !== null) {
+        $h_rng  .= ' AND v.creado_en >= %s';
+        $p_rng[] = $desde;
+    }
+    if ($hasta !== null) {
+        $h_rng  .= ' AND v.creado_en < %s';
+        $p_rng[] = $hasta;
+    }
+
+    // ---- KPIs del equipo (ventas propias de los asesores, no espejos) ----
+    $com = 0.0;
+    $ventas = 0;
+    $per_asesor = [];
+    if ($ids) {
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT COUNT(*) AS ventas, COALESCE(SUM(v.monto_comision_sol * v.bonus_multiplier), 0) AS com
+             FROM $v v
+             WHERE $h_ids $h_rng",
+            ...$p_rng
+        ));
+        $ventas = intval($row->ventas ?? 0);
+        $com    = floatval($row->com ?? 0);
+
+        $rows_pa = $wpdb->get_results($wpdb->prepare(
+            "SELECT v.usuario_id, COUNT(*) AS ventas, COALESCE(SUM(v.monto_comision_sol * v.bonus_multiplier), 0) AS com
+             FROM $v v
+             WHERE $h_ids $h_rng
+             GROUP BY v.usuario_id",
+            ...$p_rng
+        ));
+        foreach ((array) $rows_pa as $r) {
+            $per_asesor[intval($r->usuario_id)] = [
+                'ventas' => intval($r->ventas),
+                'com'    => round(floatval($r->com), 2),
+            ];
+        }
+    }
+
+    // Meta del equipo: suma de las metas de los asesores (en soles).
+    $meta_sol = 0.0;
+    foreach ($ids as $aid) {
+        $meta_sol += floatval(billetera_get_meta_por_usuario($aid));
+    }
+
+    $ticket    = $ventas > 0 ? round($com / $ventas, 2) : 0.0;
+    $meta_vtas = ($meta_sol > 0 && $ticket > 0) ? max(1, (int) round($meta_sol / $ticket)) : 0;
+
+    $avance  = ($meta_sol > 0) ? round(($com / $meta_sol) * 100, 1) : 0.0;
+    $avance  = min($avance, 100.0);
+    $faltan_sol   = max(round($meta_sol - $com, 2), 0.0);
+    $faltan_vtas  = ($ticket > 0 && $meta_vtas > 0) ? max(0, $meta_vtas - $ventas) : 0;
+
+    // Días laborables y proyección sobre ventas del equipo.
+    $dia_actual  = $es_actual ? intval($now->format('j')) : 31;
+    list($lab_trans, $lab_total) = billetera_stats_dias_laborables_mes(
+        intval($base->format('Y')), intval($base->format('n')), $dia_actual
+    );
+    $lab_trans = max($lab_trans, 1);
+    $proy_vtas = $es_actual ? (int) round($ventas / $lab_trans * $lab_total) : $ventas;
+
+    $rest_dias = max(0, $lab_total - $lab_trans);
+    $ideal_vtas = $es_actual ? (int) round($meta_vtas * $lab_trans / max($lab_total, 1)) : $meta_vtas;
+    $behind     = max(0, $ideal_vtas - $ventas);
+
+    // ---- Pocito del propio jefe (sus comisiones espejo del mes) ----
+    $com_jefe = 0.0;
+    if ($periodo === 'historico') {
+        $com_jefe = floatval($wpdb->get_var($wpdb->prepare(
+            "SELECT COALESCE(SUM(monto_comision_sol * bonus_multiplier), 0) FROM $v WHERE usuario_id = %d",
+            $user_id
+        )) ?? 0);
+    } else {
+        $com_jefe = floatval($wpdb->get_var($wpdb->prepare(
+            "SELECT COALESCE(SUM(monto_comision_sol * bonus_multiplier), 0)
+             FROM $v
+             WHERE usuario_id = %d AND creado_en >= %s AND creado_en < %s",
+            $user_id, $desde, $hasta
+        )) ?? 0);
+    }
+
+    // ---- Tendencia del equipo (ventas por mes, últimos N meses) ----
+    $meses_n = isset($_POST['meses']) ? max(2, min(12, intval($_POST['meses']))) : 12;
+    $offset  = (int) $base->format('P') * 60;
+    $desde_trend = (clone $base)->modify('-' . ($meses_n - 1) . ' months')->format('Y-m-01 00:00:00');
+
+    $rows_trend = $wpdb->get_results($wpdb->prepare("
+        SELECT DATE_FORMAT(DATE_ADD(v.creado_en, INTERVAL %d MINUTE), '%%Y-%%m') AS mes,
+               COUNT(*) AS ventas,
+               SUM(v.monto_comision_sol * v.bonus_multiplier) AS total
+        FROM $v v
+        WHERE $h_ids AND v.creado_en >= %s
+        GROUP BY mes
+        ORDER BY mes ASC
+    ", $offset, $desde_trend));
+
+    $meses_abbr = [1 => 'Ene', 2 => 'Feb', 3 => 'Mar', 4 => 'Abr', 5 => 'May', 6 => 'Jun', 7 => 'Jul', 8 => 'Ago', 9 => 'Sep', 10 => 'Oct', 11 => 'Nov', 12 => 'Dic'];
+    $map_trend = [];
+    foreach ((array) $rows_trend as $r) {
+        $map_trend[$r->mes] = $r;
+    }
+    $tendencia = [];
+    for ($i = $meses_n - 1; $i >= 0; $i--) {
+        $ts  = (clone $base)->modify("-$i months");
+        $key = $ts->format('Y-m');
+        $r   = $map_trend[$key] ?? null;
+        $tendencia[] = [
+            'mes'    => $key,
+            'label'  => $meses_abbr[intval($ts->format('n'))] . ' ' . $ts->format('y'),
+            'total'  => $r ? round(floatval($r->total), 2) : 0,
+            'ventas' => $r ? intval($r->ventas) : 0,
+        ];
+    }
+
+    // ---- ¿Qué vende tu equipo? (categoría / subcategoría) ----
+    $por_categoria    = billetera_stats_desglose_equipo($ids, $periodo, 'categoria', $base);
+    $por_subcategoria = billetera_stats_desglose_equipo($ids, $periodo, 'subcategoria', $base);
+
+    // ---- ¿Cuánto te aporta cada vendedor? (comisiones espejo del jefe) ----
+    $aportan = [];
+    if ($ids) {
+        $rows_ap = $wpdb->get_results($wpdb->prepare(
+            "SELECT v.asesor_id, SUM(v.monto_comision_sol * v.bonus_multiplier) AS com, COUNT(*) AS ventas
+             FROM $v v
+             WHERE v.usuario_id = %d AND v.asesor_id <> 0 AND v.asesor_id IS NOT NULL $h_rng
+             GROUP BY v.asesor_id",
+            $user_id, ...$p_rng
+        ));
+        foreach ((array) $rows_ap as $r) {
+            $aid = intval($r->asesor_id);
+            if (!in_array($aid, $ids, true)) {
+                continue;
+            }
+            $aportan[] = [
+                'id'     => $aid,
+                'nombre' => $nombres[$aid] ?? ('Asesor #' . $aid),
+                'com'    => round(floatval($r->com), 2),
+                'ventas' => intval($r->ventas),
+            ];
+        }
+    }
+    usort($aportan, function ($a, $b) {
+        return $b['com'] <=> $a['com'];
+    });
+
+    // ---- Top vendedores del equipo (por ventas, sin montos) ----
+    // En multi-sucursal, cada asesor muestra su propia sucursal.
+    $tienda_labels = [];
+    foreach ($tienda_ids as $tid) {
+        $tienda_labels[$tid] = get_the_title($tid);
+    }
+    $tienda_label = (count($tienda_labels) === 1)
+        ? (string) reset($tienda_labels)
+        : 'Todas (' . count($tienda_labels) . ')';
+    $top = [];
+    foreach ($ids as $aid) {
+        $pa = $per_asesor[$aid] ?? ['ventas' => 0, 'com' => 0.0];
+        $tid_a = intval(get_user_meta($aid, '_tienda_asociada', true));
+        $top[] = [
+            'id'       => $aid,
+            'nombre'   => $nombres[$aid] ?? ('Asesor #' . $aid),
+            'sucursal' => $tienda_labels[$tid_a] ?? '-',
+            'ventas'   => intval($pa['ventas']),
+            'com'      => floatval($pa['com']),
+        ];
+    }
+    usort($top, function ($a, $b) {
+        if ($a['ventas'] !== $b['ventas']) {
+            return $b['ventas'] <=> $a['ventas'];
+        }
+        return $b['com'] <=> $a['com'];
+    });
+
+    // ---- Alertas ----
+    $sin_ventas = [];
+    $sin_por_tienda = [];   // sucursal => # de asesores sin ventas
+    foreach ($ids as $aid) {
+        $pa = $per_asesor[$aid] ?? null;
+        if (!$pa || intval($pa['ventas']) === 0) {
+            $sin_ventas[] = $nombres[$aid] ?? ('Asesor #' . $aid);
+            $tid_a = intval(get_user_meta($aid, '_tienda_asociada', true));
+            if ($tid_a) {
+                $label_a = $tienda_labels[$tid_a] ?? '';
+                if ($label_a) {
+                    $sin_por_tienda[$label_a] = intval($sin_por_tienda[$label_a] ?? 0) + 1;
+                }
+            }
+        }
+    }
+    $ventas_dia = $rest_dias > 0 ? round($faltan_vtas / $rest_dias, 1) : 0.0;
+
+    wp_send_json_success([
+        'periodo'          => $periodo,
+        'base_mes'         => $base->format('Y-m'),
+        'base_ano'         => $base->format('Y'),
+        'base_label'       => $base_label,
+        'es_actual'        => $es_actual,
+        'tienda_label'     => $tienda_label,
+        'kpis'             => [
+            'ventas'       => $ventas,
+            'comisiones'   => round($com, 2),
+            'meta_sol'     => round($meta_sol, 2),
+            'meta_ventas'  => $meta_vtas,
+            'avance'       => $avance,
+            'faltan_sol'   => $faltan_sol,
+            'faltan_ventas'=> $faltan_vtas,
+            'dias_rest'    => $rest_dias,
+            'proy_ventas'  => $proy_vtas,
+            'dias_laborables' => $lab_total,
+            'dias_laborables_transcurridos' => $lab_trans,
+        ],
+        'jefe'             => [
+            'com_mes'      => round($com_jefe, 2),
+        ],
+        'ritmo'            => [
+            'ideal_ventas' => $ideal_vtas,
+            'behind'       => $behind,
+            'ventas_dia'   => $ventas_dia,
+        ],
+        'tendencia'        => $tendencia,
+        'por_categoria'    => $por_categoria,
+        'por_subcategoria' => $por_subcategoria,
+        'aportan'          => $aportan,
+        'top'              => $top,
+        'alertas'          => [
+            'sin_ventas_total' => count($sin_ventas),
+            'sin_ventas_nombres' => $sin_ventas,
+            'sin_ventas_por_tienda' => $sin_por_tienda,
+            'behind_ventas'    => $behind,
+            'ventas_dia'       => $ventas_dia,
+        ],
+        'campanas'         => billetera_campanas_para_usuario($user_id),
+    ]);
+}
+
+/**
  * "Ahora" en la zona horaria del sitio (no UTC).
  *
  * Nota de almacenamiento: tanto el registro de ventas como los reportes usan

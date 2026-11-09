@@ -32,6 +32,7 @@ $url_registro    = billetera_get_template_url('page-billetera-360-responsive.php
 $url_movimientos = billetera_get_template_url('page-billetera-360-movimientos.php');
 $url_historial   = billetera_get_template_url('page-billetera-360-movimientos-todos.php');
 $url_stats       = billetera_get_template_url('page-billetera-360-estadisticas.php');
+$url_equipo      = billetera_get_template_url('page-billetera-360-equipo.php');
 $url_ranking     = billetera_get_template_url('page-billetera-360-ranking.php');
 $url_perfil      = billetera_get_template_url('page-billetera-360-perfil.php');
 $url_cambiar     = home_url('/cambiar-contrasena');
@@ -41,6 +42,7 @@ $current_slug       = get_page_template_slug();
 $nav_registro_active = ($current_slug === 'page-billetera-360-responsive.php');
 $nav_alcancia_active = in_array($current_slug, array('page-billetera-360-movimientos.php', 'page-billetera-360-movimientos-todos.php'), true);
 $nav_stats_active    = ($current_slug === 'page-billetera-360-estadisticas.php');
+$nav_equipo_active   = ($current_slug === 'page-billetera-360-equipo.php');
 $nav_ranking_active  = ($current_slug === 'page-billetera-360-ranking.php');
 
 $home_url = $es_jefe ? $url_movimientos : $url_registro;
@@ -69,6 +71,13 @@ ob_start();
         <a class="app-header__menu-item" href="<?php echo esc_url($url_registro); ?>">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
             <span>Registrar venta</span>
+        </a>
+        <?php endif; ?>
+
+        <?php if ($es_jefe && $url_equipo && $url_equipo !== '#'): ?>
+        <a class="app-header__menu-item" href="<?php echo esc_url($url_equipo); ?>">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8M22 20v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>Mi equipo</span>
         </a>
         <?php endif; ?>
 
@@ -200,6 +209,12 @@ $user_menu_html = ob_get_clean();
         <a class="app-sidebar__link<?php echo $nav_stats_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_stats); ?>">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>
             <span>Mi desempeño</span>
+        </a>
+        <?php endif; ?>
+        <?php if ($es_jefe && $url_equipo && $url_equipo !== '#'): ?>
+        <a class="app-sidebar__link<?php echo $nav_equipo_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_equipo); ?>">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8M22 20v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span>Mi equipo</span>
         </a>
         <?php endif; ?>
         <?php if (BILLETERA_SHOW_RANKING && !$es_jefe): ?>

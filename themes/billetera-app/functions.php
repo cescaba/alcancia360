@@ -304,3 +304,27 @@ function billetera_maybe_create_ranking_page() {
 
     update_option('billetera_ranking_page_ready', 1);
 }
+
+// Asegura que exista la página "Mi equipo" (vista del jefe de venta) una sola vez
+add_action('admin_init', 'billetera_maybe_create_equipo_page');
+function billetera_maybe_create_equipo_page() {
+    if (get_option('billetera_equipo_page_ready')) {
+        return;
+    }
+
+    if (billetera_get_template_url('page-billetera-360-equipo.php') === '#') {
+        $page_id = wp_insert_post(array(
+            'post_type'   => 'page',
+            'post_status' => 'publish',
+            'post_title'  => 'Mi equipo',
+            'post_name'   => 'mi-equipo',
+            'post_author' => get_current_user_id() ? get_current_user_id() : 1,
+        ));
+
+        if ($page_id && !is_wp_error($page_id)) {
+            update_post_meta($page_id, '_wp_page_template', 'page-billetera-360-equipo.php');
+        }
+    }
+
+    update_option('billetera_equipo_page_ready', 1);
+}
