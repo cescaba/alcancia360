@@ -2029,9 +2029,13 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
             continue;
         }
 
-        // Validar que el jefe tenga el mismo tipo que el asesor
+        // Validar que el jefe tenga el mismo tipo que el asesor.
+        // Sin meta o vacio cuenta como "Venta" (mismo default que el ranking):
+        // evita descartar comisiones en silencio cuando el tipo no esta llenado.
+        $tipo_asesor_n = ($tipo_asesor === '' || $tipo_asesor === null) ? 'Venta' : trim((string) $tipo_asesor);
         $tipo_jefe = get_user_meta($jefe_id, 'billetera_tipo', true);
-        if ($tipo_asesor !== $tipo_jefe) {
+        $tipo_jefe_n = ($tipo_jefe === '' || $tipo_jefe === null) ? 'Venta' : trim((string) $tipo_jefe);
+        if ($tipo_asesor_n !== $tipo_jefe_n) {
             continue;
         }
 
@@ -2979,6 +2983,12 @@ function billetera_ajax_get_mi_equipo() {
     $tienda_ids = array_values(array_unique($tienda_ids));
 
     // Equipo: asesores de las sucursales del jefe (no espejos del jefe).
+    // Solo del MISMO TIPO que el jefe (Venta/Post Venta; sin meta = Venta,
+    // mismo criterio que el ranking y que las comisiones espejo).
+    $tipo_jefe = trim((string) get_user_meta($user_id, 'billetera_tipo', true));
+    if ($tipo_jefe === '') {
+        $tipo_jefe = 'Venta';
+    }
     $asesores = get_users([
         'meta_query' => [[
             'key'     => '_tienda_asociada',
@@ -2992,7 +3002,13 @@ function billetera_ajax_get_mi_equipo() {
     ]);
     $ids = [];
     foreach ($asesores as $a) {
-        $ids[] = intval($a->ID);
+        $t = trim((string) get_user_meta(intval($a->ID), 'billetera_tipo', true));
+        if ($t === '') {
+            $t = 'Venta';
+        }
+        if ($t === $tipo_jefe) {
+            $ids[] = intval($a->ID);
+        }
     }
     $nombres = [];
     foreach ($asesores as $a) {
@@ -3166,8 +3182,12 @@ function billetera_ajax_get_mi_equipo() {
     $por_subcategoria = billetera_stats_desglose_equipo($ids, $periodo, 'subcategoria', $base);
 
     // ---- ¿Cuánto te aporta cada vendedor? (comisiones espejo del jefe) ----
+    // Incluye a TODOS los vendedores con ventas propias del periodo: si no hay
+    // espejo (venta anterior a la funcionalidad, regla en 0, etc.) aporta S/ 0,
+    // para que el jefe vea la contribucion real de cada uno.
     $aportan = [];
     if ($ids) {
+        $espejos = [];
         $rows_ap = $wpdb->get_results($wpdb->prepare(
             "SELECT v.asesor_id, SUM(v.monto_comision_sol * v.bonus_multiplier) AS com, COUNT(*) AS ventas
              FROM $v v
@@ -3177,19 +3197,27 @@ function billetera_ajax_get_mi_equipo() {
         ));
         foreach ((array) $rows_ap as $r) {
             $aid = intval($r->asesor_id);
-            if (!in_array($aid, $ids, true)) {
-                continue;
+            $espejos[$aid] = ['com' => round(floatval($r->com), 2), 'ventas' => intval($r->ventas)];
+        }
+
+        foreach ($ids as $aid) {
+            $pa = $per_asesor[$aid] ?? null;
+            if (!$pa || intval($pa['ventas']) === 0) {
+                continue; // sin ventas propias en el periodo: no aporta nada que mostrar
             }
             $aportan[] = [
                 'id'     => $aid,
                 'nombre' => $nombres[$aid] ?? ('Asesor #' . $aid),
-                'com'    => round(floatval($r->com), 2),
-                'ventas' => intval($r->ventas),
+                'com'    => isset($espejos[$aid]) ? $espejos[$aid]['com'] : 0.0,
+                'ventas' => intval($pa['ventas']),
             ];
         }
     }
     usort($aportan, function ($a, $b) {
-        return $b['com'] <=> $a['com'];
+        if ($a['com'] !== $b['com']) {
+            return $b['com'] <=> $a['com'];
+        }
+        return $b['ventas'] <=> $a['ventas'];
     });
 
     // ---- Top vendedores del equipo (por ventas, sin montos) ----
