@@ -58,12 +58,12 @@ if (empty($tiendas_jefe)) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700;800&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-fonts.css">
-    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-responsive.css">
-    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-header.css">
-    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-alcancia.css">
-    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-stats.css">
-    <link rel="stylesheet" href="<?php echo get_template_directory_uri(); ?>/assets/css/billetera-360-equipo.css">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-fonts.css'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-responsive.css'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-header.css'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-alcancia.css'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-stats.css'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-equipo.css'); ?>">
 </head>
 <body <?php body_class(); ?>>
 
@@ -291,7 +291,7 @@ window.billetera = {
     nonce_mi_equipo: '<?php echo wp_create_nonce('billetera_get_mi_equipo'); ?>'
 };
 </script>
-<script src="<?php echo get_template_directory_uri(); ?>/assets/js/billetera-360-equipo.js"></script>
+<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-equipo.js'); ?>"></script>
 
 </body>
 </html>

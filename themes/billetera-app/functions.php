@@ -41,6 +41,17 @@ function billetera_scripts() {
 }
 add_action('wp_enqueue_scripts', 'billetera_scripts');
 
+/**
+ * URL de asset del tema con cache-busting por fecha de modificacion.
+ * Los assets se sirven con Cache-Control de 7 dias; sin ?ver= el navegador
+ * puede quedar dias usando CSS/JS viejos despues de un deploy.
+ */
+function billetera_asset_url($path) {
+    $file = get_template_directory() . $path;
+    $ver = file_exists($file) ? filemtime($file) : time();
+    return get_template_directory_uri() . $path . '?ver=' . $ver;
+}
+
 // Las tablas ahora se crean en el plugin billetera-catal
 // No es necesario crear tablas aquí
 
