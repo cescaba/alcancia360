@@ -209,6 +209,23 @@
     border-radius: 999px;
 }
 
+/* Top vendedores: lista scrolleable (~8 filas visibles) */
+#eq-top-list {
+    max-height: 380px;
+    overflow-y: auto;
+}
+
+#eq-top-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+#eq-top-list::-webkit-scrollbar-track { background: transparent; }
+
+#eq-top-list::-webkit-scrollbar-thumb {
+    background: #DCE3EB;
+    border-radius: 999px;
+}
+
 /* Top vendedores */
 .eq-top {
     box-sizing: border-box;

@@ -549,7 +549,7 @@
             : (periodo === 'ano' ? (data.base_ano || curAno()) : mesMes(data.base_mes));
         setText('eq-top-mes', mesLabel);
 
-        var visibleMax = 6;
+        var visibleMax = 8;
         var show = topAll ? rows : rows.slice(0, visibleMax);
         var hayMas = rows.length > visibleMax;
 
