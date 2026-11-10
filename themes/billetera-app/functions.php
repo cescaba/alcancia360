@@ -29,11 +29,10 @@ if (!defined('BILLETERA_SHOW_RANKING')) {
 
 /**
  * "Mi equipo" visible para jefes de venta. Interruptor maestro: poner
- * BILLETERA_SHOW_EQUIPO en true para mostrarla.
- * Por ahora oculta (pendiente de revisión).
+ * BILLETERA_SHOW_EQUIPO en false para ocultarla.
  */
 if (!defined('BILLETERA_SHOW_EQUIPO')) {
-    define('BILLETERA_SHOW_EQUIPO', false);
+    define('BILLETERA_SHOW_EQUIPO', true);
 }
 
 // Registrar estilos y scripts

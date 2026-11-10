@@ -3071,7 +3071,7 @@ function billetera_ajax_get_mi_equipo() {
         $com    = floatval($row->com ?? 0);
 
         $rows_pa = $wpdb->get_results($wpdb->prepare(
-            "SELECT v.usuario_id, COUNT(*) AS ventas, COALESCE(SUM(v.monto_comision_sol * v.bonus_multiplier), 0) AS com
+            "SELECT v.usuario_id, COUNT(*) AS ventas, COALESCE(SUM(v.monto_comision_sol * v.bonus_multiplier), 0) AS com, MAX(v.creado_en) AS ultima
              FROM $v v
              WHERE $h_ids $h_rng
              GROUP BY v.usuario_id",
@@ -3081,6 +3081,7 @@ function billetera_ajax_get_mi_equipo() {
             $per_asesor[intval($r->usuario_id)] = [
                 'ventas' => intval($r->ventas),
                 'com'    => round(floatval($r->com), 2),
+                'ultima' => $r->ultima ? (string) $r->ultima : null,
             ];
         }
     }
@@ -3202,7 +3203,7 @@ function billetera_ajax_get_mi_equipo() {
         : 'Todas (' . count($tienda_labels) . ')';
     $top = [];
     foreach ($ids as $aid) {
-        $pa = $per_asesor[$aid] ?? ['ventas' => 0, 'com' => 0.0];
+        $pa = $per_asesor[$aid] ?? ['ventas' => 0, 'com' => 0.0, 'ultima' => null];
         $tid_a = intval(get_user_meta($aid, '_tienda_asociada', true));
         $top[] = [
             'id'       => $aid,
@@ -3210,6 +3211,10 @@ function billetera_ajax_get_mi_equipo() {
             'sucursal' => $tienda_labels[$tid_a] ?? '-',
             'ventas'   => intval($pa['ventas']),
             'com'      => floatval($pa['com']),
+            // Racha actual del asesor (dias consecutivos vendiendo) + señal de
+            // "sin ventas" para detectar quien no esta vendiendo.
+            'racha'    => function_exists('billetera_get_racha') ? intval(billetera_get_racha($aid)) : 0,
+            'ultima'   => $pa['ultima'] ?? null,
         ];
     }
     usort($top, function ($a, $b) {

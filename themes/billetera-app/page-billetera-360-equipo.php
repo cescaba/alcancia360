@@ -229,14 +229,19 @@ if (empty($tiendas_jefe)) {
 
                         <aside class="st-prod">
                             <div class="st-prod__head">
-                                <span class="st-prod__title" id="eq-mix-title">¿Qué vende tu equipo?</span>
-                                <span class="st-prod__total" id="eq-mix-total">—</span>
+                                <span class="st-prod__title" id="eq-aportan-title">Vendedores que más te aportan</span>
+                                <span class="st-prod__total" id="eq-aportan-total">—</span>
                             </div>
-                            <div class="st-vista" id="eq-break-tabs">
-                                <button type="button" class="st-vista__btn is-active" data-break="categoria">Categoría</button>
-                                <button type="button" class="st-vista__btn" data-break="subcategoria">Subcategoría</button>
+                            <div class="eq-aportan__colhead" aria-hidden="true">
+                                <span class="eq-aportan__c1">#</span>
+                                <span class="eq-aportan__c2">Vendedor</span>
+                                <span class="eq-aportan__c3">Te aporta</span>
                             </div>
-                            <div class="st-breakdown" id="eq-mix-list"></div>
+                            <div class="eq-aportan" id="eq-aportan-list"></div>
+                            <div class="eq-aportan__foot">
+                                <span>Se genera con las ventas validadas de tu equipo.</span>
+                                <span class="eq-aportan__note">Monto de tu comisión de jefe.</span>
+                            </div>
                         </aside>
                     </div>
 
@@ -249,7 +254,7 @@ if (empty($tiendas_jefe)) {
                         <div class="eq-top__colhead" aria-hidden="true">
                             <span class="eq-top__c1">#</span>
                             <span class="eq-top__c2">Asesor</span>
-                            <span class="eq-top__c3">Sucursal</span>
+                            <span class="eq-top__c3">Racha</span>
                             <span class="eq-top__c4">Ventas</span>
                         </div>
                         <div id="eq-top-list"></div>
@@ -270,14 +275,6 @@ if (empty($tiendas_jefe)) {
                                 </div>
                                 <div class="eq-alert__d" id="eq-alert-sin-d">—</div>
                                 <button type="button" class="eq-alert__cta" id="eq-alert-sin-cta">Ver asesores →</button>
-                            </div>
-                            <div class="eq-alert" id="eq-alert-ritmo">
-                                <div class="eq-alert__top">
-                                    <span class="eq-alert__bar eq-alert__bar--blue" aria-hidden="true"></span>
-                                    <div class="eq-alert__t" id="eq-alert-ritmo-t">—</div>
-                                </div>
-                                <div class="eq-alert__d" id="eq-alert-ritmo-d">—</div>
-                                <button type="button" class="eq-alert__cta" id="eq-alert-ritmo-cta">Ver campaña →</button>
                             </div>
                         </div>
                     </section>

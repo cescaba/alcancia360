@@ -6,7 +6,6 @@
 
     var data = null;
     var periodo = 'mes';
-    var breakTab = 'categoria';
     var trendRows = [];
     var baseMes = null;
     var baseAno = null;
@@ -25,10 +24,9 @@
         body: document.getElementById('st-body'),
         error: document.getElementById('st-error'),
         period: document.getElementById('st-period'),
-        breakTabs: document.getElementById('eq-break-tabs'),
-        mixList: document.getElementById('eq-mix-list'),
-        mixTitle: document.getElementById('eq-mix-title'),
-        mixTotal: document.getElementById('eq-mix-total'),
+        aportanList: document.getElementById('eq-aportan-list'),
+        aportanTitle: document.getElementById('eq-aportan-title'),
+        aportanTotal: document.getElementById('eq-aportan-total'),
         trend: document.getElementById('st-trend'),
         trendDetail: document.getElementById('st-trend-detail'),
         aportaList: document.getElementById('eq-aporta-list'),
@@ -160,7 +158,7 @@
         renderGoal();
         renderAporta();
         renderTrend(data.tendencia || []);
-        renderBreakdown();
+        renderAportan();
         renderTop();
         renderAlertas();
     }
@@ -486,51 +484,65 @@
         }
     }
 
-    function renderBreakdown() {
-        if (!els.mixList || !data) return;
-        els.mixList.innerHTML = '';
+    // Top "Vendedores que más te aportan": ranking por la comision de jefe
+    // que genera cada vendedor (monto visible: es el propio ingreso del jefe).
+    function renderAportan() {
+        if (!els.aportanList || !data) return;
+        els.aportanList.innerHTML = '';
 
-        var key = 'por_' + breakTab;
-        var rows = data[key] || [];
-
-        var totalVentas = 0;
-        rows.forEach(function (r) { totalVentas += Number(r.ventas) || 0; });
-
-        var titulo = '¿Qué vende tu equipo?';
-        if (periodo === 'historico') titulo += ' · Histórico';
-        else if (periodo === 'ano') titulo += ' · ' + (data.base_ano || curAno());
-        if (els.mixTitle) els.mixTitle.textContent = titulo;
-        if (els.mixTotal) els.mixTotal.textContent = totalVentas + (totalVentas === 1 ? ' venta' : ' ventas');
+        var rows = (data.aportan) || [];
+        var mesLabel = (periodo === 'historico') ? 'Histórico'
+            : (periodo === 'ano' ? (data.base_ano || curAno()) : mesMes(data.base_mes));
+        if (els.aportanTitle) {
+            els.aportanTitle.textContent = 'Vendedores que más te aportan'
+                + (mesLabel ? ' · ' + mesLabel : '');
+        }
+        if (els.aportanTotal) {
+            els.aportanTotal.textContent = rows.length ? money((data.kpis || {}).comisiones) : '—';
+        }
 
         if (!rows.length) {
-            els.mixList.appendChild(emptyNote('Sin ventas en este periodo.'));
+            els.aportanList.appendChild(emptyNote('Sin ventas del equipo en este periodo.'));
             return;
         }
 
-        // Todas las filas; el máx. de 4 visibles + scroll lo maneja el CSS de #eq-mix-list.
-        rows.forEach(function (r, idx) {
-            // Mismo markup de filas que "¿En qué ganas más?" en Mi desempeño,
-            // pero con la CANTIDAD de ventas en la derecha (negrita, sin montos).
-            var row = document.createElement('div');
-            row.className = 'st-bd__row' + (idx % 2 === 1 ? ' st-bd__row--alt' : '');
+        rows.forEach(function (row, i) {
+            var li = document.createElement('div');
+            li.className = 'eq-aportan__row' + (i % 2 === 1 ? ' eq-aportan__row--alt' : '');
 
-            var head = document.createElement('div');
-            head.className = 'st-bd__head';
+            var puesto = document.createElement('span');
+            puesto.className = 'eq-aportan__puesto' + (i === 0 ? ' eq-aportan__puesto--gold' : '');
+            puesto.textContent = (i + 1);
 
-            var left = document.createElement('span');
-            left.className = 'st-bd__label';
-            left.textContent = r.label;
+            var name = document.createElement('div');
+            name.className = 'eq-aportan__name';
+            var nom = document.createElement('div');
+            nom.className = 'eq-aportan__nom';
+            nom.textContent = row.nombre;
+            var vts = document.createElement('div');
+            vts.className = 'eq-aportan__ventas';
+            vts.textContent = row.ventas + (row.ventas === 1 ? ' venta' : ' ventas');
+            name.appendChild(nom);
+            name.appendChild(vts);
 
-            var ventas = document.createElement('span');
-            ventas.className = 'st-bd__amount';   // bold; aquí muestra la cantidad de ventas
-            ventas.textContent = r.ventas + (r.ventas === 1 ? ' venta' : ' ventas');
+            var amt = document.createElement('span');
+            amt.className = 'eq-aportan__amt';
+            amt.textContent = money(row.com);
 
-            head.appendChild(left);
-            head.appendChild(ventas);
-
-            row.appendChild(head);
-            els.mixList.appendChild(row);
+            li.appendChild(puesto);
+            li.appendChild(name);
+            li.appendChild(amt);
+            els.aportanList.appendChild(li);
         });
+    }
+
+    // "Hace N dias" relativo a ahora (para la senal de sin ventas).
+    function haceDias(s) {
+        if (!s) return null;
+        var d = new Date(String(s).replace(' ', 'T'));
+        if (isNaN(d.getTime())) return null;
+        var diff = Math.floor((Date.now() - d.getTime()) / 86400000);
+        return diff <= 0 ? 0 : diff;
     }
 
     function renderTop() {
@@ -559,28 +571,40 @@
         }
 
         show.forEach(function (row, i) {
+            var sinVentas = Number(row.ventas) <= 0;
             var li = document.createElement('div');
-            li.className = 'eq-top__row' + (i === 0 ? ' eq-top__row--gold' : (i % 2 === 1 ? ' eq-top__row--alt' : ''));
+            li.className = 'eq-top__row' + (i === 0 && !sinVentas ? ' eq-top__row--gold' : (i % 2 === 1 ? ' eq-top__row--alt' : ''));
 
             var puesto = document.createElement('span');
-            puesto.className = 'eq-top__puesto' + (i === 0 ? ' eq-top__puesto--gold' : '');
+            puesto.className = 'eq-top__puesto' + (i === 0 && !sinVentas ? ' eq-top__puesto--gold' : '');
             puesto.textContent = (i + 1);
 
-            var nom = document.createElement('span');
-            nom.className = 'eq-top__nom';
-            nom.textContent = row.nombre;
+            var nom = document.createElement('div');
+            nom.className = 'eq-top__nomcell';
+            var nomTxt = document.createElement('span');
+            nomTxt.className = 'eq-top__nom';
+            nomTxt.textContent = row.nombre;
+            nom.appendChild(nomTxt);
+            if (sinVentas) {
+                var dias = haceDias(row.ultima);
+                var badge = document.createElement('span');
+                badge.className = 'eq-top__badge';
+                badge.textContent = 'Sin ventas' + (dias !== null ? ' · hace ' + (dias === 0 ? 'hoy' : dias + ' día' + (dias === 1 ? '' : 's')) : '');
+                nom.appendChild(badge);
+            }
 
-            var suc = document.createElement('span');
-            suc.className = 'eq-top__suc';
-            suc.textContent = row.sucursal || '—';
+            var racha = document.createElement('span');
+            racha.className = 'eq-top__racha' + (Number(row.racha) > 0 ? ' is-on' : '');
+            racha.textContent = Number(row.racha) > 0 ? ('🔥 ' + row.racha) : '—';
+            racha.title = Number(row.racha) > 0 ? (row.racha + (row.racha === 1 ? ' día de racha' : ' días de racha')) : 'Sin racha activa';
 
             var vts = document.createElement('span');
-            vts.className = 'eq-top__vts' + (i === 0 ? ' eq-top__vts--gold' : '');
+            vts.className = 'eq-top__vts' + (i === 0 && !sinVentas ? ' eq-top__vts--gold' : '');
             vts.textContent = String(row.ventas);
 
             li.appendChild(puesto);
             li.appendChild(nom);
-            li.appendChild(suc);
+            li.appendChild(racha);
             li.appendChild(vts);
             els.topList.appendChild(li);
         });
@@ -623,30 +647,12 @@
             }
         }
 
-        var ritmoEl = document.getElementById('eq-alert-ritmo');
-        if (ritmoEl) {
-            var ritT = ritmoEl.querySelector('.eq-alert__t');
-            var ritD = ritmoEl.querySelector('.eq-alert__d');
-            var ritCta = document.getElementById('eq-alert-ritmo-cta');
-            var behind = Number(alerts.behind_ventas) || 0;
-            var campanasOn = campanas && campanas.length > 0;
-            if (behind > 0 && k.meta_ventas > 0) {
-                if (ritT) ritT.textContent = 'Van ' + behind + ' ventas detrás del ritmo ideal';
-                if (ritD) ritD.textContent = 'Necesitan ~' + (alerts.ventas_dia || 0) + ' ventas por día para llegar a la meta.';
-                if (ritCta) ritCta.hidden = !campanasOn;
-            } else {
-                if (ritT) ritT.textContent = 'El equipo va al ritmo de la meta';
-                if (ritD) ritD.textContent = 'Sigue empujando los productos de la campaña para cerrar fuerte.';
-                if (ritCta) ritCta.hidden = !campanasOn;
-            }
-        }
-
         var pend = document.getElementById('eq-alerts-pend');
         if (pend) {
-            var total = (Number(alerts.sin_ventas_total) > 0 ? 1 : 0) + (((Number(alerts.behind_ventas) || 0) > 0) ? 1 : 0);
+            var total = Number(alerts.sin_ventas_total) > 0 ? 1 : 0;
             if (total > 0) {
                 pend.hidden = false;
-                pend.textContent = total + ' pendientes';
+                pend.textContent = total + ' pendiente' + (total === 1 ? '' : 's');
             } else {
                 pend.hidden = true;
             }
@@ -688,17 +694,6 @@
         });
     }
 
-    if (els.breakTabs) {
-        els.breakTabs.addEventListener('click', function (e) {
-            var btn = e.target.closest('.st-vista__btn');
-            if (!btn) return;
-            els.breakTabs.querySelectorAll('.st-vista__btn').forEach(function (b) { b.classList.remove('is-active'); });
-            btn.classList.add('is-active');
-            breakTab = btn.dataset.break;
-            renderBreakdown();
-        });
-    }
-
     var sinCta = document.getElementById('eq-alert-sin-cta');
     if (sinCta) {
         sinCta.addEventListener('click', function () {
@@ -706,16 +701,6 @@
             renderTop();
             var sec = document.querySelector('.eq-top');
             if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-    }
-
-    var ritCta = document.getElementById('eq-alert-ritmo-cta');
-    if (ritCta) {
-        ritCta.addEventListener('click', function () {
-            var banner = document.getElementById('st-banner');
-            if (banner && !banner.hidden && banner.scrollIntoView) {
-                banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
         });
     }
 
