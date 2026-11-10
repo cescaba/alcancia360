@@ -3196,9 +3196,10 @@ function billetera_ajax_get_mi_equipo() {
     // En multi-sucursal, cada asesor muestra su propia sucursal.
     $tienda_labels = [];
     foreach ($tienda_ids as $tid) {
-        // Decodifica entidades (&#8211; etc.) para que no se vean literales en
-        // textContent del JS (alertas, top, storebar).
-        $tienda_labels[$tid] = wp_specialchars_decode(get_the_title($tid), ENT_QUOTES);
+        // Decodifica entidades (&#8211; etc. de wptexturize) para que no se vean
+        // literales en textContent del JS (alertas, top, storebar).
+        // Nota: wp_specialchars_decode NO decodifica entidades numericas.
+        $tienda_labels[$tid] = html_entity_decode(get_the_title($tid), ENT_QUOTES, 'UTF-8');
     }
     $tienda_label = (count($tienda_labels) === 1)
         ? (string) reset($tienda_labels)
@@ -4028,7 +4029,8 @@ function billetera_ranking_tienda_label($user_id) {
     }
     $tienda = get_post($tienda_id);
     // Decodifica entidades HTML (&#8211; etc.): el label va a textContent de JS.
-    return $tienda ? wp_specialchars_decode($tienda->post_title, ENT_QUOTES) : '';
+    // Nota: wp_specialchars_decode NO decodifica entidades numericas.
+    return $tienda ? html_entity_decode($tienda->post_title, ENT_QUOTES, 'UTF-8') : '';
 }
 
 // AJAX: Cambiar contraseña
