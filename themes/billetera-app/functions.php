@@ -27,6 +27,15 @@ if (!defined('BILLETERA_SHOW_RANKING')) {
     define('BILLETERA_SHOW_RANKING', true);
 }
 
+/**
+ * "Mi equipo" visible para jefes de venta. Interruptor maestro: poner
+ * BILLETERA_SHOW_EQUIPO en true para mostrarla.
+ * Por ahora oculta (pendiente de revisión).
+ */
+if (!defined('BILLETERA_SHOW_EQUIPO')) {
+    define('BILLETERA_SHOW_EQUIPO', false);
+}
+
 // Registrar estilos y scripts
 function billetera_scripts() {
     wp_enqueue_style('billetera-style', get_stylesheet_uri());

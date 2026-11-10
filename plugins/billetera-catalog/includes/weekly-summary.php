@@ -573,55 +573,59 @@ function billetera_summary_get_payload($user_id, $week_start, $week_end, $stats_
     ));
 
     // Ranking del mes de referencia (tienda + global) con conteo de ventas.
+    // Misma lógica que la app: stats de billetera_ranking_stats_mes (cuenta
+    // todas las ventas, sin filtro de comisión > 0), ámbitos de
+    // billetera_ranking_scope_ids (en global un asesor solo compite con
+    // asesores) y posiciones con empates compartidos.
     $ranking = ['tienda' => ['rank' => 0, 'total' => 0], 'global' => ['rank' => 0, 'total' => 0], 'diff_txt' => ''];
-    if (function_exists('billetera_stats_ranking')) {
-        // billetera_stats_ranking usa mes actual; recalculamos para el mes de la semana.
-        $tot = $wpdb->get_results($wpdb->prepare(
-            "SELECT usuario_id, SUM(monto_comision_sol * bonus_multiplier) AS total, COUNT(*) AS ventas
-             FROM $v WHERE creado_en >= %s AND creado_en < %s AND (monto_comision_sol * bonus_multiplier) > 0
-             GROUP BY usuario_id",
-            $mes_inicio, $mes_fin
-        ));
-        $bal = [];
-        $nventas = [];
-        foreach ($tot as $t) {
-            $bal[intval($t->usuario_id)] = floatval($t->total);
-            $nventas[intval($t->usuario_id)] = intval($t->ventas);
-        }
-        $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
-        if ($tienda_id) {
-            $ases = get_users(['meta_key' => '_tienda_asociada', 'meta_value' => $tienda_id, 'fields' => 'ID', 'role__not_in' => ['jefe_venta']]);
-            $tb = [];
-            foreach ($ases as $aid) {
-                $tb[intval($aid)] = $bal[intval($aid)] ?? 0;
+    if (function_exists('billetera_ranking_ordenar_posiciones') && function_exists('billetera_ranking_scope_ids')) {
+        $stats_mes = function_exists('billetera_ranking_stats_mes')
+            ? billetera_ranking_stats_mes($mes_inicio, $mes_fin)
+            : [];
+
+        $orden_global = [];
+        $pos_global = [];
+        foreach (['tienda', 'global'] as $rk_ambito) {
+            $rk_ids = billetera_ranking_scope_ids($user_id, $rk_ambito);
+            if (empty($rk_ids)) {
+                continue;
             }
-            arsort($tb, SORT_NUMERIC);
-            $pos = array_search($user_id, array_keys($tb), true);
-            $ranking['tienda'] = ['rank' => $pos === false ? 0 : $pos + 1, 'total' => count($tb)];
+            list($rk_orden, $rk_pos) = billetera_ranking_ordenar_posiciones($rk_ids, $stats_mes);
+            $ranking[$rk_ambito] = [
+                'rank'  => $rk_pos[$user_id] ?? 0,
+                'total' => count($rk_orden),
+            ];
+            if ($rk_ambito === 'global') {
+                $orden_global = $rk_orden;
+                $pos_global = $rk_pos;
+            }
         }
-        $glob = get_users(['role__in' => ['asesor', 'jefe_venta'], 'fields' => 'ID', 'number' => -1]);
-        $gb = [];
-        foreach ($glob as $gid) {
-            $gb[intval($gid)] = $bal[intval($gid)] ?? 0;
-        }
-        arsort($gb, SORT_NUMERIC);
-        $keys = array_keys($gb);
-        $posg = array_search($user_id, $keys, true);
-        $ranking['global'] = ['rank' => $posg === false ? 0 : $posg + 1, 'total' => count($gb)];
-        // Texto "+N ventas sobre el #2" (solo si hay contexto).
-        if ($posg !== false) {
-            $mis_ventas = $nventas[$user_id] ?? 0;
-            if ($posg === 0 && isset($keys[1])) {
-                $seg = $nventas[intval($keys[1])] ?? 0;
-                $d = $mis_ventas - $seg;
-                if ($d > 0) {
-                    $ranking['diff_txt'] = '+' . $d . ($d === 1 ? ' venta sobre el #2' : ' ventas sobre el #2');
+
+        // Texto "+N ventas sobre el #2" / "Te faltan N ventas para el puesto
+        // anterior" (conteo público, nunca montos), sobre el ámbito global.
+        // Con empates, "#2" / "puesto anterior" = primera posición distinta.
+        if (!empty($orden_global)) {
+            $mi_pos = intval($ranking['global']['rank']);
+            $mi_ventas = intval($stats_mes[$user_id]['ventas'] ?? 0);
+            if ($mi_pos > 0) {
+                // Primera persona de cada posición (pos => ventas).
+                $pos_ventas = [];
+                foreach ($orden_global as $gid) {
+                    $p = intval($pos_global[$gid]);
+                    if (!isset($pos_ventas[$p])) {
+                        $pos_ventas[$p] = intval($stats_mes[$gid]['ventas'] ?? 0);
+                    }
                 }
-            } elseif ($posg > 0 && isset($keys[$posg - 1])) {
-                $prev = $nventas[intval($keys[$posg - 1])] ?? 0;
-                $d = $prev - $mis_ventas;
-                if ($d > 0) {
-                    $ranking['diff_txt'] = 'Te faltan ' . $d . ($d === 1 ? ' venta para el puesto anterior' : ' ventas para el puesto anterior');
+                if ($mi_pos === 1) {
+                    $d = isset($pos_ventas[2]) ? $mi_ventas - $pos_ventas[2] : 0;
+                    if ($d > 0) {
+                        $ranking['diff_txt'] = '+' . $d . ($d === 1 ? ' venta sobre el #2' : ' ventas sobre el #2');
+                    }
+                } else {
+                    $d = ($pos_ventas[$mi_pos - 1] ?? 0) - $mi_ventas;
+                    if ($d > 0) {
+                        $ranking['diff_txt'] = 'Te faltan ' . $d . ($d === 1 ? ' venta para el puesto anterior' : ' ventas para el puesto anterior');
+                    }
                 }
             }
         }

@@ -29,7 +29,7 @@ $tab_ranking_active  = ($current_slug === 'page-billetera-360-ranking.php');
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9c0-8 14-8 14 0"></path><rect x="2" y="9" width="20" height="11" rx="1"></rect><path d="M16 14h2"></path></svg>
         <span>Mi alcancía</span>
     </a>
-    <?php if (BILLETERA_SHOW_DESEMPENO && $es_jefe && $url_equipo && $url_equipo !== '#'): ?>
+    <?php if (BILLETERA_SHOW_EQUIPO && $es_jefe && $url_equipo && $url_equipo !== '#'): ?>
     <a class="bottom-tabbar__tab<?php echo $tab_equipo_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_equipo); ?>">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8M22 20v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
         <span>Mi equipo</span>

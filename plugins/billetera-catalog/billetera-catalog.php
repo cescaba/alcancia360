@@ -3606,60 +3606,28 @@ function billetera_stats_para_meta($user_id, $periodo, $base, $faltan) {
 
 /**
  * Ranking del mes: dentro de la tienda y global (asesores/jefes).
+ * Usa la misma lógica que la app web: stats de billetera_ranking_stats_mes
+ * (cuenta todas las ventas, sin filtro de comisión > 0), ámbitos de
+ * billetera_ranking_scope_ids (en global un asesor solo compite con asesores)
+ * y posiciones con empates compartidos.
  */
 function billetera_stats_ranking($user_id) {
-    global $wpdb;
-    $v = $wpdb->prefix . 'billetera_ventas';
-    $mes_inicio = billetera_stats_local_now()->format('Y-m-01 00:00:00');
-
-    $totales = $wpdb->get_results($wpdb->prepare("
-        SELECT usuario_id, SUM(monto_comision_sol * bonus_multiplier) AS total
-        FROM $v
-        WHERE creado_en >= %s AND (monto_comision_sol * bonus_multiplier) > 0
-        GROUP BY usuario_id
-    ", $mes_inicio));
-
-    $balances = [];
-    foreach ($totales as $t) {
-        $balances[intval($t->usuario_id)] = floatval($t->total);
-    }
-
     $user_id = intval($user_id);
+    $stats = billetera_ranking_stats_mes();
 
-    // Tienda
-    $tienda_rank = ['rank' => 0, 'total' => 0];
-    $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
-    if ($tienda_id) {
-        $asesores = get_users([
-            'meta_key'     => '_tienda_asociada',
-            'meta_value'   => $tienda_id,
-            'fields'       => 'ID',
-            'role__not_in' => ['jefe_venta'],
-        ]);
-        $tienda_balances = [];
-        foreach ($asesores as $aid) {
-            $tienda_balances[intval($aid)] = $balances[intval($aid)] ?? 0;
+    $rank_en = function ($ambito) use ($user_id, $stats) {
+        $ids = billetera_ranking_scope_ids($user_id, $ambito);
+        if (empty($ids)) {
+            return ['rank' => 0, 'total' => 0];
         }
-        arsort($tienda_balances, SORT_NUMERIC);
-        $pos = array_search($user_id, array_keys($tienda_balances), true);
-        $tienda_rank = ['rank' => $pos === false ? 0 : $pos + 1, 'total' => count($tienda_balances)];
-    }
+        list($orden, $pos_map) = billetera_ranking_ordenar_posiciones($ids, $stats);
+        return ['rank' => $pos_map[$user_id] ?? 0, 'total' => count($orden)];
+    };
 
-    // Global
-    $globales = get_users([
-        'role__in' => ['asesor', 'jefe_venta'],
-        'fields'   => 'ID',
-        'number'   => -1,
-    ]);
-    $global_balances = [];
-    foreach ($globales as $gid) {
-        $global_balances[intval($gid)] = $balances[intval($gid)] ?? 0;
-    }
-    arsort($global_balances, SORT_NUMERIC);
-    $posg = array_search($user_id, array_keys($global_balances), true);
-    $global_rank = ['rank' => $posg === false ? 0 : $posg + 1, 'total' => count($global_balances)];
-
-    return ['tienda' => $tienda_rank, 'global' => $global_rank];
+    return [
+        'tienda' => $rank_en('tienda'),
+        'global' => $rank_en('global'),
+    ];
 }
 
 // ============================================================================
@@ -3781,7 +3749,55 @@ function billetera_ranking_balances_mes() {
 }
 
 /**
+ * Tipo del asesor (Venta / Post Venta). Usuarios sin meta o vacío se tratan
+ * como "Venta" (mismo default del importador CSV).
+ */
+function billetera_ranking_tipo($user_id) {
+    $tipo = trim((string) get_user_meta(intval($user_id), 'billetera_tipo', true));
+    return ($tipo === '') ? 'Venta' : $tipo;
+}
+
+/**
+ * Filtra IDs del ámbito por el tipo (billetera_tipo) del usuario de referencia:
+ * asesor de venta y asesor de post venta no compiten entre sí en el ranking.
+ * Misma regla que la comisión de jefes (solo bonifica a jefes de su mismo tipo).
+ */
+function billetera_ranking_filtrar_tipo($ids, $user_id) {
+    $ids = array_map('intval', (array) $ids);
+    if (empty($ids)) {
+        return [];
+    }
+
+    $mi_tipo = billetera_ranking_tipo($user_id);
+
+    // Un solo query para los tipos de todos los candidatos (sin meta = Venta).
+    global $wpdb;
+    $in   = implode(',', $ids);
+    $rows = $wpdb->get_results(
+        "SELECT user_id, meta_value FROM {$wpdb->usermeta} WHERE meta_key = 'billetera_tipo' AND user_id IN ($in)"
+    );
+
+    $tipos = array_fill_keys($ids, 'Venta');
+    foreach ((array) $rows as $r) {
+        $t = trim((string) $r->meta_value);
+        if ($t !== '') {
+            $tipos[intval($r->user_id)] = $t;
+        }
+    }
+
+    $out = [];
+    foreach ($tipos as $id => $tipo) {
+        if ($tipo === $mi_tipo) {
+            $out[] = intval($id);
+        }
+    }
+    return $out;
+}
+
+/**
  * IDs de usuarios que participan del ranking según el ámbito.
+ * Además del rol, separa por tipo (billetera_tipo): Venta y Post Venta
+ * van en tableros distintos, en tienda y en global.
  */
 function billetera_ranking_scope_ids($user_id, $ambito) {
     if ($ambito === 'tienda') {
@@ -3789,12 +3805,12 @@ function billetera_ranking_scope_ids($user_id, $ambito) {
         if (!$tienda_id) {
             return [];
         }
-        return array_map('intval', get_users([
+        return billetera_ranking_filtrar_tipo(get_users([
             'meta_key'     => '_tienda_asociada',
             'meta_value'   => $tienda_id,
             'fields'       => 'ID',
             'role__not_in' => ['jefe_venta'],
-        ]));
+        ]), $user_id);
     }
 
     // Global: cada rol compite entre sí. Un asesor solo ve asesores.
@@ -3804,11 +3820,11 @@ function billetera_ranking_scope_ids($user_id, $ambito) {
         ? ['asesor']
         : ['asesor', 'jefe_venta'];
 
-    return array_map('intval', get_users([
+    return billetera_ranking_filtrar_tipo(get_users([
         'role__in' => $roles_scope,
         'fields'   => 'ID',
         'number'   => -1,
-    ]));
+    ]), $user_id);
 }
 
 /**
@@ -3848,20 +3864,13 @@ function billetera_ranking_items($ids, $user_id, $offset = 0, $stats = [], $pos_
 }
 
 /**
- * Leaderboard de un ámbito: top N + ventana alrededor del usuario.
- * Ordena por MONTO de comisiones del mes (total DESC, empates comparten posición).
- * Desempate visible: N° de ventas DESC, luego ID ASC.
- * Devuelve SOLO posición, nombre, ventas y última venta (sin montos).
- * La distancia al #1 se expone como porcentaje ciego (pct_lider / ventaja_pct),
- * nunca como soles, para no filtrar montos del líder.
+ * Orden y posiciones compartidos por todos los rankings (app, dashboard, email).
+ * Orden: MONTO total DESC (redondeado a 2 dec), ventas DESC (desempate visible), ID ASC.
+ * Posición con empates: 1 + N estrictamente delante por MONTO redondeado a 2 decimales.
+ * Devuelve [orden (uids ordenados), pos_map (uid => pos)].
  */
-function billetera_ranking_lista($user_id, $ambito, $top = 10, $ventana = 2, $desde = null, $hasta = null) {
-    $stats = billetera_ranking_stats_mes($desde, $hasta);
-    $ids      = billetera_ranking_scope_ids($user_id, $ambito);
-    $user_id  = intval($user_id);
-
-    // Orden: MONTO total DESC, ventas DESC (desempate visible), ID ASC.
-    $orden = $ids;
+function billetera_ranking_ordenar_posiciones($ids, $stats = []) {
+    $orden = array_values(array_map('intval', (array) $ids));
     usort($orden, function ($a, $b) use ($stats) {
         $ta = round(floatval($stats[$a]['total'] ?? 0.0), 2);
         $tb = round(floatval($stats[$b]['total'] ?? 0.0), 2);
@@ -3876,7 +3885,6 @@ function billetera_ranking_lista($user_id, $ambito, $top = 10, $ventana = 2, $de
         return $a <=> $b;
     });
 
-    // Posición con empates (1 + N estrictamente delante por MONTO redondeado a 2 decimales).
     $pos_map = [];
     $pos_actual = 0;
     $total_prev = null;
@@ -3890,6 +3898,26 @@ function billetera_ranking_lista($user_id, $ambito, $top = 10, $ventana = 2, $de
         $pos_map[$id] = $pos_actual;
         $delante++;
     }
+
+    return [$orden, $pos_map];
+}
+
+/**
+ * Leaderboard de un ámbito: top N + ventana alrededor del usuario.
+ * Ordena por MONTO de comisiones del mes (total DESC, empates comparten posición).
+ * Desempate visible: N° de ventas DESC, luego ID ASC.
+ * Devuelve SOLO posición, nombre, ventas y última venta (sin montos).
+ * La distancia al #1 se expone como porcentaje ciego (pct_lider / ventaja_pct),
+ * nunca como soles, para no filtrar montos del líder.
+ */
+function billetera_ranking_lista($user_id, $ambito, $top = 10, $ventana = 2, $desde = null, $hasta = null) {
+    $stats = billetera_ranking_stats_mes($desde, $hasta);
+    $ids      = billetera_ranking_scope_ids($user_id, $ambito);
+    $user_id  = intval($user_id);
+
+    // Orden por MONTO total DESC + posiciones con empates (helper compartido
+    // con el dashboard y el resumen semanal).
+    list($orden, $pos_map) = billetera_ranking_ordenar_posiciones($ids, $stats);
 
     $total      = count($orden);
     $mi_rank    = $pos_map[$user_id] ?? 0;
