@@ -194,11 +194,11 @@ if (empty($tiendas_jefe)) {
                                 <span class="eq-aporta__mes" id="eq-aporta-mes">—</span>
                             </div>
                             <div class="eq-aporta__colhead" aria-hidden="true">
+                                <span class="eq-aporta__c1">#</span>
                                 <span>Vendedor</span>
                                 <span>Comisión que te aporta</span>
                             </div>
-                            <div id="eq-aporta-list"></div>
-                            <div class="eq-aporta__more" id="eq-aporta-more" hidden></div>
+                            <div class="eq-aporta__list" id="eq-aporta-list"></div>
                             <div class="eq-aporta__foot">
                                 <span id="eq-aporta-total-note">—</span>
                                 <span class="eq-aporta__note">Se genera con las ventas validadas de tu equipo.</span>
@@ -229,19 +229,14 @@ if (empty($tiendas_jefe)) {
 
                         <aside class="st-prod">
                             <div class="st-prod__head">
-                                <span class="st-prod__title" id="eq-aportan-title">Vendedores que más te aportan</span>
-                                <span class="st-prod__total" id="eq-aportan-total">—</span>
+                                <span class="st-prod__title" id="eq-mix-title">¿Qué vende tu equipo?</span>
+                                <span class="st-prod__total" id="eq-mix-total">—</span>
                             </div>
-                            <div class="eq-aportan__colhead" aria-hidden="true">
-                                <span class="eq-aportan__c1">#</span>
-                                <span class="eq-aportan__c2">Vendedor</span>
-                                <span class="eq-aportan__c3">Te aporta</span>
+                            <div class="st-vista" id="eq-break-tabs">
+                                <button type="button" class="st-vista__btn is-active" data-break="categoria">Categoría</button>
+                                <button type="button" class="st-vista__btn" data-break="subcategoria">Subcategoría</button>
                             </div>
-                            <div class="eq-aportan" id="eq-aportan-list"></div>
-                            <div class="eq-aportan__foot">
-                                <span>Se genera con las ventas validadas de tu equipo.</span>
-                                <span class="eq-aportan__note">Monto de tu comisión de jefe.</span>
-                            </div>
+                            <div class="st-breakdown" id="eq-mix-list"></div>
                         </aside>
                     </div>
 

@@ -48,9 +48,10 @@
 }
 
 .eq-aporta__colhead {
-    display: flex;
+    display: grid;
+    grid-template-columns: 30px 1fr 110px;
     align-items: center;
-    justify-content: space-between;
+    gap: 10px;
     padding: 7px 18px;
     background: #F3F6FA;
     font-family: Inter, sans-serif;
@@ -61,16 +62,57 @@
     text-transform: uppercase;
 }
 
-#eq-aporta-list { flex: 1; }
+.eq-aporta__colhead span:last-child { text-align: right; }
+
+#eq-aporta-list {
+    flex: 1;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+#eq-aporta-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+#eq-aporta-list::-webkit-scrollbar-track { background: transparent; }
+
+#eq-aporta-list::-webkit-scrollbar-thumb {
+    background: #DCE3EB;
+    border-radius: 999px;
+}
 
 .eq-aporta__row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 14px;
     padding: 10px 18px;
     border-bottom: 1px solid #EEF2F6;
 }
+
+.eq-aporta__puesto {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid #DCE3EB;
+    color: #5B6B80;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.eq-aporta__puesto--gold {
+    background: linear-gradient(180deg, #F8D27A 0%, #C98A1E 100%);
+    border-color: #B77C16;
+    color: #5A3D06;
+}
+
+.eq-aporta__row .eq-aporta__name { flex: 1; min-width: 0; }
+.eq-aporta__row .eq-aporta__amt { margin-left: auto; }
 
 #eq-aporta-list .eq-aporta__row:nth-child(2n + 1) { background: #F5F8FB; }
 
@@ -145,115 +187,27 @@
 
 .eq-aporta__note { color: #8494A6; text-align: right; }
 
-/* Top "Vendedores que más te aportan"
-   (reemplaza al mix ¿Qué vende tu equipo?): ranking por la comision
-   de jefe que genera cada vendedor. Reutiliza .st-prod para el marco. */
-.eq-aportan__colhead {
-    display: grid;
-    grid-template-columns: 34px 1fr 90px;
-    align-items: center;
-    gap: 12px;
-    padding: 7px 18px;
-    background: #F3F6FA;
-    font-family: Inter, sans-serif;
-    font-size: 9.5px;
-    font-weight: 600;
-    letter-spacing: 1.1px;
-    color: #5B6B80;
-    text-transform: uppercase;
-}
-
-.eq-aportan__c3 { text-align: right; }
-
-.eq-aportan {
-    max-height: 280px;
+/* Mix ¿Qué vende tu equipo?
+   Reutiliza el mismo markup/CSS del aside de Mi desempeño:
+   .st-prod, .st-prod__head, .st-prod__title, .st-prod__total,
+   .st-vista + .st-breakdown con filas .st-bd__*.
+   Ajustes del equipo: máx. 4 filas visibles con scroll;
+   la derecha muestra la cantidad de ventas (bold), no montos. */
+#eq-mix-list {
+    max-height: 200px;   /* 4 filas + separaciones (regla .st-breakdown) */
     overflow-y: auto;
 }
 
-.eq-aportan::-webkit-scrollbar {
+#eq-mix-list::-webkit-scrollbar {
     width: 8px;
 }
 
-.eq-aportan::-webkit-scrollbar-track { background: transparent; }
+#eq-mix-list::-webkit-scrollbar-track { background: transparent; }
 
-.eq-aportan::-webkit-scrollbar-thumb {
+#eq-mix-list::-webkit-scrollbar-thumb {
     background: #DCE3EB;
     border-radius: 999px;
 }
-
-.eq-aportan__row {
-    display: grid;
-    grid-template-columns: 34px 1fr 90px;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 18px;
-    border-bottom: 1px solid #EEF2F6;
-}
-
-.eq-aportan__row--alt { background: #F5F8FB; }
-
-.eq-aportan__puesto {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: #fff;
-    border: 1px solid #DCE3EB;
-    color: #5B6B80;
-    font-family: 'Barlow Condensed', sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.eq-aportan__puesto--gold {
-    background: linear-gradient(180deg, #F8D27A 0%, #C98A1E 100%);
-    border-color: #B77C16;
-    color: #5A3D06;
-}
-
-.eq-aportan__name { min-width: 0; }
-
-.eq-aportan__nom {
-    font-family: Inter, sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    color: #0E2438;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.eq-aportan__ventas {
-    font-family: Inter, sans-serif;
-    font-size: 11px;
-    color: #8494A6;
-    margin-top: 1px;
-}
-
-.eq-aportan__amt {
-    font-family: 'Barlow Condensed', sans-serif;
-    font-size: 19px;
-    font-weight: 700;
-    color: #1B6E46;
-    text-align: right;
-    white-space: nowrap;
-}
-
-.eq-aportan__foot {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 10px 18px 12px;
-    border-top: 1px solid #E4EAF1;
-    font-family: Inter, sans-serif;
-    font-size: 11px;
-    color: #5B6B80;
-}
-
-.eq-aportan__note { color: #8494A6; text-align: right; }
 
 /* Top vendedores */
 .eq-top {

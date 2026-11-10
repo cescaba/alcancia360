@@ -6,6 +6,7 @@
 
     var data = null;
     var periodo = 'mes';
+    var breakTab = 'categoria';
     var trendRows = [];
     var baseMes = null;
     var baseAno = null;
@@ -24,13 +25,13 @@
         body: document.getElementById('st-body'),
         error: document.getElementById('st-error'),
         period: document.getElementById('st-period'),
-        aportanList: document.getElementById('eq-aportan-list'),
-        aportanTitle: document.getElementById('eq-aportan-title'),
-        aportanTotal: document.getElementById('eq-aportan-total'),
+        breakTabs: document.getElementById('eq-break-tabs'),
+        mixList: document.getElementById('eq-mix-list'),
+        mixTitle: document.getElementById('eq-mix-title'),
+        mixTotal: document.getElementById('eq-mix-total'),
         trend: document.getElementById('st-trend'),
         trendDetail: document.getElementById('st-trend-detail'),
         aportaList: document.getElementById('eq-aporta-list'),
-        aportaMore: document.getElementById('eq-aporta-more'),
         aportaMes: document.getElementById('eq-aporta-mes'),
         aportaNote: document.getElementById('eq-aporta-total-note'),
         topList: document.getElementById('eq-top-list'),
@@ -158,7 +159,7 @@
         renderGoal();
         renderAporta();
         renderTrend(data.tendencia || []);
-        renderAportan();
+        renderBreakdown();
         renderTop();
         renderAlertas();
     }
@@ -289,12 +290,13 @@
     function renderAporta() {
         if (!els.aportaList || !data) return;
         els.aportaList.innerHTML = '';
-        if (els.aportaMore) els.aportaMore.hidden = true;
 
         var mesLabel = (periodo === 'historico') ? 'Histórico'
             : (periodo === 'ano' ? (data.base_ano || curAno()) : mesMes(data.base_mes));
         if (els.aportaMes) els.aportaMes.textContent = mesLabel;
 
+        // Top de vendedores que mas aportan a la comision de jefe.
+        // data.aportan ya viene ordenado por comision DESC (backend).
         var rows = (data.aportan) || [];
         if (els.aportaNote) {
             els.aportaNote.textContent = rows.length
@@ -307,10 +309,13 @@
             return;
         }
 
-        var show = rows.slice(0, 4);
-        show.forEach(function (row) {
+        rows.forEach(function (row, i) {
             var li = document.createElement('div');
-            li.className = 'eq-aporta__row';
+            li.className = 'eq-aporta__row' + (i % 2 === 1 ? ' eq-aporta__row--alt' : '');
+
+            var puesto = document.createElement('span');
+            puesto.className = 'eq-aporta__puesto' + (i === 0 ? ' eq-aporta__puesto--gold' : '');
+            puesto.textContent = (i + 1);
 
             var name = document.createElement('div');
             name.className = 'eq-aporta__name';
@@ -333,16 +338,11 @@
             amt.className = 'eq-aporta__amt';
             amt.textContent = money(row.com);
 
+            li.appendChild(puesto);
             li.appendChild(name);
             li.appendChild(amt);
             els.aportaList.appendChild(li);
         });
-
-        var rest = rows.length - show.length;
-        if (rest > 0 && els.aportaMore) {
-            els.aportaMore.hidden = false;
-            els.aportaMore.textContent = '+ ' + rest + ' vendedor' + (rest === 1 ? '' : 'es') + ' más';
-        }
     }
 
     function iniciales(nombre) {
@@ -484,55 +484,50 @@
         }
     }
 
-    // Top "Vendedores que más te aportan": ranking por la comision de jefe
-    // que genera cada vendedor (monto visible: es el propio ingreso del jefe).
-    function renderAportan() {
-        if (!els.aportanList || !data) return;
-        els.aportanList.innerHTML = '';
+    function renderBreakdown() {
+        if (!els.mixList || !data) return;
+        els.mixList.innerHTML = '';
 
-        var rows = (data.aportan) || [];
-        var mesLabel = (periodo === 'historico') ? 'Histórico'
-            : (periodo === 'ano' ? (data.base_ano || curAno()) : mesMes(data.base_mes));
-        if (els.aportanTitle) {
-            els.aportanTitle.textContent = 'Vendedores que más te aportan'
-                + (mesLabel ? ' · ' + mesLabel : '');
-        }
-        if (els.aportanTotal) {
-            els.aportanTotal.textContent = rows.length ? money((data.kpis || {}).comisiones) : '—';
-        }
+        var key = 'por_' + breakTab;
+        var rows = data[key] || [];
+
+        var totalVentas = 0;
+        rows.forEach(function (r) { totalVentas += Number(r.ventas) || 0; });
+
+        var titulo = '¿Qué vende tu equipo?';
+        if (periodo === 'historico') titulo += ' · Histórico';
+        else if (periodo === 'ano') titulo += ' · ' + (data.base_ano || curAno());
+        if (els.mixTitle) els.mixTitle.textContent = titulo;
+        if (els.mixTotal) els.mixTotal.textContent = totalVentas + (totalVentas === 1 ? ' venta' : ' ventas');
 
         if (!rows.length) {
-            els.aportanList.appendChild(emptyNote('Sin ventas del equipo en este periodo.'));
+            els.mixList.appendChild(emptyNote('Sin ventas en este periodo.'));
             return;
         }
 
-        rows.forEach(function (row, i) {
-            var li = document.createElement('div');
-            li.className = 'eq-aportan__row' + (i % 2 === 1 ? ' eq-aportan__row--alt' : '');
+        // Todas las filas; el máx. de 4 visibles + scroll lo maneja el CSS de #eq-mix-list.
+        rows.forEach(function (r, idx) {
+            // Mismo markup de filas que "¿En qué ganas más?" en Mi desempeño,
+            // pero con la CANTIDAD de ventas en la derecha (negrita, sin montos).
+            var row = document.createElement('div');
+            row.className = 'st-bd__row' + (idx % 2 === 1 ? ' st-bd__row--alt' : '');
 
-            var puesto = document.createElement('span');
-            puesto.className = 'eq-aportan__puesto' + (i === 0 ? ' eq-aportan__puesto--gold' : '');
-            puesto.textContent = (i + 1);
+            var head = document.createElement('div');
+            head.className = 'st-bd__head';
 
-            var name = document.createElement('div');
-            name.className = 'eq-aportan__name';
-            var nom = document.createElement('div');
-            nom.className = 'eq-aportan__nom';
-            nom.textContent = row.nombre;
-            var vts = document.createElement('div');
-            vts.className = 'eq-aportan__ventas';
-            vts.textContent = row.ventas + (row.ventas === 1 ? ' venta' : ' ventas');
-            name.appendChild(nom);
-            name.appendChild(vts);
+            var left = document.createElement('span');
+            left.className = 'st-bd__label';
+            left.textContent = r.label;
 
-            var amt = document.createElement('span');
-            amt.className = 'eq-aportan__amt';
-            amt.textContent = money(row.com);
+            var ventas = document.createElement('span');
+            ventas.className = 'st-bd__amount';   // bold; aquí muestra la cantidad de ventas
+            ventas.textContent = r.ventas + (r.ventas === 1 ? ' venta' : ' ventas');
 
-            li.appendChild(puesto);
-            li.appendChild(name);
-            li.appendChild(amt);
-            els.aportanList.appendChild(li);
+            head.appendChild(left);
+            head.appendChild(ventas);
+
+            row.appendChild(head);
+            els.mixList.appendChild(row);
         });
     }
 
@@ -691,6 +686,17 @@
                 var sec = document.querySelector('.eq-top');
                 if (sec && sec.scrollIntoView) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
+        });
+    }
+
+    if (els.breakTabs) {
+        els.breakTabs.addEventListener('click', function (e) {
+            var btn = e.target.closest('.st-vista__btn');
+            if (!btn) return;
+            els.breakTabs.querySelectorAll('.st-vista__btn').forEach(function (b) { b.classList.remove('is-active'); });
+            btn.classList.add('is-active');
+            breakTab = btn.dataset.break;
+            renderBreakdown();
         });
     }
 
