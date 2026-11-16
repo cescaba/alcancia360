@@ -32,7 +32,7 @@ function get_page_by_template($template_name) {
 }
 
 $movimientos_url = get_page_by_template('page-billetera-360-movimientos.php');
-$alcancia_img   = get_template_directory_uri() . '/assets/img/alcancia.svg';
+$alcancia_img   = billetera_asset_url('/assets/img/alcancia.svg');
 
 $meses_cortos = array('ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic');
 $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] . ' ' . date('Y');

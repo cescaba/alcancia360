@@ -111,13 +111,12 @@
     }
 }
 
-/* ===== Tu sucursal destacada en la tabla de sucursales ===== */
-.rkj-row--mine {
-    background: #EEF4FA;
-}
-
-.rkj-row--mine.rkj-row--alt {
-    background: #EEF4FA;
+/* ===== Tu sucursal destacada: fondo crema (antes del #1) =====
+   Especificidad alta (.rkj-row.rkj-row--mine) para ganarle al fondo
+   blanco base y al gris alterno, que aparecen más abajo en el archivo. */
+.rkj-row.rkj-row--mine,
+.rkj-row.rkj-row--mine.rkj-row--alt {
+    background: #FBF6EA;
 }
 
 .rkj-row--mine .rkj-row__nombre::after {
@@ -254,11 +253,7 @@
     background: #F5F8FB;
 }
 
-/* #1 destacado (crema + badge dorado) */
-.rkj-row--top {
-    background: #FBF6EA;
-}
-
+/* Posición: círculo base */
 .rkj-row__pos {
     display: flex;
     justify-content: center;
@@ -275,6 +270,7 @@
     color: #5B6B80;
 }
 
+/* #1 destacado solo por su medalla dorada (el fondo crema es de "tu sucursal") */
 .rkj-row--top .rkj-row__pos {
     background: linear-gradient(180deg, #F8D27A 0%, #C98A1E 100%);
     border: 1px solid #B77C16;
@@ -331,10 +327,6 @@
     color: #0E2438;
 }
 
-.rkj-row--top .rkj-row__vm {
-    color: #0E2438;
-}
-
 /* Avance de meta: barra + % */
 .rkj-row__avance {
     display: flex;
@@ -376,10 +368,6 @@
 
 .rkj-row--low .rkj-row__pct {
     color: #B3352A;
-}
-
-.rkj-row--top .rkj-row__pct {
-    color: #8A5F0F;
 }
 
 /* Producto top */

@@ -24,7 +24,7 @@ if (!array_intersect($allowed_roles, $current_user->roles)) {
 $meses = array('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre');
 $mes_label = $meses[intval(current_time('n')) - 1] . ' ' . current_time('Y');
 $registro_url = function_exists('billetera_get_template_url') ? billetera_get_template_url('page-billetera-360-responsive.php') : '#';
-$alcancia_img = get_template_directory_uri() . '/assets/img/alcancia.svg';
+$alcancia_img = billetera_asset_url('/assets/img/alcancia.svg');
 
 // Sucursales donde este usuario es jefe de venta (multi-sucursal).
 $tiendas_jefe = array();
@@ -148,21 +148,14 @@ if (empty($tiendas_jefe)) {
                         </div>
                     </section>
 
-                    <!-- KPIs del equipo -->
+                    <!-- KPIs del equipo (sin métricas de meta) -->
                     <div class="st-kpis5">
                         <div class="st-kpi5">
                             <div class="st-kpi5__val st-kpi5__val--blue" id="k5-ventas">—</div>
                             <div class="st-kpi5__label">Ventas del equipo</div>
                         </div>
-                        <div class="st-kpi5 st-kpi5--alt">
-                            <div class="st-kpi5__val st-kpi5__val--gold" id="k5-avance">—</div>
-                            <div class="st-kpi5__label">Avance de meta del equipo</div>
-                        </div>
+
                         <div class="st-kpi5">
-                            <div class="st-kpi5__val" id="k5-faltan">—</div>
-                            <div class="st-kpi5__label">Te faltan</div>
-                        </div>
-                        <div class="st-kpi5 st-kpi5--alt">
                             <div class="st-kpi5__val" id="k5-cierre">—</div>
                             <div class="st-kpi5__label">Para el cierre</div>
                         </div>
@@ -185,17 +178,13 @@ if (empty($tiendas_jefe)) {
                                         </button>
                                     </div>
                                 </div>
-                                <div class="st-goal__cap" id="st-goal-cap">— de la meta del equipo</div>
+                                <div class="st-goal__cap" id="st-goal-cap">—</div>
                             </div>
                             <div class="st-goal__body">
                                 <div class="st-goal__row">
                                     <div>
                                         <div class="st-goal__label">Mi pocito de jefe</div>
                                         <div class="st-goal__pocito" id="st-pocito">—</div>
-                                    </div>
-                                    <div class="st-goal__meta">
-                                        <div class="st-goal__label">Meta equipo</div>
-                                        <div class="st-goal__meta-val" id="st-goal-meta">—</div>
                                     </div>
                                 </div>
                                 <div class="st-goal__bar">
@@ -236,7 +225,6 @@ if (empty($tiendas_jefe)) {
                                     </button>
                                     <div class="st-chartper__menu" id="st-chartper-menu" role="listbox" aria-label="Periodo del gráfico" hidden></div>
                                 </div>
-                                <div class="st-chartlegend"><span class="st-chartlegend__sw"></span>Meta <b id="st-chart-meta">—</b></div>
                             </div>
                             <div class="st-chartwrap">
                                 <div class="st-chartmetal" id="st-chart-metal" hidden></div>
@@ -270,9 +258,10 @@ if (empty($tiendas_jefe)) {
                             <span class="eq-top__c3">Racha</span>
                             <span class="eq-top__c5">Últ. venta</span>
                             <span class="eq-top__c4">Ventas</span>
+                            <span class="eq-top__c6">Comisionado</span>
                         </div>
                         <div id="eq-top-list"></div>
-                        <div class="eq-top__note">Ranking por número de ventas. Por privacidad no se muestran las comisiones de tus asesores.</div>
+                        <div class="eq-top__note">Ranking por número de ventas. "Comisionado" es la suma de las comisiones del asesor en el periodo.</div>
                     </section>
 
                     <div class="st-error" id="st-error" hidden></div>

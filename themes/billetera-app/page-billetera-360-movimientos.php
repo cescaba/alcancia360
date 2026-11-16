@@ -37,7 +37,7 @@ function get_page_by_template($template_name) {
 
 $todos_url  = get_page_by_template('page-billetera-360-movimientos-todos.php');
 $registro_url = get_page_by_template('page-billetera-360-responsive.php');
-$alcancia_img = get_template_directory_uri() . '/assets/img/alcancia.svg';
+$alcancia_img = billetera_asset_url('/assets/img/alcancia.svg');
 
 $meses = array('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre');
 $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');

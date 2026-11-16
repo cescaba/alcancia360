@@ -6,9 +6,17 @@
 
 .st-row--eq {
     display: grid;
-    grid-template-columns: 1fr 400px;
+    /* Gráfico más angosto, panel "¿Qué vende tu equipo?" más ancho:
+       las filas del desglose llevan la linea (marca) y necesitan espacio. */
+    grid-template-columns: minmax(0, 1fr) 520px;
     gap: 22px;
     align-items: stretch;
+}
+
+/* .st-prod tiene width: 400px fijo en stats.css (para "Mi desempeño");
+   dentro de esta fila debe ocupar toda su columna del grid. */
+.st-row--eq .st-prod {
+    width: 100%;
 }
 
 /* Caja: aporta de cada vendedor (al lado del pocito).
@@ -265,7 +273,7 @@
 
 .eq-top__colhead {
     display: grid;
-    grid-template-columns: 34px 1fr 80px 92px 70px;
+    grid-template-columns: 34px 1fr 80px 92px 70px 110px;
     align-items: center;
     gap: 12px;
     padding: 7px 18px;
@@ -278,11 +286,20 @@
     text-transform: uppercase;
 }
 
-.eq-top__c4, .eq-top__vts { text-align: right; }
+.eq-top__c4, .eq-top__vts,
+.eq-top__c6, .eq-top__com { text-align: right; }
+
+.eq-top__com {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0E2438;
+    white-space: nowrap;
+}
 
 .eq-top__row {
     display: grid;
-    grid-template-columns: 34px 1fr 80px 92px 70px;
+    grid-template-columns: 34px 1fr 80px 92px 70px 110px;
     align-items: center;
     gap: 12px;
     padding: 10px 18px;
@@ -573,14 +590,38 @@
     .eq-alerts__row { flex-direction: column; }
 }
 
+/* Desglose "¿Qué vende tu equipo?": label + tag de linea (marca) */
+.st-bd__left {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    min-width: 0;
+}
+
+.st-bd__tag {
+    font-family: 'Inter', sans-serif;
+    font-size: 9.5px;
+    font-weight: 600;
+    line-height: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #8494A6;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 @media (max-width: 720px) {
     .st-row--eq { gap: 14px; }
     .eq-sucursal { width: 100%; }
     .eq-sucursal__btn { width: 100%; }
     .st-head__actions { width: 100%; }
     .st-period { flex: 1 1 auto; }
-    .eq-top__colhead, .eq-top__row { grid-template-columns: 30px 1fr 66px 52px; }
-    .eq-top__c3, .eq-top__racha { display: none; }
+    .eq-top__colhead, .eq-top__row { grid-template-columns: 30px 1fr 52px 96px; }
+    .eq-top__c3, .eq-top__racha,
+    .eq-top__c5, .eq-top__fult { display: none; }
     .eq-aporta__row { padding: 9px 12px; }
     .eq-aporta__colhead { padding: 7px 12px; }
     .eq-aporta__foot { flex-direction: column; gap: 2px; }

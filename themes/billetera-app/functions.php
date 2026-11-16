@@ -101,7 +101,7 @@ add_action('login_head', 'billetera_login_js_reorganize');
 function billetera_login_js_reorganize() {
     $logo_url     = get_template_directory_uri() . '/assets/img/logo.png';
     $wordmark_url = get_template_directory_uri() . '/assets/img/header-gildemeister.png';
-    $alcancia_url = get_template_directory_uri() . '/assets/img/alcancia.svg';
+    $alcancia_url = billetera_asset_url('/assets/img/alcancia.svg');
     ?>
     <script>
     document.addEventListener('DOMContentLoaded', function() {

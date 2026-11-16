@@ -247,8 +247,6 @@
     function renderKpis() {
         var k = (data && data.kpis) || {};
         setText('k5-ventas', String(Number(k.ventas) || 0));
-        setText('k5-avance', (k.avance || 0) + '%');
-        setText('k5-faltan', (Number(k.faltan_ventas) || 0) + ' ventas');
         setText('k5-cierre', (Number(k.dias_rest) || 0) + (Number(k.dias_rest) === 1 ? ' día' : ' días'));
         setText('k5-proy', '~' + (Number(k.proy_ventas) || 0) + ' ventas');
     }
@@ -256,7 +254,6 @@
     function renderGoal() {
         var k = (data && data.kpis) || {};
         var jefe = (data && data.jefe) || {};
-        var ritmo = (data && data.ritmo) || {};
 
         var fill = (k.meta_ventas > 0) ? Math.min(100, Math.round(k.ventas / k.meta_ventas * 100)) : 0;
         var fillEl = document.getElementById('st-goal-fill');
@@ -264,26 +261,21 @@
         var pig = document.getElementById('st-pig-fill');
         if (pig) pig.style.clipPath = 'inset(' + (100 - fill) + '% 0 0 0)';
 
-        setText('st-goal-cap', fill + '% de la meta del equipo');
+        // La meta del equipo no se muestra: la alcancía solo informa ventas
+        // del periodo (el relleno interno se mantiene como referencia visual).
+        setText('st-goal-cap', (Number(k.ventas) || 0) + ' ventas del mes');
         setText('st-pocito', money(jefe.com_mes));
-        setText('st-goal-meta', (k.meta_ventas || 0) + ' ventas');
 
         var mark = document.getElementById('st-goal-mark');
         var total = Number(k.dias_laborables) || 0;
         var trans = Number(k.dias_laborables_transcurridos) || 0;
         if (mark && total > 0) mark.style.left = Math.min(100, trans / total * 100) + '%';
 
+        // La línea de "ritmo ideal" es meta-derived: se oculta.
         var pace = document.getElementById('st-goal-pace');
         if (pace) {
-            var ideal = Number(ritmo.ideal_ventas) || 0;
-            var behind = Number(ritmo.behind) || 0;
-            if (k.meta_ventas > 0 && behind > 0) {
-                pace.innerHTML = 'Ritmo ideal hoy ' + ideal + ' ventas · <b class="down">van ' + behind + ' abajo</b>';
-            } else if (k.meta_ventas > 0) {
-                pace.innerHTML = 'Ritmo ideal hoy ' + ideal + ' ventas · <b class="up">al ritmo</b>';
-            } else {
-                pace.textContent = '—';
-            }
+            pace.hidden = true;
+            pace.textContent = '';
         }
     }
 
@@ -388,9 +380,9 @@
         els.trend.innerHTML = '';
         trendRows = rows || [];
 
-        var k = (data && data.kpis) || {};
-        var meta = Number(k.meta_ventas) || 0;
-        setText('st-chart-meta', meta ? (meta + ' ventas') : '—');
+        // La meta del equipo no se muestra: sin leyenda ni línea de meta.
+        // El escalado usa el máximo de las propias barras.
+        var meta = 0;
 
         if (!trendRows.some(function (r) { return Number(r.ventas) > 0; })) {
             els.trend.appendChild(emptyNote('Tu equipo aún no registra ventas en este periodo.'));
@@ -515,9 +507,23 @@
             var head = document.createElement('div');
             head.className = 'st-bd__head';
 
-            var left = document.createElement('span');
-            left.className = 'st-bd__label';
-            left.textContent = r.label;
+            var left = document.createElement('div');
+            left.className = 'st-bd__left';
+
+            var label = document.createElement('span');
+            label.className = 'st-bd__label';
+            label.textContent = r.label;
+            left.appendChild(label);
+
+            // Linea (marca) bajo el nombre: pueden existir registros con el
+            // mismo nombre en lineas distintas (ej. 2x "Kit de seguridad").
+            if (r.linea) {
+                var tag = document.createElement('span');
+                tag.className = 'st-bd__tag';
+                tag.textContent = r.linea;
+                tag.title = r.label + ' · ' + r.linea;
+                left.appendChild(tag);
+            }
 
             var ventas = document.createElement('span');
             ventas.className = 'st-bd__amount';   // bold; aquí muestra la cantidad de ventas
@@ -620,11 +626,18 @@
             vts.className = 'eq-top__vts' + (i === 0 && !sinVentas ? ' eq-top__vts--gold' : '');
             vts.textContent = String(row.ventas);
 
+            // Cuanto comisionado lleva el asesor en el periodo (S/).
+            var comEl = document.createElement('span');
+            comEl.className = 'eq-top__com';
+            comEl.textContent = money(row.com || 0);
+            comEl.title = 'Comisiones del asesor en el periodo';
+
             li.appendChild(puesto);
             li.appendChild(nom);
             li.appendChild(racha);
             li.appendChild(fult);
             li.appendChild(vts);
+            li.appendChild(comEl);
             els.topList.appendChild(li);
         });
 

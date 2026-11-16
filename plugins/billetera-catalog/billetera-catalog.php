@@ -2878,6 +2878,7 @@ function billetera_stats_desglose_equipo($ids, $periodo, $tipo, $base) {
     $v   = $wpdb->prefix . 'billetera_ventas';
     $sub = $wpdb->prefix . 'billetera_subcategorias';
     $cat = $wpdb->prefix . 'billetera_categorias';
+    $lin = $wpdb->prefix . 'billetera_lineas';
 
     list($desde, $hasta) = billetera_stats_rango($periodo, $base);
     $h = $ids ? ('v.usuario_id IN (' . implode(',', array_map('intval', $ids)) . ')') : '1=0';
@@ -2891,11 +2892,15 @@ function billetera_stats_desglose_equipo($ids, $periodo, $tipo, $base) {
         $p[] = $hasta;
     }
 
+    // La linea (marca) acompaNa a categorIa y subcategorIa: pueden existir dos
+    // registros con el mismo nombre (ej. "Kit de seguridad") en lIneas distintas.
+    $select = "l.nombre AS linea";
+    $join   = "JOIN $lin l ON l.codigo = c.linea_codigo";
     if ($tipo === 'subcategoria') {
-        $select = 's.nombre AS label';
+        $select .= ', s.nombre AS label';
         $group  = 's.id';
     } else {
-        $select = 'c.nombre AS label';
+        $select .= ', c.nombre AS label';
         $group  = 'c.id';
     }
 
@@ -2905,8 +2910,9 @@ function billetera_stats_desglose_equipo($ids, $periodo, $tipo, $base) {
             FROM $v v
             JOIN $sub s ON s.id = v.subcategoria_id
             JOIN $cat c ON c.id = s.categoria_id
+            $join
             WHERE $h
-            GROUP BY $group
+            GROUP BY $group, l.codigo
             ORDER BY ventas DESC, total DESC
             LIMIT 30";
 
@@ -2918,7 +2924,8 @@ function billetera_stats_desglose_equipo($ids, $periodo, $tipo, $base) {
     $out = [];
     foreach ((array) $rows as $r) {
         $out[] = [
-            'label'  => (string) $r->label,
+            'label'  => html_entity_decode((string) $r->label, ENT_QUOTES, 'UTF-8'),
+            'linea'  => html_entity_decode((string) ($r->linea ?? ''), ENT_QUOTES, 'UTF-8'),
             'ventas' => intval($r->ventas),
             'total'  => round(floatval($r->total), 2),
         ];

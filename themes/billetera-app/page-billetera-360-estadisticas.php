@@ -39,7 +39,7 @@ if (!array_intersect(array('asesor', 'administrator'), $roles_desempeno)) {
 $meses = array('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre');
 $mes_label = $meses[intval(current_time('n')) - 1] . ' ' . current_time('Y');
 $registro_url = function_exists('billetera_get_template_url') ? billetera_get_template_url('page-billetera-360-responsive.php') : '#';
-$alcancia_img = get_template_directory_uri() . '/assets/img/alcancia.svg';
+$alcancia_img = billetera_asset_url('/assets/img/alcancia.svg');
 ?>
 
 <!DOCTYPE html>
