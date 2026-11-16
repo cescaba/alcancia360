@@ -178,7 +178,6 @@ if (empty($tiendas_jefe)) {
                                         </button>
                                     </div>
                                 </div>
-                                <div class="st-goal__cap" id="st-goal-cap">—</div>
                             </div>
                             <div class="st-goal__body">
                                 <div class="st-goal__row">
@@ -187,11 +186,6 @@ if (empty($tiendas_jefe)) {
                                         <div class="st-goal__pocito" id="st-pocito">—</div>
                                     </div>
                                 </div>
-                                <div class="st-goal__bar">
-                                    <div class="st-goal__fill" id="st-goal-fill"></div>
-                                    <div class="st-goal__mark" id="st-goal-mark"></div>
-                                </div>
-                                <div class="st-goal__pace" id="st-goal-pace"></div>
                             </div>
                         </aside>
 

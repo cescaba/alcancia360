@@ -255,28 +255,14 @@
         var k = (data && data.kpis) || {};
         var jefe = (data && data.jefe) || {};
 
+        // La meta del equipo no se muestra. En el goal card solo queda el
+        // chanchito (con relleno animado como referencia visual) y el
+        // comisionado del jefe ("Mi pocito de jefe").
         var fill = (k.meta_ventas > 0) ? Math.min(100, Math.round(k.ventas / k.meta_ventas * 100)) : 0;
-        var fillEl = document.getElementById('st-goal-fill');
-        if (fillEl) fillEl.style.width = fill + '%';
         var pig = document.getElementById('st-pig-fill');
         if (pig) pig.style.clipPath = 'inset(' + (100 - fill) + '% 0 0 0)';
 
-        // La meta del equipo no se muestra: la alcancía solo informa ventas
-        // del periodo (el relleno interno se mantiene como referencia visual).
-        setText('st-goal-cap', (Number(k.ventas) || 0) + ' ventas del mes');
         setText('st-pocito', money(jefe.com_mes));
-
-        var mark = document.getElementById('st-goal-mark');
-        var total = Number(k.dias_laborables) || 0;
-        var trans = Number(k.dias_laborables_transcurridos) || 0;
-        if (mark && total > 0) mark.style.left = Math.min(100, trans / total * 100) + '%';
-
-        // La línea de "ritmo ideal" es meta-derived: se oculta.
-        var pace = document.getElementById('st-goal-pace');
-        if (pace) {
-            pace.hidden = true;
-            pace.textContent = '';
-        }
     }
 
     function renderAporta() {
