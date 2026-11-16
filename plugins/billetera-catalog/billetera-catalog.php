@@ -2301,6 +2301,7 @@ function billetera_ajax_get_balance() {
     }
 
     $racha = function_exists('billetera_get_racha') ? billetera_get_racha($user_id) : 0;
+    $es_jefe = in_array('jefe_venta', (array) (get_userdata($user_id)->roles ?? []), true);
 
     wp_send_json_success([
         'balance' => $balance,
@@ -2310,6 +2311,7 @@ function billetera_ajax_get_balance() {
         'ranking' => ['rank' => $rank, 'total' => $rank_total],
         'ranking_global' => ['rank' => $rank_global, 'total' => $rank_total_global],
         'racha' => $racha,
+        'es_jefe' => $es_jefe,
         'meta' => $meta,
         'fill_percent' => $fill_percent,
         'movements' => $movements,
@@ -3076,6 +3078,7 @@ function billetera_ajax_get_mi_equipo() {
     $com = 0.0;
     $ventas = 0;
     $per_asesor = [];
+    $ultima_total = [];
     if ($ids) {
         $row = $wpdb->get_row($wpdb->prepare(
             "SELECT COUNT(*) AS ventas, COALESCE(SUM(v.monto_comision_sol * v.bonus_multiplier), 0) AS com
@@ -3099,6 +3102,19 @@ function billetera_ajax_get_mi_equipo() {
                 'com'    => round(floatval($r->com), 2),
                 'ultima' => $r->ultima ? (string) $r->ultima : null,
             ];
+        }
+
+        // Ultima venta HISTORICA de cada asesor (sin filtro de periodo): si el
+        // asesor no vendio en el periodo seleccionado, igual se muestra cuando
+        // fue su ultima venta real (columna "Ult. venta" del top del equipo).
+        $rows_ut = $wpdb->get_results(
+            "SELECT v.usuario_id, MAX(v.creado_en) AS ultima
+             FROM $v v
+             WHERE v.usuario_id IN (" . implode(',', array_map('intval', $ids)) . ")
+             GROUP BY v.usuario_id"
+        );
+        foreach ((array) $rows_ut as $r) {
+            $ultima_total[intval($r->usuario_id)] = $r->ultima ? (string) $r->ultima : null;
         }
     }
 
@@ -3246,6 +3262,8 @@ function billetera_ajax_get_mi_equipo() {
             // "sin ventas" para detectar quien no esta vendiendo.
             'racha'    => function_exists('billetera_get_racha') ? intval(billetera_get_racha($aid)) : 0,
             'ultima'   => $pa['ultima'] ?? null,
+            // Fecha de su ultima venta historicamente (para la columna "Ult. venta").
+            'ultima_total' => $ultima_total[$aid] ?? null,
         ];
     }
     usort($top, function ($a, $b) {
@@ -3836,6 +3854,23 @@ function billetera_ranking_filtrar_tipo($ids, $user_id) {
  * van en tableros distintos, en tienda y en global.
  */
 function billetera_ranking_scope_ids($user_id, $ambito) {
+    if ($ambito === 'equipo') {
+        // Asesores a cargo del jefe (sus tiendas + su tipo). Solo lo usa el
+        // AJAX de ranking de jefes.
+        return billetera_ranking_jefe_asesores($user_id);
+    }
+
+    if ($ambito === 'global_asesores') {
+        // Vista "Global" del jefe: TODOS los asesores del país de su tipo
+        // (para ver dónde están parados los suyos a nivel nacional).
+        $ids = get_users([
+            'role'   => 'asesor',
+            'fields' => 'ID',
+            'number' => -1,
+        ]);
+        return billetera_ranking_filtrar_tipo($ids, $user_id);
+    }
+
     if ($ambito === 'tienda') {
         $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
         if (!$tienda_id) {
@@ -3889,6 +3924,7 @@ function billetera_ranking_items($ids, $user_id, $offset = 0, $stats = [], $pos_
         $id = intval($id);
         $s = $stats[$id] ?? ['ventas' => 0, 'total' => 0.0, 'ultima' => null];
         $out[] = [
+            'id'     => $id,
             'pos'    => isset($pos_map[$id]) ? intval($pos_map[$id]) : ($offset + $i + 1),
             'nombre' => $nombres[$id] ?? ('Usuario #' . $id),
             'es_yo'  => ($id === $user_id),
@@ -4060,6 +4096,421 @@ function billetera_ranking_tienda_label($user_id) {
     // Nota: wp_specialchars_decode NO decodifica entidades numericas.
     return $tienda ? html_entity_decode($tienda->post_title, ENT_QUOTES, 'UTF-8') : '';
 }
+
+// =====================================================================
+// RANKING DE JEFES: ranking por sucursal + ranking de sus asesores
+// =====================================================================
+
+/**
+ * Tiendas donde el usuario es jefe de venta (via _jefes_venta_asociados).
+ * Fallback: su propia tienda asociada (misma regla de la pantalla de equipo).
+ */
+function billetera_ranking_jefe_tiendas($user_id) {
+    $posts = get_posts([
+        'post_type' => 'tienda',
+        'numberposts' => -1,
+        'post_status' => 'publish',
+    ]);
+    $out = [];
+    foreach ($posts as $t) {
+        $jefes = get_post_meta($t->ID, '_jefes_venta_asociados', true);
+        if (!is_array($jefes)) {
+            $jefes = $jefes ? [$jefes] : [];
+        }
+        if (in_array((string) $user_id, array_map('strval', $jefes), true)) {
+            $out[intval($t->ID)] = html_entity_decode($t->post_title, ENT_QUOTES, 'UTF-8');
+        }
+    }
+    if (empty($out)) {
+        $tid = intval(get_user_meta($user_id, '_tienda_asociada', true));
+        if ($tid) {
+            $t = get_post($tid);
+            if ($t) {
+                $out[$tid] = html_entity_decode($t->post_title, ENT_QUOTES, 'UTF-8');
+            }
+        }
+    }
+    return $out;
+}
+
+/**
+ * IDs de los asesores a cargo del jefe: sus tiendas + su tipo
+ * (Venta / Post Venta no compiten, misma regla del ranking de asesores).
+ */
+function billetera_ranking_jefe_asesores($user_id) {
+    $tiendas = array_keys(billetera_ranking_jefe_tiendas($user_id));
+    if (empty($tiendas)) {
+        return [];
+    }
+
+    $ids = get_users([
+        'meta_query' => [
+            ['key' => '_tienda_asociada', 'value' => $tiendas, 'compare' => 'IN'],
+        ],
+        'role'   => 'asesor',
+        'fields' => 'ID',
+        'number' => -1,
+    ]);
+
+    return billetera_ranking_filtrar_tipo($ids, $user_id);
+}
+
+/**
+ * Filas del ranking por sucursal para el jefe: TODAS las sucursales que
+ * tengan al menos 1 asesor del tipo del jefe (para comparar su sucursal
+ * contra las demas de la compania). Solo ventas de asesores del tipo.
+ */
+function billetera_ranking_sucursal_rows($user_id, $desde, $hasta, $vs_desde, $vs_hasta) {
+    global $wpdb;
+
+    // Asesores (rol asesor) con tienda asociada, agrupados por sucursal.
+    $cap_key = $wpdb->prefix . 'capabilities';
+    $rows_u = $wpdb->get_results("
+        SELECT u.ID AS uid, tm.meta_value AS tienda_id
+        FROM {$wpdb->users} u
+        INNER JOIN {$wpdb->usermeta} tm ON tm.user_id = u.ID AND tm.meta_key = '_tienda_asociada' AND tm.meta_value <> ''
+        INNER JOIN {$wpdb->usermeta} cap ON cap.user_id = u.ID
+            AND cap.meta_key = '$cap_key'
+            AND cap.meta_value LIKE '%\"asesor\"%'
+    ");
+
+    $por_tienda = [];
+    $todos_ids = [];
+    foreach ((array) $rows_u as $r) {
+        $uid = intval($r->uid);
+        $tid = intval($r->tienda_id);
+        if (!$uid || !$tid) {
+            continue;
+        }
+        $todos_ids[$uid] = $tid;
+    }
+    if (empty($todos_ids)) {
+        return [];
+    }
+
+    // Solo asesores del tipo del jefe (sin meta = Venta).
+    $ids_tipo = billetera_ranking_filtrar_tipo(array_keys($todos_ids), $user_id);
+    foreach ($ids_tipo as $uid) {
+        $por_tienda[$todos_ids[$uid]][] = intval($uid);
+    }
+    if (empty($por_tienda)) {
+        return [];
+    }
+
+    // Info de tiendas + dealer (subtitulo de la fila).
+    $tiendas_info = [];
+    $posts = get_posts(['post_type' => 'tienda', 'numberposts' => -1, 'post_status' => 'publish']);
+    foreach ($posts as $t) {
+        $dealer_id = intval(get_post_meta($t->ID, '_dealer_id', true));
+        $dealer = $dealer_id ? get_post($dealer_id) : null;
+        $tiendas_info[intval($t->ID)] = [
+            'nombre' => html_entity_decode($t->post_title, ENT_QUOTES, 'UTF-8'),
+            'dealer' => $dealer ? html_entity_decode($dealer->post_title, ENT_QUOTES, 'UTF-8') : '',
+        ];
+    }
+
+    $all_ids = array_merge([], ...array_values($por_tienda));
+    $in_ids = implode(',', array_map('intval', $all_ids));
+    $v  = $wpdb->prefix . 'billetera_ventas';
+    $sb = $wpdb->prefix . 'billetera_subcategorias';
+
+    // Ventas / comisiones por tienda para un rango dado.
+    $ventas_rango = function ($d, $h) use ($wpdb, $v, $in_ids) {
+        $rows = $wpdb->get_results($wpdb->prepare("
+            SELECT tm.meta_value AS tienda_id, COUNT(*) AS ventas,
+                   COALESCE(SUM(v.monto_comision_sol * v.bonus_multiplier), 0) AS com
+            FROM $v v
+            INNER JOIN {$wpdb->usermeta} tm ON tm.user_id = v.usuario_id AND tm.meta_key = '_tienda_asociada'
+            WHERE v.usuario_id IN ($in_ids) AND v.creado_en >= %s AND v.creado_en < %s
+            GROUP BY tm.meta_value
+        ", $d, $h));
+        $out = [];
+        foreach ((array) $rows as $r) {
+            $out[intval($r->tienda_id)] = [
+                'ventas' => intval($r->ventas),
+                'com'    => floatval($r->com),
+            ];
+        }
+        return $out;
+    };
+
+    $cur = $ventas_rango($desde, $hasta);
+    $ant = $ventas_rango($vs_desde, $vs_hasta);
+
+    // Producto top por tienda (subcategoria con mas ventas del periodo).
+    $rows_prod = $wpdb->get_results($wpdb->prepare("
+        SELECT tm.meta_value AS tienda_id, s.nombre, COUNT(*) AS n
+        FROM $v v
+        INNER JOIN {$wpdb->usermeta} tm ON tm.user_id = v.usuario_id AND tm.meta_key = '_tienda_asociada'
+        INNER JOIN $sb s ON s.id = v.subcategoria_id
+        WHERE v.usuario_id IN ($in_ids) AND v.creado_en >= %s AND v.creado_en < %s
+        GROUP BY tm.meta_value, s.nombre
+        ORDER BY n DESC, s.nombre ASC
+    ", $desde, $hasta));
+    $prod_top = [];
+    foreach ((array) $rows_prod as $r) {
+        $tid = intval($r->tienda_id);
+        if (!isset($prod_top[$tid])) {
+            $prod_top[$tid] = html_entity_decode((string) $r->nombre, ENT_QUOTES, 'UTF-8');
+        }
+    }
+
+    // Meta de la sucursal: suma de las metas de sus asesores
+    // (misma regla de la pantalla "Mi equipo").
+    $rows = [];
+    foreach ($por_tienda as $tid => $ids_t) {
+        $info = $tiendas_info[$tid] ?? ['nombre' => ('Sucursal #' . $tid), 'dealer' => ''];
+        $ventas = intval($cur[$tid]['ventas'] ?? 0);
+        $com    = floatval($cur[$tid]['com'] ?? 0.0);
+
+        $meta_sol = 0.0;
+        foreach ($ids_t as $aid) {
+            $meta_sol += floatval(billetera_get_meta_por_usuario($aid));
+        }
+
+        // Meta en numero de ventas: monto de la meta / ticket promedio de la
+        // sucursal (mismo criterio de la pantalla de equipo).
+        $ticket   = $ventas > 0 ? ($com / $ventas) : 0.0;
+        $meta_vtas = ($meta_sol > 0 && $ticket > 0) ? (int) round($meta_sol / $ticket) : 0;
+
+        // Avance de meta: comisiones del periodo / meta en soles (sin tope,
+        // puede superar 100%; la barra de UI se cap en 100%).
+        $pct = ($meta_sol > 0) ? round(($com / $meta_sol) * 100, 1) : 0.0;
+
+        // Asesores con ventas en el periodo (distintos usuarios con venta).
+        $con_ventas = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT usuario_id) FROM $v
+             WHERE usuario_id IN (" . implode(',', array_map('intval', $ids_t)) . ")
+             AND creado_en >= %s AND creado_en < %s",
+            $desde, $hasta
+        ));
+
+        // Comparacion vs mes anterior (mismo dia si es mes en curso).
+        $ant_ventas = intval($ant[$tid]['ventas'] ?? 0);
+        $vs_pct = null;
+        if ($ant_ventas > 0) {
+            $vs_pct = round((($ventas - $ant_ventas) / $ant_ventas) * 100, 0);
+        } elseif ($ant_ventas === 0 && $ventas > 0) {
+            $vs_pct = 100.0; // Sin ventas el mes pasado: +100%.
+        }
+
+        $rows[] = [
+            'tienda_id'    => $tid,
+            'nombre'       => $info['nombre'],
+            'dealer'       => $info['dealer'],
+            'asesores_tot' => count($ids_t),
+            'con_ventas'   => $con_ventas,
+            'ventas'       => $ventas,
+            'meta_sol'     => $meta_sol,
+            'com'          => $com,
+            'meta_vtas'    => $meta_vtas,
+            'pct'          => $pct,
+            'producto_top' => $prod_top[$tid] ?? '',
+            'vs_pct'       => $vs_pct,
+        ];
+    }
+
+    // Orden default: % de meta DESC; empate por ventas DESC, nombre ASC.
+    usort($rows, function ($a, $b) {
+        $pa = round(floatval($a['pct']), 2);
+        $pb = round(floatval($b['pct']), 2);
+        if ($pa !== $pb) {
+            return $pb <=> $pa;
+        }
+        if ($a['ventas'] !== $b['ventas']) {
+            return $b['ventas'] <=> $a['ventas'];
+        }
+        return strcasecmp($a['nombre'], $b['nombre']);
+    });
+
+    // Posiciones con empates por % de meta redondeado.
+    $pos = 0;
+    $prev = null;
+    $delante = 0;
+    foreach ($rows as $i => $r) {
+        $p = round(floatval($r['pct']), 2);
+        if ($prev === null || $p !== $prev) {
+            $pos = $delante + 1;
+            $prev = $p;
+        }
+        $rows[$i]['pos'] = $pos;
+        $delante++;
+    }
+
+    return $rows;
+}
+
+add_action('wp_ajax_billetera_get_ranking_jefe', 'billetera_ajax_get_ranking_jefe');
+
+/**
+ * Ranking para jefes de venta:
+ * - sucursales: ranking de todas las sucursales (del tipo del jefe) por
+ *   % de meta, con ventas, producto top y comparacion vs mes anterior.
+ * - asesores: leaderboard de los asesores a su cargo (misma estructura
+ *   que el ranking de asesores).
+ */
+function billetera_ajax_get_ranking_jefe() {
+    global $wpdb;
+
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_get_ranking')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
+    $current_user = wp_get_current_user();
+    if (!defined('BILLETERA_SHOW_RANKING') || !BILLETERA_SHOW_RANKING) {
+        wp_send_json_error(['message' => 'Ranking desactivado']);
+    }
+    if (!array_intersect(['jefe_venta', 'administrator'], (array) $current_user->roles)) {
+        wp_send_json_error(['message' => 'No tienes permiso']);
+    }
+
+    $user_id = get_current_user_id();
+    $meses = [1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'];
+    $now = billetera_stats_local_now();
+
+    // Mes solicitado (YYYY-MM). Por defecto, mes actual.
+    $mes_param = isset($_POST['mes']) ? sanitize_text_field(wp_unslash($_POST['mes'])) : '';
+    if (!preg_match('/^\d{4}-\d{2}$/', $mes_param)) {
+        $mes_param = $now->format('Y-m');
+    }
+    try {
+        $tz = wp_timezone();
+        $base = new DateTime($mes_param . '-01 00:00:00', $tz);
+    } catch (Exception $e) {
+        $base = (clone $now)->setDate((int) $now->format('Y'), (int) $now->format('m'), 1)->setTime(0, 0, 0);
+        $mes_param = $base->format('Y-m');
+    }
+    $desde = $base->format('Y-m-01 00:00:00');
+    $hasta = (clone $base)->modify('first day of next month')->format('Y-m-01 00:00:00');
+    $es_actual = ($base->format('Y-m') === $now->format('Y-m'));
+    $mes_ant_key = (clone $base)->modify('first day of last month')->format('Y-m');
+
+    // Rango comparable del mes anterior: si es el mes en curso, se compara
+    // con el mismo dia del mes anterior; si es un mes pasado, mes completo.
+    $dia_actual = $es_actual ? intval($now->format('j')) : intval($base->format('t'));
+    $prev = (clone $base)->modify('-1 month');
+    $ant_desde = $prev->format('Y-m-01 00:00:00');
+    if ($es_actual) {
+        $ant_corte = (clone $prev)->modify('+' . ($dia_actual - 1) . ' days');
+        $ant_hasta = $ant_corte->format('Y-m-d 23:59:59');
+    } else {
+        $ant_hasta = $base->format('Y-m-01 00:00:00');
+    }
+
+    // Mapa usuario -> tienda (para el filtro por sucursal de "Mis asesores").
+    $tid_rows = $wpdb->get_results(
+        "SELECT user_id, meta_value AS tid FROM {$wpdb->usermeta} WHERE meta_key = '_tienda_asociada'"
+    );
+    $tid_map = [];
+    foreach ((array) $tid_rows as $r) {
+        $tid_map[intval($r->user_id)] = intval($r->tid);
+    }
+
+    // Enrich: agrega tienda_id a cada item del leaderboard del equipo.
+    $enrich_tienda = function (&$rows) use ($tid_map) {
+        foreach ((array) $rows as $i => $row) {
+            if (is_array($row)) {
+                $rows[$i]['tienda_id'] = $tid_map[intval($row['id'] ?? 0)] ?? 0;
+            }
+        }
+    };
+
+    $lista_equipo = billetera_ranking_lista($user_id, 'equipo', 10, 2, $desde, $hasta);
+    foreach (['top', 'ventana', 'todos'] as $k) {
+        $enrich_tienda($lista_equipo[$k]);
+    }
+
+    // Sus tiendas (para el picker de sucursal).
+    $mis_tiendas = [];
+    foreach (billetera_ranking_jefe_tiendas($user_id) as $tid => $tnombre) {
+        $mis_tiendas[] = ['id' => intval($tid), 'nombre' => $tnombre];
+    }
+
+    // Resumen de SUS sucursales (KPIs/panel cuando administra varias).
+    $suc_rows = billetera_ranking_sucursal_rows($user_id, $desde, $hasta, $ant_desde, $ant_hasta);
+    $mis_tids = array_map('intval', array_column($mis_tiendas, 'id'));
+    $agg = [
+        'tiendas' => 0, 'ventas' => 0, 'meta_sol' => 0.0, 'com' => 0.0,
+        'con_ventas' => 0, 'asesores_tot' => 0, 'mejor_pos' => 0, 'pct' => 0.0, 'producto_top' => '',
+    ];
+    foreach ($suc_rows as $r) {
+        if (!in_array(intval($r['tienda_id']), $mis_tids, true)) {
+            continue;
+        }
+        $agg['tiendas']++;
+        $agg['ventas']       += intval($r['ventas']);
+        $agg['meta_sol']     += floatval($r['meta_sol']);
+        $agg['com']          += floatval($r['com']);
+        $agg['con_ventas']   += intval($r['con_ventas']);
+        $agg['asesores_tot'] += intval($r['asesores_tot']);
+        if (!$agg['mejor_pos'] || intval($r['pos']) < $agg['mejor_pos']) {
+            $agg['mejor_pos'] = intval($r['pos']);
+        }
+    }
+    $agg['pct'] = ($agg['meta_sol'] > 0) ? round(($agg['com'] / $agg['meta_sol']) * 100, 1) : 0.0;
+
+    // Producto top combinado de sus sucursales.
+    $mis_asesores = billetera_ranking_jefe_asesores($user_id);
+    if ($mis_asesores && $mis_tids) {
+        $v2 = $wpdb->prefix . 'billetera_ventas';
+        $sb2 = $wpdb->prefix . 'billetera_subcategorias';
+        $in_a = implode(',', array_map('intval', $mis_asesores));
+        $in_t = implode(',', $mis_tids);
+        $row_prod = $wpdb->get_row($wpdb->prepare("
+            SELECT s.nombre, COUNT(*) AS n
+            FROM $v2 v
+            INNER JOIN {$wpdb->usermeta} tm ON tm.user_id = v.usuario_id AND tm.meta_key = '_tienda_asociada'
+            INNER JOIN $sb2 s ON s.id = v.subcategoria_id
+            WHERE v.usuario_id IN ($in_a) AND tm.meta_value IN ($in_t)
+            AND v.creado_en >= %s AND v.creado_en < %s
+            GROUP BY s.nombre
+            ORDER BY n DESC
+            LIMIT 1
+        ", $desde, $hasta));
+        $agg['producto_top'] = $row_prod ? html_entity_decode((string) $row_prod->nombre, ENT_QUOTES, 'UTF-8') : '';
+    }
+
+    wp_send_json_success([
+        'periodo'        => 'mes',
+        'mes'            => $base->format('Y-m'),
+        'mes_label'      => $meses[intval($base->format('n'))] . ' ' . $base->format('Y'),
+        'mes_anterior'   => $mes_ant_key,
+        'mes_anterior_label' => $meses[intval($prev->format('n'))] . ' ' . $prev->format('Y'),
+        'dia_actual'     => $dia_actual,
+        'es_actual'      => $es_actual,
+        'tipo_label'     => billetera_ranking_tipo($user_id),
+        'tienda_label'   => billetera_ranking_tienda_label($user_id),
+        'mi_tienda_id'   => intval(get_user_meta($user_id, '_tienda_asociada', true)),
+        'empresa_label'  => billetera_ranking_empresa_label($user_id),
+        'mis_tiendas'    => $mis_tiendas,
+        'mis_resumen'    => $agg,
+        'sucursales'     => $suc_rows,
+        'asesores'       => $lista_equipo,
+        'asesores_global' => billetera_ranking_lista($user_id, 'global_asesores', 10, 2, $desde, $hasta),
+    ]);
+}
+
+/**
+ * Nombre del dealer de la tienda del usuario (para el título
+ * "RANKING POR SUCURSAL · {DEALER}").
+ */
+function billetera_ranking_empresa_label($user_id) {
+    $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
+    if (!$tienda_id) {
+        return '';
+    }
+    $dealer_id = intval(get_post_meta($tienda_id, '_dealer_id', true));
+    if (!$dealer_id) {
+        return '';
+    }
+    $dealer = get_post($dealer_id);
+    return $dealer ? html_entity_decode($dealer->post_title, ENT_QUOTES, 'UTF-8') : '';
+}
+
 
 // AJAX: Cambiar contraseña
 add_action('wp_ajax_billetera_change_password', 'billetera_ajax_change_password');

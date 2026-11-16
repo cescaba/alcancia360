@@ -56,9 +56,17 @@ function billetera_get_template_url($template_name) {
 /**
  * Racha de ventas: días consecutivos con al menos 1 venta.
  * Regla: 1 venta al día mantiene la racha; un día sin ventas la rompe.
+ * Los jefes (de venta o postventa, cualquiera sea su tipo) no tienen racha.
  */
 function billetera_get_racha($user_id) {
     global $wpdb;
+
+    // Los jefes (rol jefe_venta, sin importar su tipo venta/postventa) no tienen racha.
+    $u = get_userdata($user_id);
+    if (!$u || in_array('jefe_venta', (array) $u->roles, true)) {
+        return 0;
+    }
+
     $ventas_table = $wpdb->prefix . 'billetera_ventas';
 
     $dias = $wpdb->get_col($wpdb->prepare(

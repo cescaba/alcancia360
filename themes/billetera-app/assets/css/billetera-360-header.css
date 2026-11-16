@@ -617,8 +617,80 @@ body {
     font-weight: 600;
 }
 
+/* Activo "suave" para el padre que tiene sub-items abiertos:
+   solo toma el color, el estado fuerte lo lleva el sub-item activo. */
+.app-sidebar__link.is-active-soft {
+    background: transparent;
+    border-left-color: transparent;
+    color: #0a6cb4;
+    font-weight: 600;
+}
+
 .app-sidebar__link svg {
     flex-shrink: 0;
+}
+
+/* Sub-items del ranking de jefes (Sucursal / Mis asesores) */
+.app-sidebar__group .app-sidebar__chev {
+    margin-left: auto;
+    margin-right: -6px;
+    flex-shrink: 0;
+    padding: 6px;
+    box-sizing: content-box;
+    transition: transform 0.15s;
+}
+
+.app-sidebar__group.is-open .app-sidebar__chev {
+    transform: rotate(180deg);
+}
+
+.app-sidebar__sub {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Grupo cerrado: oculta los sub-items */
+.app-sidebar__group:not(.is-open) .app-sidebar__sub {
+    display: none;
+}
+
+.app-sidebar__sublink {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 20px 8px 49px;
+    border-left: 3px solid transparent;
+    color: #5b6b80;
+    font-family: Barlow, sans-serif;
+    font-size: 12.5px;
+    font-weight: 400;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.app-sidebar__sublink svg {
+    flex-shrink: 0;
+    opacity: 0.75;
+}
+
+.app-sidebar__sublink:hover {
+    background: #f3f6fa;
+    color: #0e2438;
+}
+
+.app-sidebar__sublink:hover svg {
+    opacity: 1;
+}
+
+.app-sidebar__sublink.is-active {
+    background: #eef4fa;
+    border-left-color: #0a6cb4;
+    color: #0a6cb4;
+    font-weight: 600;
+}
+
+.app-sidebar__sublink.is-active svg {
+    opacity: 1;
 }
 
 .app-sidebar__foot {

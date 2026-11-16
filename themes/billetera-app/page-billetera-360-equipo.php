@@ -130,6 +130,24 @@ if (empty($tiendas_jefe)) {
                         </div>
                     </div>
 
+                    <!-- ALERTAS DEL EQUIPO -->
+                    <section class="eq-alerts">
+                        <div class="eq-alerts__head">
+                            <span class="eq-alerts__title">Alertas y recomendaciones</span>
+                            <span class="eq-alerts__pend" id="eq-alerts-pend" hidden></span>
+                        </div>
+                        <div class="eq-alerts__row">
+                            <div class="eq-alert" id="eq-alert-sin">
+                                <div class="eq-alert__top">
+                                    <span class="eq-alert__bar eq-alert__bar--danger" aria-hidden="true"></span>
+                                    <div class="eq-alert__t" id="eq-alert-sin-t">—</div>
+                                </div>
+                                <div class="eq-alert__d" id="eq-alert-sin-d">—</div>
+                                <button type="button" class="eq-alert__cta" id="eq-alert-sin-cta">Ver asesores →</button>
+                            </div>
+                        </div>
+                    </section>
+
                     <!-- KPIs del equipo -->
                     <div class="st-kpis5">
                         <div class="st-kpi5">
@@ -250,28 +268,11 @@ if (empty($tiendas_jefe)) {
                             <span class="eq-top__c1">#</span>
                             <span class="eq-top__c2">Asesor</span>
                             <span class="eq-top__c3">Racha</span>
+                            <span class="eq-top__c5">Últ. venta</span>
                             <span class="eq-top__c4">Ventas</span>
                         </div>
                         <div id="eq-top-list"></div>
                         <div class="eq-top__note">Ranking por número de ventas. Por privacidad no se muestran las comisiones de tus asesores.</div>
-                    </section>
-
-                    <!-- ALERTAS DEL EQUIPO -->
-                    <section class="eq-alerts">
-                        <div class="eq-alerts__head">
-                            <span class="eq-alerts__title">Alertas y recomendaciones</span>
-                            <span class="eq-alerts__pend" id="eq-alerts-pend" hidden></span>
-                        </div>
-                        <div class="eq-alerts__row">
-                            <div class="eq-alert" id="eq-alert-sin">
-                                <div class="eq-alert__top">
-                                    <span class="eq-alert__bar eq-alert__bar--danger" aria-hidden="true"></span>
-                                    <div class="eq-alert__t" id="eq-alert-sin-t">—</div>
-                                </div>
-                                <div class="eq-alert__d" id="eq-alert-sin-d">—</div>
-                                <button type="button" class="eq-alert__cta" id="eq-alert-sin-cta">Ver asesores →</button>
-                            </div>
-                        </div>
                     </section>
 
                     <div class="st-error" id="st-error" hidden></div>

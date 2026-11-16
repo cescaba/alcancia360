@@ -46,6 +46,15 @@ $nav_equipo_active   = ($current_slug === 'page-billetera-360-equipo.php');
 $nav_ranking_active  = ($current_slug === 'page-billetera-360-ranking.php');
 
 $home_url = $es_jefe ? $url_movimientos : $url_registro;
+
+// Subsección activa del ranking de jefes (?tab=sucursal | equipo en la página de ranking).
+$nav_ranking_tab = '';
+if ($nav_ranking_active) {
+    $nav_ranking_tab = isset($_GET['tab']) ? sanitize_key(wp_unslash($_GET['tab'])) : 'sucursal';
+    if (!in_array($nav_ranking_tab, array('sucursal', 'equipo'), true)) {
+        $nav_ranking_tab = 'sucursal';
+    }
+}
 ?>
 
 <?php
@@ -93,7 +102,7 @@ ob_start();
         </a>
         <?php endif; ?>
 
-        <?php if (BILLETERA_SHOW_RANKING && !$es_jefe): ?>
+        <?php if (BILLETERA_SHOW_RANKING): ?>
         <a class="app-header__menu-item" href="<?php echo esc_url($url_ranking); ?>">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/></svg>
             <span>Ranking</span>
@@ -133,10 +142,12 @@ $user_menu_html = ob_get_clean();
         </a>
 
         <div class="app-topbar__actions">
+            <?php if (!$es_jefe): ?>
             <div class="app-topbar__racha" title="Racha de ventas (días consecutivos)">
                 <svg viewBox="0 0 24 24" width="13" height="13" fill="#F5C563"><path d="M12 2c1 4-2 5-2 8a4 4 0 0 0 8 0c0-1-.4-2-1-3 3 2 5 5 5 8a10 10 0 1 1-20 0C2 8 8 6 12 2z"></path></svg>
                 <?php echo intval($racha); ?> días de racha
             </div>
+            <?php endif; ?>
 
             <div class="app-topbar__user">
                 <div class="app-topbar__user-info">
@@ -170,12 +181,14 @@ $user_menu_html = ob_get_clean();
         <div class="app-header__actions">
 
             <!-- Racha -->
+            <?php if (!$es_jefe): ?>
             <div class="app-header__racha" title="Racha de ventas (días consecutivos)">
                 <svg class="app-header__flame" viewBox="0 0 24 24" width="12" height="12" fill="#F5C563">
                     <path d="M12 2c1 4-2 5-2 8a4 4 0 0 0 8 0c0-1-.4-2-1-3 3 2 5 5 5 8a10 10 0 1 1-20 0C2 8 8 6 12 2z"></path>
                 </svg>
                 <span class="app-header__racha-num"><?php echo intval($racha); ?></span>
             </div>
+            <?php endif; ?>
 
             <!-- Usuario -->
             <div class="app-header__user">
@@ -217,11 +230,31 @@ $user_menu_html = ob_get_clean();
             <span>Mi equipo</span>
         </a>
         <?php endif; ?>
-        <?php if (BILLETERA_SHOW_RANKING && !$es_jefe): ?>
+        <?php if (BILLETERA_SHOW_RANKING): ?>
+        <?php if ($es_jefe && $url_ranking && $url_ranking !== '#'): ?>
+        <div class="app-sidebar__group" data-sidebar-group="ranking" data-open-on-load="<?php echo $nav_ranking_active ? '1' : '0'; ?>">
+            <a class="app-sidebar__link<?php echo $nav_ranking_active ? ' is-active is-active-soft' : ''; ?>" href="<?php echo esc_url($url_ranking); ?>">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"></path></svg>
+                <span>Ranking</span>
+                <svg class="app-sidebar__chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+            </a>
+            <div class="app-sidebar__sub">
+                <a class="app-sidebar__sublink<?php echo $nav_ranking_tab === 'sucursal' ? ' is-active' : ''; ?>" data-ranking-tab="sucursal" href="<?php echo esc_url(add_query_arg('tab', 'sucursal', $url_ranking)); ?>">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.2-5h15.6L21 9M3 9h18M4.5 9v10.5h15V9M9 19.5v-6h6v6M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"></path></svg>
+                    <span>Sucursal</span>
+                </a>
+                <a class="app-sidebar__sublink<?php echo $nav_ranking_tab === 'equipo' ? ' is-active' : ''; ?>" data-ranking-tab="equipo" href="<?php echo esc_url(add_query_arg('tab', 'equipo', $url_ranking)); ?>">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8M22 20v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    <span>Mis asesores</span>
+                </a>
+            </div>
+        </div>
+        <?php else: ?>
         <a class="app-sidebar__link<?php echo $nav_ranking_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_ranking); ?>">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"></path></svg>
             <span>Ranking</span>
         </a>
+        <?php endif; ?>
         <?php endif; ?>
 
         <div class="app-sidebar__section app-sidebar__section--spaced">Mi cuenta</div>
@@ -246,6 +279,43 @@ $user_menu_html = ob_get_clean();
         });
         document.querySelectorAll('[data-app-user-backdrop].is-open').forEach(function (b) {
             b.classList.remove('is-open');
+        });
+    }
+
+    // Acordeón del sidebar: grupos (ej. Ranking de jefes) que se abren/cierran.
+    // - Se abre solo si el usuario está dentro de la sección (data-open-on-load).
+    // - Si no, respeta la última preferencia guardada en localStorage.
+    // - El chevron es la zona de toggle; el resto del link navega normal.
+    function initSidebarGroups() {
+        document.querySelectorAll('[data-sidebar-group]').forEach(function (group) {
+            var link = group.querySelector('.app-sidebar__link');
+            var chev = group.querySelector('.app-sidebar__chev');
+            var key = 'billetera_sidebar_' + group.dataset.sidebarGroup + '_open';
+
+            var open;
+            if (group.dataset.openOnLoad === '1') {
+                open = true; // dentro de la sección: siempre expandido
+            } else {
+                try { open = localStorage.getItem(key) === '1'; } catch (e) { open = false; }
+            }
+
+            function apply() {
+                group.classList.toggle('is-open', open);
+                if (chev) chev.setAttribute('aria-expanded', open ? 'true' : 'false');
+            }
+
+            if (chev) {
+                chev.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    open = !open;
+                    try { localStorage.setItem(key, open ? '1' : '0'); } catch (err) {}
+                    apply();
+                });
+            }
+
+            // Estado inicial (expandido si está dentro de la sección).
+            apply();
         });
     }
 
@@ -282,9 +352,13 @@ $user_menu_html = ob_get_clean();
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initAppHeader);
+        document.addEventListener('DOMContentLoaded', function () {
+            initAppHeader();
+            initSidebarGroups();
+        });
     } else {
         initAppHeader();
+        initSidebarGroups();
     }
 })();
 </script>

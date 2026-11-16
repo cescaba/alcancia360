@@ -48,11 +48,18 @@ const PIG_PHRASES = [
 let fillPct = 0;
 let rank = 0;
 let racha = 0;
+let esJefe = false;
 let mobileHintIdx = 0;
 let deskHintIdx = 1;
 
+// Los jefes (de venta o postventa) no tienen racha: se omite esa frase.
+function activePhrases() {
+    return esJefe ? PIG_PHRASES.slice(0, 3) : PIG_PHRASES;
+}
+
 function pigPhrase(idx, ctx) {
-    return PIG_PHRASES[idx % PIG_PHRASES.length](ctx);
+    const list = activePhrases();
+    return list[idx % list.length](ctx);
 }
 
 function renderPigHints() {
@@ -166,6 +173,7 @@ function updateStats(d) {
 
     rank = (d.ranking && d.ranking.rank) ? d.ranking.rank : 0;
     racha = Number(d.racha) || 0;
+    esJefe = !!d.es_jefe;
     const total = (d.ranking && d.ranking.total) ? d.ranking.total : 0;
     const rankGlobal = (d.ranking_global && d.ranking_global.rank) ? d.ranking_global.rank : 0;
     const totalGlobal = (d.ranking_global && d.ranking_global.total) ? d.ranking_global.total : 0;

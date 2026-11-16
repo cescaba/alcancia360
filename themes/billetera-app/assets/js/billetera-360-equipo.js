@@ -540,6 +540,23 @@
         return diff <= 0 ? 0 : diff;
     }
 
+    // Fecha corta "12 nov" para la columna "Ult. venta" (detalle completo en el title).
+    var MESES_CORTOS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+    function fechaCorta(s) {
+        var d = s ? new Date(String(s).replace(' ', 'T')) : null;
+        if (!d || isNaN(d.getTime())) return null;
+        return d.getDate() + ' ' + MESES_CORTOS[d.getMonth()];
+    }
+
+    function fechaLarga(s) {
+        var d = s ? new Date(String(s).replace(' ', 'T')) : null;
+        if (!d || isNaN(d.getTime())) return '';
+        function p2(n) { return (n < 10 ? '0' : '') + n; }
+        return d.getDate() + ' de ' + MESES_FULL[d.getMonth()] + ' de ' + d.getFullYear() +
+            ', ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+    }
+
     function renderTop() {
         if (!els.topList || !data) return;
         els.topList.innerHTML = '';
@@ -581,7 +598,7 @@
             nomTxt.textContent = row.nombre;
             nom.appendChild(nomTxt);
             if (sinVentas) {
-                var dias = haceDias(row.ultima);
+                var dias = haceDias(row.ultima_total || row.ultima);
                 var badge = document.createElement('span');
                 badge.className = 'eq-top__badge';
                 badge.textContent = 'Sin ventas' + (dias !== null ? ' · hace ' + (dias === 0 ? 'hoy' : dias + ' día' + (dias === 1 ? '' : 's')) : '');
@@ -593,6 +610,12 @@
             racha.textContent = Number(row.racha) > 0 ? ('🔥 ' + row.racha) : '—';
             racha.title = Number(row.racha) > 0 ? (row.racha + (row.racha === 1 ? ' día de racha' : ' días de racha')) : 'Sin racha activa';
 
+            var fult = document.createElement('span');
+            fult.className = 'eq-top__fult';
+            var fultTxt = fechaCorta(row.ultima_total || row.ultima);
+            fult.textContent = fultTxt || '—';
+            fult.title = fultTxt ? ('Última venta: ' + fechaLarga(row.ultima_total || row.ultima)) : 'Sin ventas registradas';
+
             var vts = document.createElement('span');
             vts.className = 'eq-top__vts' + (i === 0 && !sinVentas ? ' eq-top__vts--gold' : '');
             vts.textContent = String(row.ventas);
@@ -600,6 +623,7 @@
             li.appendChild(puesto);
             li.appendChild(nom);
             li.appendChild(racha);
+            li.appendChild(fult);
             li.appendChild(vts);
             els.topList.appendChild(li);
         });
