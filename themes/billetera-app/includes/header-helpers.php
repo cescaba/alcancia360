@@ -143,23 +143,8 @@ function billetera_get_notificaciones($user_id) {
     $notificaciones = [];
 
     if (in_array('jefe_venta', $roles, true)) {
-        // Sucursales donde este usuario es jefe de venta
-        $tienda_ids = [];
-        $tiendas = get_posts([
-            'post_type' => 'tienda',
-            'numberposts' => -1,
-            'post_status' => 'publish',
-        ]);
-
-        foreach ($tiendas as $t) {
-            $jefes = get_post_meta($t->ID, '_jefes_venta_asociados', true);
-            if (!is_array($jefes)) {
-                $jefes = $jefes ? [$jefes] : [];
-            }
-            if (in_array((string) $user_id, array_map('strval', $jefes), true)) {
-                $tienda_ids[] = $t->ID;
-            }
-        }
+        // Sucursales donde este usuario es jefe de venta (perfil: _tiendas_del_jefe).
+        $tienda_ids = array_values(array_filter(array_map('intval', (array) get_user_meta($user_id, '_tiendas_del_jefe', true))));
 
         if (empty($tienda_ids)) {
             return [];

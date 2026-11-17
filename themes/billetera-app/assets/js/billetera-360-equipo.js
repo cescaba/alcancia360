@@ -78,6 +78,10 @@
         return 'S/ ' + n.toFixed(0);
     }
 
+    // Flag global: controla toda la UI de meta en "Mi equipo" (KPIs, goal card,
+    // línea de meta del gráfico y panel "Para llegar a tu meta").
+    var META_ON = !!(window.billetera && window.billetera.meta_equipo_v2);
+
     function setText(id, value) {
         var el = document.getElementById(id);
         if (el) el.textContent = value;
@@ -157,11 +161,80 @@
         renderBanner();
         renderKpis();
         renderGoal();
-        renderAporta();
+        if (window.billetera && window.billetera.meta_equipo_v2) {
+            renderLlegarMeta();
+        } else {
+            renderAporta();
+        }
         renderTrend(data.tendencia || []);
         renderBreakdown();
         renderTop();
         renderAlertas();
+    }
+
+    // Vista v2 (flag window.billetera.meta_equipo_v2):
+    // "Para llegar a tu meta" — filas por categoría con meta de sucursal.
+    function renderLlegarMeta() {
+        // Título con el periodo (mismo criterio que el top).
+        var mesLabel = (periodo === 'historico') ? 'Histórico'
+            : (periodo === 'ano' ? (data.base_ano || curAno()) : mesMes(data.base_mes));
+        setText('eq-com2-mes', mesLabel);
+
+        var list = document.getElementById('eq-com2-list');
+        if (!list) return;
+        list.innerHTML = '';
+
+        var rows = (data && data.llegar_meta) || [];
+        if (!rows.length) {
+            list.appendChild(emptyNote('No hay metas por categoría configuradas para tu equipo.'));
+            return;
+        }
+
+        rows.forEach(function (row, i) {
+            var rowEl = document.createElement('div');
+            rowEl.className = 'eq-com2__row'
+                + (i === 0 ? ' eq-com2__row--top' : (i % 2 === 1 ? ' eq-com2__row--alt' : ''));
+
+            // CAT. — iniciales de la categoría en la cajita.
+            var cat = document.createElement('span');
+            cat.className = 'eq-com2__icnbox';
+            cat.textContent = iniciales(row.nombre);
+            cat.title = row.nombre;
+
+            // PRODUCTO — categoría + tag de línea.
+            var nom = document.createElement('div');
+            nom.className = 'eq-com2__concepto';
+            var tit = document.createElement('div');
+            tit.className = 'eq-com2__titulo';
+            tit.textContent = row.nombre;
+            nom.appendChild(tit);
+            if (row.linea) {
+                var tag = document.createElement('span');
+                tag.className = 'eq-com2__subtag';
+                tag.textContent = row.linea;
+                nom.appendChild(tag);
+            }
+
+            // COMISIÓN POR VENTA — promedio real de los espejos del jefe.
+            var com = document.createElement('span');
+            com.className = 'eq-com2__detalle eq-com2__comcell';
+            var cp = Number(row.com_prom) || 0;
+            com.textContent = cp > 0 ? money(cp) : '—';
+            com.title = 'Promedio de lo que te aporta cada venta de esta categoría (sin bonos)';
+
+            // VENTAS NECESARIAS — lo que falta de la meta de la categoría.
+            var nec = document.createElement('span');
+            nec.className = 'eq-com2__monto'
+                + (i === 0 && Number(row.faltan) > 0 ? ' eq-com2__monto--gold' : '');
+            nec.textContent = String(Number(row.faltan) || 0);
+            nec.title = 'Meta ' + row.meta + ' · van ' + row.ventas + ' · faltan ' + row.faltan;
+
+            rowEl.appendChild(cat);
+            rowEl.appendChild(nom);
+            rowEl.appendChild(com);
+            rowEl.appendChild(nec);
+            list.appendChild(rowEl);
+        });
     }
 
     // Banner de campaña (mismo motor que Mi desempeño).
@@ -247,6 +320,15 @@
     function renderKpis() {
         var k = (data && data.kpis) || {};
         setText('k5-ventas', String(Number(k.ventas) || 0));
+        // KPIs de meta (solo con el flag activo; sin flag no existen en el DOM).
+        if (META_ON) {
+            var meta = Number(k.meta_ventas) || 0;
+            var ventas = Number(k.ventas) || 0;
+            var pct = meta > 0 ? Math.round(ventas / meta * 100) : 0;
+            setText('k5-avance', meta > 0 ? (ventas + ' de ' + meta) : '—');
+            setText('k5-faltan', meta > 0 ? (Math.max(0, meta - ventas) + (meta - ventas === 1 ? ' venta' : ' ventas')) : '—');
+            document.getElementById('k5-avance').title = meta > 0 ? ('Avance: ' + pct + '% de la meta') : '';
+        }
         setText('k5-cierre', (Number(k.dias_rest) || 0) + (Number(k.dias_rest) === 1 ? ' día' : ' días'));
         setText('k5-proy', '~' + (Number(k.proy_ventas) || 0) + ' ventas');
     }
@@ -255,12 +337,42 @@
         var k = (data && data.kpis) || {};
         var jefe = (data && data.jefe) || {};
 
-        // La meta del equipo no se muestra. En el goal card solo queda el
-        // chanchito (con relleno animado como referencia visual) y el
-        // comisionado del jefe ("Mi pocito de jefe").
-        var fill = (k.meta_ventas > 0) ? Math.min(100, Math.round(k.ventas / k.meta_ventas * 100)) : 0;
+        // Con la meta oculta (flag off): solo el chanchito sin progreso y el
+        // pocito del jefe (diseño anterior).
+        if (!META_ON) {
+            setText('st-pocito', money(jefe.com_mes));
+            return;
+        }
+
+        var metaV  = Number(k.meta_ventas) || 0;
+        var ventas = Number(k.ventas) || 0;
+        var fill   = (metaV > 0) ? Math.max(0, Math.min(100, Math.round(ventas / metaV * 100))) : 0;
+
         var pig = document.getElementById('st-pig-fill');
         if (pig) pig.style.clipPath = 'inset(' + (100 - fill) + '% 0 0 0)';
+
+        // Meta del equipo (en nº de ventas, criterio del panel de equipo).
+        setText('st-goal-meta', metaV > 0 ? (metaV + (metaV === 1 ? ' venta' : ' ventas')) : '—');
+        var fillEl = document.getElementById('st-goal-fill');
+        if (fillEl) fillEl.style.width = fill + '%';
+
+        // Marca del ritmo ideal: posición según días laborables transcurridos.
+        var mark = document.getElementById('st-goal-mark');
+        var total = Number(k.dias_laborables) || 0;
+        var trans = Number(k.dias_laborables_transcurridos) || 0;
+        if (mark) mark.style.left = (total > 0 ? Math.min(100, trans / total * 100) : 0) + '%';
+
+        // Ritmo ideal hoy vs avance real (en ventas del equipo).
+        var pace = document.getElementById('st-goal-pace');
+        if (pace) {
+            var ideal = (data && data.es_actual === false) ? metaV : (total > 0 ? Math.round(metaV * trans / total) : metaV);
+            var diff = ventas - ideal;
+            var abs = Math.abs(diff);
+            var dir = diff >= 0
+                ? '<b class="up">vas ' + abs + (abs === 1 ? ' venta' : ' ventas') + ' arriba</b>'
+                : '<b class="down">vas ' + abs + (abs === 1 ? ' venta' : ' ventas') + ' abajo</b>';
+            pace.innerHTML = 'Ritmo ideal hoy ' + ideal + ' · ' + dir;
+        }
 
         setText('st-pocito', money(jefe.com_mes));
     }
@@ -366,9 +478,10 @@
         els.trend.innerHTML = '';
         trendRows = rows || [];
 
-        // La meta del equipo no se muestra: sin leyenda ni línea de meta.
-        // El escalado usa el máximo de las propias barras.
-        var meta = 0;
+        // Línea de meta del equipo: solo con el flag activo.
+        // La meta es en nº de ventas (kpis.meta_ventas).
+        var meta = META_ON ? (Number((data.kpis || {}).meta_ventas) || 0) : 0;
+        setText('st-chart-meta', META_ON && meta > 0 ? (meta + (meta === 1 ? ' venta' : ' ventas')) : '—');
 
         if (!trendRows.some(function (r) { return Number(r.ventas) > 0; })) {
             els.trend.appendChild(emptyNote('Tu equipo aún no registra ventas en este periodo.'));
@@ -454,7 +567,9 @@
             if (isBest) {
                 var m = /^(\d{4})-(\d{2})$/.exec(r.mes || '');
                 var nombre = m ? MESES_FULL[parseInt(m[2], 10) - 1] : r.label;
-                els.trendDetail.innerHTML = 'Mejor mes: ' + nombre + ' · <b>' + r.ventas + ' ventas del equipo</b>';
+                var metaV = META_ON ? (Number((data.kpis || {}).meta_ventas) || 0) : 0;
+                var pct = metaV > 0 ? Math.round(Number(r.ventas) / metaV * 100) : 0;
+                els.trendDetail.innerHTML = 'Mejor mes: ' + nombre + ' · <b>' + r.ventas + ' ventas del equipo' + (pct > 0 ? ' (' + pct + '% de la meta)' : '') + '</b>';
             } else {
                 els.trendDetail.textContent = r.label + ' · ' + r.ventas + (r.ventas === 1 ? ' venta' : ' ventas') +
                     (Number(r.total) > 0 ? ' · ' + money(r.total) : '');
@@ -618,12 +733,19 @@
             comEl.textContent = money(row.com || 0);
             comEl.title = 'Comisiones del asesor en el periodo';
 
+            // Cuanto te aporta este asesor (tu comision espejo del periodo).
+            var aporta = document.createElement('span');
+            aporta.className = 'eq-top__aporta';
+            aporta.textContent = money(row.aporta || 0);
+            aporta.title = 'Comisión que te aporta este asesor (tu comisión de jefe por sus ventas)';
+
             li.appendChild(puesto);
             li.appendChild(nom);
             li.appendChild(racha);
             li.appendChild(fult);
             li.appendChild(vts);
             li.appendChild(comEl);
+            li.appendChild(aporta);
             els.topList.appendChild(li);
         });
 

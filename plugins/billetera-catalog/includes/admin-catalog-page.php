@@ -52,6 +52,7 @@ function billetera_catalog_admin_menu() {
     add_submenu_page('billetera_catalogo', 'Subcategorías', 'Subcategorías', $cap, 'billetera_subcategorias', 'billetera_render_subcategorias_page');
     add_submenu_page('billetera_catalogo', 'Comisiones', 'Comisiones', $cap, 'billetera_comisiones_admin', 'billetera_render_comisiones_page');
     add_submenu_page('billetera_catalogo', 'Metas potenciales', 'Metas potenciales', $cap, 'billetera_metas_admin', 'billetera_render_metas_page');
+    add_submenu_page('billetera_catalogo', 'Metas por sucursal', 'Metas por sucursal', $cap, 'billetera_metas_sucursal_admin', 'billetera_render_metas_sucursal_admin_page');
     add_submenu_page('billetera_catalogo', 'Líneas y Marcas', 'Líneas y Marcas', $cap, 'billetera_lineas_admin', 'billetera_render_lineas_page');
     add_submenu_page('billetera_catalogo', 'Configuración', 'Configuración', $cap, 'billetera_config_admin', 'billetera_render_config_page');
     // OCULTAMIENTO PERMANENTE para administrador_hyundai: estas 2 páginas usan
@@ -95,7 +96,7 @@ function billetera_catalog_ocultar_hyundai() {
 add_action('admin_enqueue_scripts', 'billetera_catalog_admin_assets');
 function billetera_catalog_admin_assets() {
     $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
-    $pages = ['billetera_catalogo', 'billetera_subcategorias', 'billetera_comisiones_admin', 'billetera_metas_admin', 'billetera_lineas_admin', 'billetera_config_admin', 'billetera_resumen_admin', 'billetera_reporte_comisiones', 'billetera_bonus_admin'];
+    $pages = ['billetera_catalogo', 'billetera_subcategorias', 'billetera_comisiones_admin', 'billetera_metas_admin', 'billetera_metas_sucursal_admin', 'billetera_lineas_admin', 'billetera_config_admin', 'billetera_resumen_admin', 'billetera_reporte_comisiones', 'billetera_bonus_admin'];
     if (!in_array($page, $pages, true)) {
         return;
     }
@@ -949,6 +950,298 @@ function billetera_render_metas_page() {
             </tbody>
         </table>
     </div>
+    <?php
+    billetera_bc_close();
+}
+
+// ===========================================================================
+// METAS POR SUCURSAL (unidades por categoría)
+// ===========================================================================
+
+// AJAX (admin): categorías activas de una línea, para el cascada del
+// formulario "Metas por sucursal". A diferencia de billetera_get_categorias
+// (que valida permisos de línea del asesor), aquí solo se exige la
+// capability del catálogo porque lo usa un administrador.
+add_action('wp_ajax_billetera_bc_admin_categorias', 'billetera_bc_admin_get_categorias');
+function billetera_bc_admin_get_categorias() {
+    if (!current_user_can(BILLETERA_CATALOG_CAP)) {
+        wp_send_json_error(['message' => 'Sin permisos']);
+    }
+
+    global $wpdb;
+    $linea = sanitize_text_field($_POST['linea_codigo'] ?? '');
+    if ($linea === '') {
+        wp_send_json_error(['message' => 'Línea inválida']);
+    }
+
+    $rows = $wpdb->get_results($wpdb->prepare("
+        SELECT id, nombre
+        FROM {$wpdb->prefix}billetera_categorias
+        WHERE linea_codigo = %s AND activo = 1
+        ORDER BY orden_display ASC, nombre ASC
+    ", $linea));
+
+    wp_send_json_success($rows);
+}
+
+function billetera_render_metas_sucursal_admin_page() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'billetera_metas_sucursal';
+    $msg = '';
+    $err = '';
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bc_action'])) {
+        check_admin_referer('billetera_catalog');
+        $action = sanitize_key($_POST['bc_action']);
+
+        if ($action === 'save') {
+            $id      = intval(billetera_bc_post('id', 0));
+            $tienda  = intval(billetera_bc_post('tienda_id', 0));
+            $linea   = sanitize_text_field(billetera_bc_post('linea_codigo'));
+            $catid   = intval(billetera_bc_post('categoria_id', 0));
+            $tipo    = sanitize_text_field(billetera_bc_post('tipo'));
+            $unid    = intval(billetera_bc_post('unidades', 0));
+
+            // La categoría debe existir, estar activa y pertenecer a la línea.
+            $cat_ok = 0;
+            if ($catid > 0 && $linea !== '') {
+                $cat_ok = intval($wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$wpdb->prefix}billetera_categorias WHERE id = %d AND linea_codigo = %s AND activo = 1",
+                    $catid, $linea
+                )));
+            }
+
+            if ($tienda <= 0 || $linea === '' || !$cat_ok || !in_array($tipo, ['Venta', 'Post Venta'], true) || $unid < 0) {
+                $err = 'Sucursal, línea, categoría (de esa línea), tipo y unidades son obligatorios.';
+            } else {
+                if ($id <= 0) {
+                    $id = intval($wpdb->get_var($wpdb->prepare(
+                        "SELECT id FROM $table WHERE tienda_id = %d AND linea_codigo = %s AND categoria_id = %d AND tipo = %s",
+                        $tienda, $linea, $catid, $tipo
+                    )));
+                }
+                $data = ['tienda_id' => $tienda, 'linea_codigo' => $linea, 'categoria_id' => $catid, 'tipo' => $tipo, 'unidades' => $unid];
+                $fmt  = ['%d', '%s', '%d', '%s', '%d'];
+                if ($id > 0) {
+                    $wpdb->update($table, $data, ['id' => $id], $fmt, ['%d']);
+                    $msg = 'Meta de sucursal actualizada.';
+                } else {
+                    $wpdb->insert($table, $data, $fmt);
+                    if ($wpdb->insert_id) {
+                        $msg = 'Meta de sucursal creada.';
+                    } else {
+                        $err = 'No se pudo crear la meta.';
+                    }
+                }
+            }
+        } elseif ($action === 'delete') {
+            $id = intval(billetera_bc_post('id', 0));
+            if ($id) {
+                $wpdb->delete($table, ['id' => $id], ['%d']);
+                $msg = 'Meta de sucursal eliminada.';
+            }
+        }
+    }
+
+    $edit = null;
+    if (isset($_GET['action'], $_GET['id']) && $_GET['action'] === 'edit') {
+        $edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id = %d", intval($_GET['id'])));
+    }
+
+    $tiendas = billetera_bc_tiendas();
+    $lineas  = billetera_bc_lineas();
+
+    // En modo edición se precargan las categorías de la línea de la meta.
+    $cats_edit = [];
+    if ($edit) {
+        $cats_edit = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, nombre FROM {$wpdb->prefix}billetera_categorias WHERE linea_codigo = %s AND activo = 1 ORDER BY orden_display ASC, nombre ASC",
+            $edit->linea_codigo
+        ));
+    }
+
+    $rows = $wpdb->get_results("
+        SELECT m.*, l.nombre AS linea_nombre, c.nombre AS categoria_nombre
+        FROM $table m
+        LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = m.linea_codigo
+        LEFT JOIN {$wpdb->prefix}billetera_categorias c ON c.id = m.categoria_id
+        ORDER BY m.tienda_id, m.linea_codigo, c.nombre, m.tipo
+    ");
+
+    // Meta total de cada sucursal (suma de unidades por categoría), por tipo.
+    $resumen = $wpdb->get_results("
+        SELECT tienda_id, tipo, SUM(unidades) AS total, COUNT(*) AS n_cats
+        FROM $table
+        GROUP BY tienda_id, tipo
+        ORDER BY tienda_id, tipo
+    ");
+
+    billetera_bc_open('Metas por sucursal', 'Meta mensual en UNIDADES por sucursal, línea, categoría y tipo. La meta total de la sucursal es la suma de las unidades de cada categoría; Venta y Post Venta se calculan por separado.');
+    billetera_bc_notices($msg, $err);
+    ?>
+    <div class="bc-card">
+        <h2 class="bc-card__title"><?php echo $edit ? 'Editar meta de sucursal' : 'Nueva meta de sucursal'; ?></h2>
+        <form method="post" class="bc-grid">
+            <?php wp_nonce_field('billetera_catalog'); ?>
+            <input type="hidden" name="bc_action" value="save">
+            <input type="hidden" name="id" value="<?php echo $edit ? intval($edit->id) : 0; ?>">
+
+            <div class="bc-field bc-field--full">
+                <label class="bc-label">Sucursal *</label>
+                <select name="tienda_id" class="bc-select" required>
+                    <option value="">— Selecciona —</option>
+                    <?php foreach ($tiendas as $t): ?>
+                        <option value="<?php echo intval($t->ID); ?>" <?php echo selected($edit->tienda_id ?? 0, $t->ID, false); ?>><?php echo esc_html($t->post_title); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Línea *</label>
+                <select name="linea_codigo" id="bcms-linea" class="bc-select" required>
+                    <option value="">— Selecciona —</option>
+                    <?php foreach ($lineas as $l): ?>
+                        <option value="<?php echo esc_attr($l->codigo); ?>" <?php echo selected($edit->linea_codigo ?? '', $l->codigo, false); ?>><?php echo esc_html($l->nombre); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Categoría *</label>
+                <select name="categoria_id" id="bcms-categoria" class="bc-select" required>
+                    <option value="">— Selecciona línea —</option>
+                    <?php foreach ((array) $cats_edit as $c): ?>
+                        <option value="<?php echo intval($c->id); ?>" <?php echo selected($edit->categoria_id ?? 0, $c->id, false); ?>><?php echo esc_html($c->nombre); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Tipo *</label>
+                <select name="tipo" class="bc-select" required>
+                    <option value="Venta" <?php echo selected($edit->tipo ?? 'Venta', 'Venta', false); ?>>Venta</option>
+                    <option value="Post Venta" <?php echo selected($edit->tipo ?? '', 'Post Venta', false); ?>>Post Venta</option>
+                </select>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Unidades *</label>
+                <input type="number" step="1" min="0" name="unidades" class="bc-input" required value="<?php echo esc_attr($edit->unidades ?? ''); ?>" placeholder="0">
+            </div>
+            <div class="bc-field bc-field--actions">
+                <button type="submit" class="button button-primary"><?php echo $edit ? 'Guardar cambios' : 'Crear meta'; ?></button>
+                <?php if ($edit): ?><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=billetera_metas_sucursal_admin')); ?>">Cancelar</a><?php endif; ?>
+            </div>
+        </form>
+    </div>
+
+    <div class="bc-card">
+        <h2 class="bc-card__title">Metas registradas</h2>
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th style="width:60px;">ID</th>
+                    <th>Sucursal</th>
+                    <th>Línea</th>
+                    <th>Categoría</th>
+                    <th>Tipo</th>
+                    <th style="width:130px;">Unidades</th>
+                    <th style="width:150px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!$rows): ?>
+                    <tr><td colspan="7">Sin metas de sucursal registradas.</td></tr>
+                <?php else: foreach ($rows as $r): ?>
+                    <tr>
+                        <td><?php echo intval($r->id); ?></td>
+                        <td><?php echo esc_html(get_the_title($r->tienda_id) ?: ('#' . intval($r->tienda_id))); ?></td>
+                        <td><?php echo esc_html($r->linea_nombre ?: $r->linea_codigo); ?></td>
+                        <td><?php echo esc_html($r->categoria_nombre ?: ('#' . intval($r->categoria_id))); ?></td>
+                        <td><?php echo esc_html($r->tipo); ?></td>
+                        <td><?php echo esc_html(number_format((float) $r->unidades, 0)); ?></td>
+                        <td>
+                            <a class="bc-link" href="<?php echo esc_url(add_query_arg(['page' => 'billetera_metas_sucursal_admin', 'action' => 'edit', 'id' => $r->id], admin_url('admin.php'))); ?>">Editar</a>
+                            <span class="bc-sep">|</span>
+                            <?php billetera_bc_delete_form('delete', $r->id); ?>
+                        </td>
+                    </tr>
+                <?php endforeach; endif; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <?php if ($resumen): ?>
+    <div class="bc-card">
+        <h2 class="bc-card__title">Meta total por sucursal (suma de categorías)</h2>
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th>Sucursal</th>
+                    <th>Tipo</th>
+                    <th style="width:160px;">Meta total (unidades)</th>
+                    <th style="width:160px;">Categorías</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($resumen as $s): ?>
+                    <tr>
+                        <td><?php echo esc_html(get_the_title($s->tienda_id) ?: ('#' . intval($s->tienda_id))); ?></td>
+                        <td><?php echo esc_html($s->tipo); ?></td>
+                        <td><?php echo esc_html(number_format((float) $s->total, 0)); ?></td>
+                        <td><?php echo intval($s->n_cats); ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
+    <?php
+    // Cascada Línea → Categoría vía AJAX (solo esta página).
+    ?>
+    <script>
+    (function () {
+        var linea = document.getElementById('bcms-linea');
+        var cat = document.getElementById('bcms-categoria');
+        if (!linea || !cat) return;
+
+        function loadCats(keepCurrent) {
+            var codigo = linea.value;
+            if (!codigo) {
+                cat.innerHTML = '<option value="">— Selecciona línea —</option>';
+                return;
+            }
+            var body = new URLSearchParams();
+            body.append('action', 'billetera_bc_admin_categorias');
+            body.append('linea_codigo', codigo);
+            fetch('<?php echo esc_url(admin_url('admin-ajax.php')); ?>', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                body: body.toString()
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res || !res.success) {
+                        cat.innerHTML = '<option value="">— Sin categorías —</option>';
+                        return;
+                    }
+                    var prev = keepCurrent ? String(cat.value || '') : '';
+                    cat.innerHTML = '<option value="">— Selecciona —</option>';
+                    (res.data || []).forEach(function (c) {
+                        var opt = document.createElement('option');
+                        opt.value = c.id;
+                        opt.textContent = c.nombre;
+                        if (prev && String(c.id) === prev) opt.selected = true;
+                        cat.appendChild(opt);
+                    });
+                })
+                .catch(function () {
+                    cat.innerHTML = '<option value="">— Error al cargar —</option>';
+                });
+        }
+
+        linea.addEventListener('change', function () { loadCats(false); });
+        // Al abrir en modo edición, recarga las categorías conservando la elegida.
+        if (linea.value) { loadCats(true); }
+    })();
+    </script>
     <?php
     billetera_bc_close();
 }

@@ -26,25 +26,27 @@ $mes_label = $meses[intval(current_time('n')) - 1] . ' ' . current_time('Y');
 $registro_url = function_exists('billetera_get_template_url') ? billetera_get_template_url('page-billetera-360-responsive.php') : '#';
 $alcancia_img = billetera_asset_url('/assets/img/alcancia.svg');
 
-// Sucursales donde este usuario es jefe de venta (multi-sucursal).
+// FLAG: controla TODA la UI relacionada a la meta en "Mi equipo" (KPIs de
+// avance/faltante, panel "Para llegar a tu meta", meta y progreso del goal
+// card, línea de meta en el gráfico). Activar (true) cuando la data de
+// sucursales esté disponible. Con false se oculta todo lo de meta y se
+// mantiene el diseño anterior sin cambios.
+$meta_equipo_v2 = false;
+
+// Sucursales donde este usuario es jefe de venta (perfil: _tiendas_del_jefe).
+// Sin fallback a _tienda_asociada.
 $tiendas_jefe = array();
-$tiendas_all = get_posts(array('post_type' => 'tienda', 'numberposts' => -1, 'post_status' => 'publish', 'orderby' => 'title', 'order' => 'ASC'));
-foreach ($tiendas_all as $t) {
-    $jefes = get_post_meta($t->ID, '_jefes_venta_asociados', true);
-    if (!is_array($jefes)) {
-        $jefes = $jefes ? [$jefes] : [];
-    }
-    if (in_array((string) $current_user->ID, array_map('strval', $jefes), true)) {
-        $tiendas_jefe[intval($t->ID)] = $t->post_title;
-    }
+$mis_tiendas_meta = get_user_meta($current_user->ID, '_tiendas_del_jefe', true);
+if (!is_array($mis_tiendas_meta)) {
+    $mis_tiendas_meta = $mis_tiendas_meta ? [$mis_tiendas_meta] : [];
 }
-if (empty($tiendas_jefe)) {
-    $tid_jefe = intval(get_user_meta($current_user->ID, '_tienda_asociada', true));
-    if ($tid_jefe) {
-        $t = get_post($tid_jefe);
-        if ($t) {
-            $tiendas_jefe[$tid_jefe] = $t->post_title;
-        }
+foreach (array_map('intval', (array) $mis_tiendas_meta) as $tid_jefe) {
+    if (!$tid_jefe) {
+        continue;
+    }
+    $t = get_post($tid_jefe);
+    if ($t && $t->post_type === 'tienda') {
+        $tiendas_jefe[intval($t->ID)] = $t->post_title;
     }
 }
 ?>
@@ -148,14 +150,25 @@ if (empty($tiendas_jefe)) {
                         </div>
                     </section>
 
-                    <!-- KPIs del equipo (sin métricas de meta) -->
+                    <!-- KPIs del equipo (incluye avance de meta por sucursal) -->
                     <div class="st-kpis5">
                         <div class="st-kpi5">
                             <div class="st-kpi5__val st-kpi5__val--blue" id="k5-ventas">—</div>
                             <div class="st-kpi5__label">Ventas del equipo</div>
                         </div>
 
+                        <?php if ($meta_equipo_v2): ?>
+                        <div class="st-kpi5 st-kpi5--alt">
+                            <div class="st-kpi5__val st-kpi5__val--gold" id="k5-avance">—</div>
+                            <div class="st-kpi5__label">Avance de meta</div>
+                        </div>
                         <div class="st-kpi5">
+                            <div class="st-kpi5__val" id="k5-faltan">—</div>
+                            <div class="st-kpi5__label">Faltan para la meta</div>
+                        </div>
+                        <?php endif; ?>
+
+                        <div class="st-kpi5 st-kpi5--alt">
                             <div class="st-kpi5__val" id="k5-cierre">—</div>
                             <div class="st-kpi5__label">Para el cierre</div>
                         </div>
@@ -185,10 +198,42 @@ if (empty($tiendas_jefe)) {
                                         <div class="st-goal__label">Mi pocito de jefe</div>
                                         <div class="st-goal__pocito" id="st-pocito">—</div>
                                     </div>
+                                    <?php if ($meta_equipo_v2): ?>
+                                    <div>
+                                        <div class="st-goal__label">Meta del equipo</div>
+                                        <div class="st-goal__meta-val" id="st-goal-meta">—</div>
+                                    </div>
                                 </div>
+                                <div class="st-goal__bar">
+                                    <div class="st-goal__fill" id="st-goal-fill"></div>
+                                    <div class="st-goal__mark" id="st-goal-mark"></div>
+                                </div>
+                                <div class="st-goal__pace" id="st-goal-pace"></div>
+                                <?php else: ?>
+                                </div>
+                                <?php endif; ?>
                             </div>
                         </aside>
 
+                        <?php if ($meta_equipo_v2): ?>
+                        <!-- Para llegar a tu meta · v2 (flag $meta_equipo_v2) -->
+                        <section class="eq-com2">
+                            <div class="eq-com2__meta">
+                                <span class="eq-com2__meta-label">Para llegar a tu meta</span>
+                                <span class="eq-com2__title-mes" id="eq-com2-mes">—</span>
+                            </div>
+                            <div class="eq-com2__head">
+                                <span class="eq-com2__cat-h">Cat.</span>
+                                <span class="eq-com2__concepto">Producto</span>
+                                <span class="eq-com2__col eq-com2__comcell">Comisión por venta</span>
+                                <span class="eq-com2__col">Ventas necesarias</span>
+                            </div>
+                            <div id="eq-com2-list"></div>
+                            <div class="eq-com2__foot">
+                                <span class="eq-com2__nota">Comisión por venta según tus registros, sin bonos. Referencial.</span>
+                            </div>
+                        </section>
+                        <?php else: ?>
                         <section class="eq-aporta">
                             <div class="eq-aporta__head">
                                 <span class="eq-aporta__title">Tu comisión de jefe</span>
@@ -205,6 +250,7 @@ if (empty($tiendas_jefe)) {
                                 <span class="eq-aporta__note">Se genera con las ventas validadas de tu equipo.</span>
                             </div>
                         </section>
+                        <?php endif; ?>
                     </div>
 
                     <!-- CHART + ¿QUÉ VENDE TU EQUIPO? -->
@@ -219,6 +265,9 @@ if (empty($tiendas_jefe)) {
                                     </button>
                                     <div class="st-chartper__menu" id="st-chartper-menu" role="listbox" aria-label="Periodo del gráfico" hidden></div>
                                 </div>
+                                <?php if ($meta_equipo_v2): ?>
+                                <div class="st-chartlegend"><span class="st-chartlegend__sw"></span>Meta <b id="st-chart-meta">—</b></div>
+                                <?php endif; ?>
                             </div>
                             <div class="st-chartwrap">
                                 <div class="st-chartmetal" id="st-chart-metal" hidden></div>
@@ -253,9 +302,10 @@ if (empty($tiendas_jefe)) {
                             <span class="eq-top__c5">Últ. venta</span>
                             <span class="eq-top__c4">Ventas</span>
                             <span class="eq-top__c6">Comisionado</span>
+                            <span class="eq-top__c7">Te aporta</span>
                         </div>
                         <div id="eq-top-list"></div>
-                        <div class="eq-top__note">Ranking por número de ventas. "Comisionado" es la suma de las comisiones del asesor en el periodo.</div>
+                        <div class="eq-top__note">Ranking por número de ventas. "Comisionado" es la suma de las comisiones del asesor en el periodo. "Te aporta" es tu comisión de jefe por sus ventas (espejo).</div>
                     </section>
 
                     <div class="st-error" id="st-error" hidden></div>
@@ -272,7 +322,8 @@ if (empty($tiendas_jefe)) {
 <script>
 window.billetera = {
     ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
-    nonce_mi_equipo: '<?php echo wp_create_nonce('billetera_get_mi_equipo'); ?>'
+    nonce_mi_equipo: '<?php echo wp_create_nonce('billetera_get_mi_equipo'); ?>',
+    meta_equipo_v2: <?php echo $meta_equipo_v2 ? 'true' : 'false'; ?>
 };
 </script>
 <script src="<?php echo billetera_asset_url('/assets/js/billetera-360-equipo.js'); ?>"></script>

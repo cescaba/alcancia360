@@ -10,12 +10,15 @@ add_action('edit_user_profile', 'billetera_user_custom_fields');
 add_action('user_new_form', 'billetera_user_custom_fields');
 
 function billetera_user_custom_fields($user) {
-    $hyu = get_user_meta($user->ID, 'billetera_hyu', true);
-    $hcv = get_user_meta($user->ID, 'billetera_hcv', true);
-    $gee = get_user_meta($user->ID, 'billetera_gee', true);
-    $jmc = get_user_meta($user->ID, 'billetera_jmc', true);
-    $mul = get_user_meta($user->ID, 'billetera_mul', true);
-    $tipo = get_user_meta($user->ID, 'billetera_tipo', true);
+    // edit_user_profile pasa un objeto WP_User; user_new_form pasa el contexto
+    // como string ('add-new-user'). En creación los metas están vacíos.
+    $user_id = ($user instanceof WP_User) ? $user->ID : 0;
+    $hyu = get_user_meta($user_id, 'billetera_hyu', true);
+    $hcv = get_user_meta($user_id, 'billetera_hcv', true);
+    $gee = get_user_meta($user_id, 'billetera_gee', true);
+    $jmc = get_user_meta($user_id, 'billetera_jmc', true);
+    $mul = get_user_meta($user_id, 'billetera_mul', true);
+    $tipo = get_user_meta($user_id, 'billetera_tipo', true);
     ?>
     <h3><?php _e('Campos Billetera'); ?></h3>
     <table class="form-table" role="presentation">

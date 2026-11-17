@@ -41,7 +41,7 @@ register_deactivation_hook(__FILE__, 'billetera_summary_unschedule');
 add_action('plugins_loaded', 'billetera_maybe_upgrade_schema');
 
 function billetera_maybe_upgrade_schema() {
-    if (get_option('billetera_db_version') === '1.6') {
+    if (get_option('billetera_db_version') === '1.7') {
         return;
     }
 
@@ -77,7 +77,10 @@ function billetera_maybe_upgrade_schema() {
     // --- 1.4: tabla de cola del resumen semanal por correo ---
     billetera_summary_create_queue_table();
 
-    update_option('billetera_db_version', '1.6');
+    // --- 1.7: metas de sucursal en unidades (línea x categoría x tipo) ---
+    billetera_create_metas_sucursal_table();
+
+    update_option('billetera_db_version', '1.7');
 }
 
 /**
@@ -299,6 +302,39 @@ function billetera_create_metas_table() {
     dbDelta($sql);
 }
 
+/**
+ * Esquema de METAS POR SUCURSAL: sucursal x línea x categoría x tipo,
+ * definida en UNIDADES (cantidad de ventas) en vez de monto.
+ * La meta total de la sucursal es la suma de unidades de sus categorías.
+ */
+function billetera_create_metas_sucursal_table() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'billetera_metas_sucursal';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$table'") == $table) {
+        return;
+    }
+
+    $charset_collate = $wpdb->get_charset_collate();
+    $sql = "CREATE TABLE $table (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        tienda_id bigint(20) NOT NULL,
+        linea_codigo varchar(3) NOT NULL,
+        categoria_id mediumint(9) NOT NULL,
+        tipo varchar(20) NOT NULL,
+        unidades int(9) NOT NULL DEFAULT 0,
+        creado_en datetime DEFAULT CURRENT_TIMESTAMP,
+        actualizado_en datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY cruce_unico (tienda_id, linea_codigo, categoria_id, tipo),
+        KEY tienda_id (tienda_id),
+        KEY linea_codigo (linea_codigo),
+        KEY categoria_id (categoria_id)
+    ) $charset_collate;";
+
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+}
+
 function billetera_create_catalog_tables() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
@@ -463,6 +499,9 @@ function billetera_create_catalog_tables() {
 
     // Tabla de METAS por sucursal x línea x tipo (Venta / Post Venta)
     billetera_create_metas_table();
+
+    // Tabla de METAS POR SUCURSAL en unidades (línea x categoría x tipo)
+    billetera_create_metas_sucursal_table();
 
     // Tabla de cola del resumen semanal por correo
     billetera_summary_create_queue_table();
@@ -1049,6 +1088,64 @@ function billetera_get_meta_por_usuario($user_id) {
     }
 
     return floatval($sum);
+}
+
+// Meta de una SUCURSAL en unidades: suma de las metas por categoría de la
+// tabla wp_billetera_metas_sucursal (vista "Metas por sucursal") para la
+// tienda y tipo dados. 'configurada' indica si tiene al menos 1 categoría.
+function billetera_get_meta_sucursal($tienda_id, $tipo) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'billetera_metas_sucursal';
+
+    $unidades = intval($wpdb->get_var($wpdb->prepare(
+        "SELECT COALESCE(SUM(unidades), 0) FROM $table WHERE tienda_id = %d AND tipo = %s",
+        intval($tienda_id), $tipo
+    )));
+
+    return [
+        'unidades'    => $unidades,
+        'configurada' => $unidades > 0,
+    ];
+}
+
+// Mapa tienda_id => unidades totales para un tipo (Venta / Post Venta).
+// Evita consultar la tabla por cada sucursal en rankings y reportes.
+function billetera_get_meta_sucursal_map($tipo) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'billetera_metas_sucursal';
+
+    $rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT tienda_id, SUM(unidades) AS total FROM $table WHERE tipo = %s GROUP BY tienda_id",
+        $tipo
+    ));
+
+    $out = [];
+    foreach ((array) $rows as $r) {
+        $out[intval($r->tienda_id)] = intval($r->total);
+    }
+    return $out;
+}
+
+// Desglose por categoría de la meta de una sucursal (unidades por categoría).
+function billetera_get_meta_sucursal_rows($tienda_id, $tipo = '') {
+    global $wpdb;
+    $table = $wpdb->prefix . 'billetera_metas_sucursal';
+
+    $where_tipo = '';
+    $params = [intval($tienda_id)];
+    if ($tipo !== '') {
+        $where_tipo = ' AND tipo = %s';
+        $params[] = $tipo;
+    }
+
+    return $wpdb->get_results($wpdb->prepare(
+        "SELECT m.*, c.nombre AS categoria_nombre
+         FROM $table m
+         LEFT JOIN {$wpdb->prefix}billetera_categorias c ON c.id = m.categoria_id
+         WHERE m.tienda_id = %d$where_tipo
+         ORDER BY m.tipo, m.linea_codigo, c.nombre",
+        ...$params
+    ));
 }
 
 function billetera_find_comision($subcategoria_id, $distribuidor_id, $rol) {
@@ -2955,31 +3052,13 @@ function billetera_ajax_get_mi_equipo() {
         wp_send_json_error(['message' => 'Solo los jefes de venta pueden ver Mi equipo']);
     }
 
-    // --- Sucursales donde este usuario es jefe de venta (multi-sucursal) ---
-    $tienda_ids = [];
-    $tiendas_all = get_posts([
-        'post_type'   => 'tienda',
-        'numberposts' => -1,
-        'post_status' => 'publish',
-    ]);
-    foreach ($tiendas_all as $t) {
-        $jefes = get_post_meta($t->ID, '_jefes_venta_asociados', true);
-        if (!is_array($jefes)) {
-            $jefes = $jefes ? [$jefes] : [];
-        }
-        if (in_array((string) $user_id, array_map('strval', $jefes), true)) {
-            $tienda_ids[] = intval($t->ID);
-        }
-    }
+    // --- Sucursales donde este usuario es jefe de venta (perfil: _tiendas_del_jefe) ---
+    // Sin fallback a _tienda_asociada: si no tiene sucursales asignadas en su
+    // perfil, no administra ninguna.
+    $tienda_map = billetera_jefe_tiendas($user_id);
+    $tienda_ids = array_keys($tienda_map);
     if (!$tienda_ids) {
-        // Fallback: sucursal guardada en el perfil del jefe.
-        $tid_jefe = intval(get_user_meta($user_id, '_tienda_asociada', true));
-        if ($tid_jefe) {
-            $tienda_ids = [$tid_jefe];
-        }
-    }
-    if (!$tienda_ids) {
-        wp_send_json_error(['message' => 'No eres jefe de ninguna sucursal']);
+        wp_send_json_error(['message' => 'No eres jefe de ninguna sucursal. Asignalas en tu perfil.']);
     }
 
     // Filtro del selector de sucursal del header (0 = todas).
@@ -3125,19 +3204,36 @@ function billetera_ajax_get_mi_equipo() {
         }
     }
 
-    // Meta del equipo: suma de las metas de los asesores (en soles).
+    // Meta del equipo: suma de las UNIDADES de las metas por sucursal de las
+    // tiendas del equipo (mismo criterio que el ranking de jefes, por el tipo
+    // del jefe). Si ninguna sucursal tiene metas por categoria, se conserva la
+    // regla anterior: suma de las metas de los asesores (en soles) convertida
+    // a nº de ventas via ticket promedio.
     $meta_sol = 0.0;
     foreach ($ids as $aid) {
         $meta_sol += floatval(billetera_get_meta_por_usuario($aid));
     }
 
-    $ticket    = $ventas > 0 ? round($com / $ventas, 2) : 0.0;
-    $meta_vtas = ($meta_sol > 0 && $ticket > 0) ? max(1, (int) round($meta_sol / $ticket)) : 0;
+    $meta_unid = 0;
+    foreach ($tienda_ids as $tid_m) {
+        $m_suc = billetera_get_meta_sucursal($tid_m, $tipo_jefe);
+        $meta_unid += intval($m_suc['unidades']);
+    }
 
-    $avance  = ($meta_sol > 0) ? round(($com / $meta_sol) * 100, 1) : 0.0;
-    $avance  = min($avance, 100.0);
-    $faltan_sol   = max(round($meta_sol - $com, 2), 0.0);
-    $faltan_vtas  = ($ticket > 0 && $meta_vtas > 0) ? max(0, $meta_vtas - $ventas) : 0;
+    $ticket = $ventas > 0 ? round($com / $ventas, 2) : 0.0;
+
+    if ($meta_unid > 0) {
+        // Meta en unidades (sin conversion por ticket).
+        $meta_vtas   = $meta_unid;
+        $avance      = min(round(($ventas / $meta_unid) * 100, 1), 100.0);
+        $faltan_sol  = 0.0;
+        $faltan_vtas = max(0, $meta_unid - $ventas);
+    } else {
+        $meta_vtas = ($meta_sol > 0 && $ticket > 0) ? max(1, (int) round($meta_sol / $ticket)) : 0;
+        $avance    = ($meta_sol > 0) ? min(round(($com / $meta_sol) * 100, 1), 100.0) : 0.0;
+        $faltan_sol  = max(round($meta_sol - $com, 2), 0.0);
+        $faltan_vtas = ($ticket > 0 && $meta_vtas > 0) ? max(0, $meta_vtas - $ventas) : 0;
+    }
 
     // Días laborables y proyección sobre ventas del equipo.
     $dia_actual  = $es_actual ? intval($now->format('j')) : 31;
@@ -3265,6 +3361,8 @@ function billetera_ajax_get_mi_equipo() {
             'sucursal' => $tienda_labels[$tid_a] ?? '-',
             'ventas'   => intval($pa['ventas']),
             'com'      => floatval($pa['com']),
+            // Comision que le aporta al jefe (espejo del periodo).
+            'aporta'   => isset($espejos[$aid]['com']) ? floatval($espejos[$aid]['com']) : 0.0,
             // Racha actual del asesor (dias consecutivos vendiendo) + señal de
             // "sin ventas" para detectar quien no esta vendiendo.
             'racha'    => function_exists('billetera_get_racha') ? intval(billetera_get_racha($aid)) : 0,
@@ -3298,6 +3396,82 @@ function billetera_ajax_get_mi_equipo() {
     }
     $ventas_dia = $rest_dias > 0 ? round($faltan_vtas / $rest_dias, 1) : 0.0;
 
+    // ---- "Para llegar a tu meta": filas por categoría con meta de sucursal ----
+    // Une las metas por categoría de las sucursales del equipo (sumadas cuando
+    // hay varias), las ventas del periodo por categoría y el promedio real de
+    // comisión espejo del jefe por categoría ("según tus registros, sin bonos").
+    $llegar_meta = [];
+    $cats_meta = []; // categoria_id => meta sumada + nombre
+    foreach ($tienda_ids as $tid_lm) {
+        foreach (billetera_get_meta_sucursal_rows($tid_lm, $tipo_jefe) as $row_lm) {
+            $cid = intval($row_lm->categoria_id);
+            if (!isset($cats_meta[$cid])) {
+                $cats_meta[$cid] = [
+                    'meta'   => 0,
+                    'nombre' => $row_lm->categoria_nombre ?: ('Categoría #' . $cid),
+                    'linea'  => $row_lm->linea_codigo ?: '',
+                ];
+            }
+            $cats_meta[$cid]['meta'] += intval($row_lm->unidades);
+        }
+    }
+    if ($cats_meta && $ids) {
+        $linea_nombres = [];
+        foreach ($wpdb->get_results("SELECT codigo, nombre FROM {$wpdb->prefix}billetera_lineas") as $l) {
+            $linea_nombres[$l->codigo] = $l->nombre;
+        }
+
+        // Ventas del equipo por categoría en el periodo (ventas propias, sin espejos).
+        $ventas_cat = [];
+        $rows_vc = $wpdb->get_results($wpdb->prepare("
+            SELECT c.id AS categoria_id, COUNT(*) AS ventas
+            FROM $v v
+            INNER JOIN {$wpdb->prefix}billetera_subcategorias s ON s.id = v.subcategoria_id
+            INNER JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
+            WHERE v.usuario_id IN ($in) AND v.asesor_id IS NULL $h_rng
+            GROUP BY c.id
+        ", array_merge($ids, $p_rng)));
+        foreach ((array) $rows_vc as $r) {
+            $ventas_cat[intval($r->categoria_id)] = intval($r->ventas);
+        }
+
+        // Promedio de comisión espejo del jefe por categoría (sus registros).
+        $com_cat = [];
+        $rows_cc = $wpdb->get_results($wpdb->prepare("
+            SELECT c.id AS categoria_id, AVG(v.monto_comision_sol * v.bonus_multiplier) AS prom
+            FROM $v v
+            INNER JOIN {$wpdb->prefix}billetera_subcategorias s ON s.id = v.subcategoria_id
+            INNER JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
+            WHERE v.usuario_id = %d AND v.asesor_id IN ($in) $h_rng
+            GROUP BY c.id
+        ", array_merge([$user_id], $ids, $p_rng)));
+        foreach ((array) $rows_cc as $r) {
+            $com_cat[intval($r->categoria_id)] = floatval($r->prom);
+        }
+
+        foreach ($cats_meta as $cid => $cm) {
+            if ($cm['meta'] <= 0) {
+                continue;
+            }
+            $ventas_c = isset($ventas_cat[$cid]) ? $ventas_cat[$cid] : 0;
+            $llegar_meta[] = [
+                'categoria_id' => $cid,
+                'nombre'       => $cm['nombre'],
+                'linea'        => isset($linea_nombres[$cm['linea']]) ? $linea_nombres[$cm['linea']] : $cm['linea'],
+                'meta'         => intval($cm['meta']),
+                'ventas'       => $ventas_c,
+                'faltan'       => max(0, intval($cm['meta']) - $ventas_c),
+                'com_prom'     => isset($com_cat[$cid]) ? round($com_cat[$cid], 2) : 0.0,
+            ];
+        }
+        usort($llegar_meta, function ($a, $b) {
+            if ($a['faltan'] !== $b['faltan']) {
+                return $b['faltan'] <=> $a['faltan'];
+            }
+            return strcasecmp($a['nombre'], $b['nombre']);
+        });
+    }
+
     wp_send_json_success([
         'periodo'          => $periodo,
         'base_mes'         => $base->format('Y-m'),
@@ -3320,6 +3494,15 @@ function billetera_ajax_get_mi_equipo() {
         ],
         'jefe'             => [
             'com_mes'      => round($com_jefe, 2),
+            // Datos para la vista v2 de "Tu comisión de jefe" (flag meta_equipo_v2):
+            // ventas espejo del periodo y monto promedio por venta del jefe.
+            'espejo_ventas' => isset($espejos) ? array_sum(array_column($espejos, 'ventas')) : 0,
+            'espejo_unit'  => (isset($espejos) && array_sum(array_column($espejos, 'ventas')) > 0)
+                ? round($com_jefe / array_sum(array_column($espejos, 'ventas')), 2)
+                : 0.0,
+            // Placeholders: se llenan cuando llegue la data de sucursales.
+            'bono'         => null,
+            'por_validar'  => ['ventas' => 0, 'com' => 0.0],
         ],
         'ritmo'            => [
             'ideal_ventas' => $ideal_vtas,
@@ -3330,6 +3513,7 @@ function billetera_ajax_get_mi_equipo() {
         'por_categoria'    => $por_categoria,
         'por_subcategoria' => $por_subcategoria,
         'aportan'          => $aportan,
+        'llegar_meta'      => $llegar_meta,
         'top'              => $top,
         'alertas'          => [
             'sin_ventas_total' => count($sin_ventas),
@@ -4109,35 +4293,37 @@ function billetera_ranking_tienda_label($user_id) {
 // =====================================================================
 
 /**
- * Tiendas donde el usuario es jefe de venta (via _jefes_venta_asociados).
- * Fallback: su propia tienda asociada (misma regla de la pantalla de equipo).
+ * Sucursales que administra un jefe de venta. Fuente de verdad: el perfil del
+ * usuario (user meta _tiendas_del_jefe, multiselect "Sucursales que
+ * administras"). Se mantiene espejado en _jefes_venta_asociados de cada tienda
+ * al guardar en cualquiera de las dos direcciones. SIN fallback a
+ * _tienda_asociada: si el jefe no tiene sucursales asignadas, no administra
+ * ninguna.
  */
-function billetera_ranking_jefe_tiendas($user_id) {
-    $posts = get_posts([
-        'post_type' => 'tienda',
-        'numberposts' => -1,
-        'post_status' => 'publish',
-    ]);
-    $out = [];
-    foreach ($posts as $t) {
-        $jefes = get_post_meta($t->ID, '_jefes_venta_asociados', true);
-        if (!is_array($jefes)) {
-            $jefes = $jefes ? [$jefes] : [];
-        }
-        if (in_array((string) $user_id, array_map('strval', $jefes), true)) {
-            $out[intval($t->ID)] = html_entity_decode($t->post_title, ENT_QUOTES, 'UTF-8');
-        }
+function billetera_jefe_tiendas($user_id) {
+    $val = get_user_meta(intval($user_id), '_tiendas_del_jefe', true);
+    if (!is_array($val)) {
+        $val = $val ? [$val] : [];
     }
-    if (empty($out)) {
-        $tid = intval(get_user_meta($user_id, '_tienda_asociada', true));
-        if ($tid) {
-            $t = get_post($tid);
-            if ($t) {
-                $out[$tid] = html_entity_decode($t->post_title, ENT_QUOTES, 'UTF-8');
-            }
+    $out = [];
+    foreach (array_map('intval', (array) $val) as $tid) {
+        if (!$tid) {
+            continue;
+        }
+        $t = get_post($tid);
+        if ($t && $t->post_type === 'tienda') {
+            $out[$tid] = html_entity_decode($t->post_title, ENT_QUOTES, 'UTF-8');
         }
     }
     return $out;
+}
+
+/**
+ * Tiendas donde el usuario es jefe de venta (perfil: _tiendas_del_jefe).
+ * Sin fallback a _tienda_asociada (regla anterior eliminada).
+ */
+function billetera_ranking_jefe_tiendas($user_id) {
+    return billetera_jefe_tiendas($user_id);
 }
 
 /**
@@ -4262,27 +4448,42 @@ function billetera_ranking_sucursal_rows($user_id, $desde, $hasta, $vs_desde, $v
         }
     }
 
-    // Meta de la sucursal: suma de las metas de sus asesores
-    // (misma regla de la pantalla "Mi equipo").
+    // Meta de la sucursal: UNIDADES por categoría configuradas en la vista
+    // "Metas por sucursal" (suma de unidades para el tipo del jefe).
+    // Si la sucursal aún no tiene metas por categoría, se conserva la regla
+    // anterior: suma de las metas de sus asesores convertida a nº de ventas
+    // vía ticket promedio (misma regla de la pantalla "Mi equipo").
+    $tipo_jefe = billetera_ranking_tipo($user_id);
+    $meta_sucs = billetera_get_meta_sucursal_map($tipo_jefe);
     $rows = [];
     foreach ($por_tienda as $tid => $ids_t) {
         $info = $tiendas_info[$tid] ?? ['nombre' => ('Sucursal #' . $tid), 'dealer' => ''];
         $ventas = intval($cur[$tid]['ventas'] ?? 0);
         $com    = floatval($cur[$tid]['com'] ?? 0.0);
 
-        $meta_sol = 0.0;
-        foreach ($ids_t as $aid) {
-            $meta_sol += floatval(billetera_get_meta_por_usuario($aid));
+        $meta_sol  = 0.0;
+        $meta_vtas = 0;
+        $pct       = 0.0;
+
+        if (isset($meta_sucs[$tid]) && $meta_sucs[$tid] > 0) {
+            // Meta en unidades: suma de las metas por categoría de la sucursal.
+            // Avance: nº de ventas del periodo / meta en unidades (sin tope).
+            $meta_vtas = intval($meta_sucs[$tid]);
+            $pct = round(($ventas / $meta_vtas) * 100, 1);
+        } else {
+            foreach ($ids_t as $aid) {
+                $meta_sol += floatval(billetera_get_meta_por_usuario($aid));
+            }
+
+            // Meta en numero de ventas: monto de la meta / ticket promedio de la
+            // sucursal (mismo criterio de la pantalla de equipo).
+            $ticket   = $ventas > 0 ? ($com / $ventas) : 0.0;
+            $meta_vtas = ($meta_sol > 0 && $ticket > 0) ? (int) round($meta_sol / $ticket) : 0;
+
+            // Avance de meta: comisiones del periodo / meta en soles (sin tope,
+            // puede superar 100%; la barra de UI se cap en 100%).
+            $pct = ($meta_sol > 0) ? round(($com / $meta_sol) * 100, 1) : 0.0;
         }
-
-        // Meta en numero de ventas: monto de la meta / ticket promedio de la
-        // sucursal (mismo criterio de la pantalla de equipo).
-        $ticket   = $ventas > 0 ? ($com / $ventas) : 0.0;
-        $meta_vtas = ($meta_sol > 0 && $ticket > 0) ? (int) round($meta_sol / $ticket) : 0;
-
-        // Avance de meta: comisiones del periodo / meta en soles (sin tope,
-        // puede superar 100%; la barra de UI se cap en 100%).
-        $pct = ($meta_sol > 0) ? round(($com / $meta_sol) * 100, 1) : 0.0;
 
         // Asesores con ventas en el periodo (distintos usuarios con venta).
         $con_ventas = (int) $wpdb->get_var($wpdb->prepare(

@@ -351,6 +351,30 @@ class HU_DealerTienda {
         $jefes = isset($_POST['jefes_venta_asociados']) ? (array) $_POST['jefes_venta_asociados'] : [];
         $jefes = array_values(array_filter(array_map('intval', $jefes)));
         update_post_meta($post_id, '_jefes_venta_asociados', $jefes);
+
+        // Sincronizar el espejo en el perfil de cada jefe: la fuente de verdad
+        // de las sucursales de un jefe es su user meta _tiendas_del_jefe, que
+        // se actualiza aqui al cambiar la lista de la tienda.
+        $jefes_actuales = array_map('intval', $jefes);
+        foreach (get_users(['role' => 'jefe_venta', 'fields' => 'ID', 'number' => -1]) as $uid) {
+            $uid = intval($uid);
+            $mis = get_user_meta($uid, '_tiendas_del_jefe', true);
+            if (!is_array($mis)) {
+                $mis = $mis ? [$mis] : [];
+            }
+            $mis     = array_map('intval', (array) $mis);
+            $antes   = in_array($post_id, $mis, true);
+            $despues = in_array($post_id, $jefes_actuales, true);
+            if ($antes === $despues) {
+                continue;
+            }
+            if ($despues) {
+                $mis[] = $post_id;
+            } else {
+                $mis = array_values(array_diff($mis, [$post_id]));
+            }
+            update_user_meta($uid, '_tiendas_del_jefe', array_values(array_unique($mis)));
+        }
     }
 
     /**
