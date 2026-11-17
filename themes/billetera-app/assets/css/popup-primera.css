@@ -1,0 +1,351 @@
+/* ============================================================================
+   Popup "Primera moneda del mes" — Mi alcancia 360
+   Modal full-screen en móvil (390px), centrado con backdrop en desktop.
+   Animaciones: moneda dorada girando en 3D que aterriza con rebote, rayos de
+   luz que se encienden al aterrizar, chip que aparece con pop, brillos.
+   ========================================================================== */
+
+.popup-primera {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(14, 36, 56, 0.5);
+}
+
+.popup-primera[hidden] {
+    display: none;
+}
+
+.popup-primera__box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 18px 24px 28px;
+    width: 100%;
+    max-width: 390px;
+    min-height: 100dvh;
+    background: #FFFFFF;
+    overflow-y: auto;
+}
+
+/* --- Header --- */
+
+.popup-primera__head {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    flex: none;
+}
+
+.popup-primera__close {
+    background: none;
+    border: 0;
+    padding: 0;
+    width: 16px;
+    height: 22px;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 500;
+    font-size: 18px;
+    line-height: 22px;
+    color: #8494A6;
+    cursor: pointer;
+}
+
+.popup-primera__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    background: #FBF6EA;
+    border: 1px solid #F0D9A8;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    line-height: 12px;
+    letter-spacing: 1.2px;
+    color: #8A5F0F;
+}
+
+/* --- Escenario (chanchito + moneda girando + rayos + chip) --- */
+
+.popup-primera__stage {
+    position: relative;
+    width: 100%;
+    height: 250px;
+    margin-top: 18px;
+    background: linear-gradient(180deg, #FBF6EA 0%, #FFFFFF 100%);
+    border: 1px solid #F0D9A8;
+    overflow: hidden;
+}
+
+.popup-primera__pig {
+    position: absolute;
+    width: 204px;
+    height: auto;
+    left: 69px;
+    top: 55.7px;
+    /* Salto de alegría cuando la moneda aterriza, luego flota */
+    animation:
+        rachaMetaHop 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) 1.15s 1 both,
+        rachaMetaFloat 3s ease-in-out 2s infinite;
+}
+
+/* Rayos de luz (se encienden cuando la moneda brilla) */
+.popup-primera__ray {
+    position: absolute;
+    width: 2px;
+    background: rgba(201, 138, 30, 0.45);
+    opacity: 0;
+    animation: primeraRayIn 0.5s ease-out 1.5s both;
+}
+
+.popup-primera__ray--main {
+    height: 40px;
+    left: 163.88px;
+    top: 0;
+    background: rgba(201, 138, 30, 0.5);
+}
+
+.popup-primera__ray--left {
+    height: 14px;
+    left: 128.88px;
+    top: 52px;
+}
+
+.popup-primera__ray--right {
+    height: 14px;
+    left: 194.88px;
+    top: 52px;
+}
+
+/* Moneda dorada: cae girando en 3D, aterriza con rebote y destella */
+.popup-primera__coin {
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 46px;
+    height: 46px;
+    left: 141.88px;
+    top: 22px;
+    background: linear-gradient(180deg, #F8D27A 0%, #C98A1E 100%);
+    border: 1px solid #B77C16;
+    box-shadow: 0px 2px 4px rgba(138, 94, 15, 0.3);
+    border-radius: 23px;
+    opacity: 0;
+    animation:
+        primeraCoinSpin 1.5s cubic-bezier(0.25, 1, 0.4, 1) 0.2s both,
+        primeraCoinGlint 0.6s ease-in-out 1.75s 1;
+    transform-style: preserve-3d;
+}
+
+.popup-primera__coin > span {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    line-height: 18px;
+    color: #5A3D06;
+}
+
+/* Chip "Nueva moneda · 7:42 a.m." */
+.popup-primera__chip {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    left: 196px;
+    top: 30px;
+    background: #FFFFFF;
+    border: 1px solid #F0D9A8;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 600;
+    font-size: 10.5px;
+    line-height: 13px;
+    color: #8A5F0F;
+    white-space: nowrap;
+    opacity: 0;
+    animation: primeraChipPop 0.4s cubic-bezier(0.3, 1.5, 0.5, 1) 1.6s both;
+}
+
+/* Brillos (estrellitas doradas) en 4 posiciones */
+.popup-primera__spark {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: #E3A94A;
+    clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+    animation: rachaSpark 2.4s ease-in-out infinite;
+}
+
+.popup-primera__spark--1 { width: 16px; height: 16px; left: 34px;  top: 40px; }
+.popup-primera__spark--2 { width: 12px; height: 12px; left: 300px; top: 36px;  animation-delay: .6s; }
+.popup-primera__spark--3 { width: 18px; height: 18px; left: 310px; top: 170px; animation-delay: 1.2s; }
+.popup-primera__spark--4 { width: 10px; height: 10px; left: 26px;  top: 180px; animation-delay: 1.8s; }
+
+/* --- Número + título --- */
+
+.popup-primera__num {
+    margin-top: 10px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 92px;
+    line-height: 110px;
+    color: #0A6CB4;
+}
+
+.popup-primera__title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    line-height: 29px;
+    text-align: center;
+    letter-spacing: 1.2px;
+    color: #0E2438;
+}
+
+/* --- Tarjeta: mensaje --- */
+
+.popup-primera__card {
+    width: 100%;
+    margin-top: 26px;
+    background: #FFFFFF;
+    border: 1px solid #DCE3EB;
+}
+
+.popup-primera__msg {
+    margin: 0;
+    padding: 16px 18px;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 140%;
+    text-align: center;
+    color: #5B6B80;
+}
+
+/* --- CTA + CONTINUAR --- */
+
+.popup-primera__cta {
+    width: 100%;
+    margin-top: auto;
+    padding: 15px 0;
+    background: #0A6CB4;
+    border: 0;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    line-height: 22px;
+    letter-spacing: 1.8px;
+    color: #FFFFFF;
+    cursor: pointer;
+}
+
+.popup-primera__cta:active {
+    background: #085C9B;
+}
+
+.popup-primera__continue {
+    margin-top: 12px;
+    background: none;
+    border: 0;
+    padding: 0;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 16px;
+    letter-spacing: 1.2px;
+    color: #0A6CB4;
+    cursor: pointer;
+}
+
+/* ==========================================================================
+   Desktop: tarjeta centrada con backdrop completo
+   ========================================================================== */
+
+@media (min-width: 769px) {
+    .popup-primera__box {
+        min-height: 0;
+        max-height: calc(100dvh - 48px);
+        width: 390px;
+        border-radius: 4px;
+        box-shadow: 0 24px 60px rgba(14, 36, 56, 0.35);
+    }
+
+    .popup-primera__cta {
+        margin-top: 26px;
+    }
+}
+
+/* ==========================================================================
+   Animaciones
+   ========================================================================== */
+
+/* Moneda: cae desde arriba girando en 3D (2 vueltas) y aterriza con rebote */
+@keyframes primeraCoinSpin {
+    0%   { opacity: 0; transform: translateY(-120px) rotateY(0deg) scale(0.7); }
+    15%  { opacity: 1; }
+    55%  { opacity: 1; transform: translateY(0) rotateY(720deg) scale(1); }
+    70%  { opacity: 1; transform: translateY(-16px) rotateY(720deg) scale(1); }
+    82%  { opacity: 1; transform: translateY(0) rotateY(720deg) scale(1); }
+    90%  { opacity: 1; transform: translateY(-6px) rotateY(720deg) scale(1); }
+    100% { opacity: 1; transform: translateY(0) rotateY(720deg) scale(1); }
+}
+
+/* Destello al encajar */
+@keyframes primeraCoinGlint {
+    0%, 100% { filter: brightness(1); box-shadow: 0px 2px 4px rgba(138, 94, 15, 0.3); }
+    50%      { filter: brightness(1.7); box-shadow: 0 0 14px rgba(245, 197, 99, 0.9); }
+}
+
+/* Rayos de luz se encienden y quedan pulsando suave */
+@keyframes primeraRayIn {
+    0%   { opacity: 0; transform: scaleY(0.3); }
+    60%  { opacity: 1; transform: scaleY(1); }
+    100% { opacity: 0.8; transform: scaleY(1); }
+}
+
+/* Chip aparece con pop */
+@keyframes primeraChipPop {
+    0%   { opacity: 0; transform: scale(0.6); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+/* Salto del chanchito (compartido con popup-meta) */
+@keyframes rachaMetaHop {
+    0%   { transform: translateY(0); }
+    35%  { transform: translateY(-16px); }
+    60%  { transform: translateY(0); }
+    75%  { transform: translateY(-6px); }
+    100% { transform: translateY(0); }
+}
+
+@keyframes rachaMetaFloat {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-7px); }
+}
+
+/* Brillos parpadeando (compartido) */
+@keyframes rachaSpark {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.2; transform: scale(0.7); }
+}
+
+/* Respeta la preferencia de menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+    .popup-primera__pig,
+    .popup-primera__coin,
+    .popup-primera__chip,
+    .popup-primera__spark {
+        animation: none;
+        opacity: 1;
+    }
+
+    .popup-primera__ray {
+        animation: none;
+        opacity: 0.8;
+    }
+}

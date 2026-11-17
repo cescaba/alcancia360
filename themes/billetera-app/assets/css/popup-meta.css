@@ -1,0 +1,314 @@
+/* ============================================================================
+   Popup "Meta del mes superada" — Mi alcancia 360
+   Modal full-screen en móvil (390px), centrado con backdrop en desktop.
+   Animaciones: monedas cayendo con rebote, chanchito dorado con salto,
+   brillos parpadeando.
+   ========================================================================== */
+
+.popup-meta {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(14, 36, 56, 0.5);
+}
+
+.popup-meta[hidden] {
+    display: none;
+}
+
+.popup-meta__box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 18px 24px 28px;
+    width: 100%;
+    max-width: 390px;
+    min-height: 100dvh;
+    background: #FFFFFF;
+    overflow-y: auto;
+}
+
+/* --- Header --- */
+
+.popup-meta__head {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    flex: none;
+}
+
+.popup-meta__close {
+    background: none;
+    border: 0;
+    padding: 0;
+    width: 16px;
+    height: 22px;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 500;
+    font-size: 18px;
+    line-height: 22px;
+    color: #8494A6;
+    cursor: pointer;
+}
+
+.popup-meta__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    background: #FBF6EA;
+    border: 1px solid #F0D9A8;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    line-height: 12px;
+    letter-spacing: 1.2px;
+    color: #8A5F0F;
+}
+
+/* --- Escenario (chanchito dorado + monedas + brillos) --- */
+
+.popup-meta__stage {
+    position: relative;
+    width: 100%;
+    height: 250px;
+    margin-top: 18px;
+    background: linear-gradient(180deg, #FBF6EA 0%, #FFFFFF 100%);
+    border: 1px solid #F0D9A8;
+    overflow: hidden;
+}
+
+.popup-meta__pig {
+    position: absolute;
+    width: 204px;
+    height: auto;
+    left: 69px;
+    top: 51.7px;
+    /* Salto al recibir la primera moneda y luego flota suave */
+    animation:
+        rachaMetaHop 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) 0.55s 1 both,
+        rachaMetaFloat 3s ease-in-out 1.4s infinite;
+}
+
+/* Monedas S/: caen desde arriba con rebote y luego quedan flotando */
+.popup-meta__coin {
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(180deg, #F8D27A 0%, #C98A1E 100%);
+    border: 1px solid #B77C16;
+    box-shadow: 0px 2px 4px rgba(138, 94, 15, 0.3);
+    border-radius: 50%;
+    opacity: 0;
+    animation:
+        rachaMetaCoinDrop 1s cubic-bezier(0.2, 0.8, 0.4, 1) both,
+        rachaMetaCoinFloat 3s ease-in-out infinite;
+}
+
+.popup-meta__coin > span {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    color: #5A3D06;
+    font-size: 12.9px;
+    line-height: 16px;
+}
+
+/* Tamaño de la etiqueta según el tamaño de la moneda */
+.popup-meta__coin[style*="width:34px"] > span { font-size: 12.9px; }
+.popup-meta__coin[style*="width:30px"] > span { font-size: 11.4px; }
+.popup-meta__coin[style*="width:26px"] > span { font-size: 9.9px; }
+
+/* Brillos (estrellitas doradas) en 4 posiciones */
+.popup-meta__spark {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: #E3A94A;
+    clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+    animation: rachaSpark 2.4s ease-in-out infinite;
+}
+
+.popup-meta__spark--1 { width: 16px; height: 16px; left: 34px;  top: 40px; }
+.popup-meta__spark--2 { width: 12px; height: 12px; left: 300px; top: 36px;  animation-delay: .6s; }
+.popup-meta__spark--3 { width: 18px; height: 18px; left: 310px; top: 170px; animation-delay: 1.2s; }
+.popup-meta__spark--4 { width: 10px; height: 10px; left: 26px;  top: 180px; animation-delay: 1.8s; }
+
+/* --- Número + título (dorado) --- */
+
+.popup-meta__num {
+    margin-top: 10px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 92px;
+    line-height: 110px;
+    color: #8A5F0F;
+}
+
+.popup-meta__title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    line-height: 29px;
+    text-align: center;
+    letter-spacing: 1.2px;
+    color: #0E2438;
+}
+
+/* --- Tarjeta: barra de progreso + mensaje --- */
+
+.popup-meta__card {
+    width: 100%;
+    margin-top: 26px;
+    background: #FFFFFF;
+    border: 1px solid #DCE3EB;
+}
+
+.popup-meta__progress {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 18px;
+}
+
+.popup-meta__progress-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    font-family: 'Barlow', sans-serif;
+    font-size: 12px;
+    line-height: 14px;
+}
+
+.popup-meta__progress-saved {
+    font-weight: 600;
+    color: #0E2438;
+}
+
+.popup-meta__progress-goal {
+    font-weight: 400;
+    color: #5B6B80;
+}
+
+.popup-meta__progress-bar {
+    width: 100%;
+    height: 10px;
+    background: #F0EDE6;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.popup-meta__progress-fill {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #C98A1E 0%, #F5C563 100%);
+    border-radius: 5px;
+    transition: width 0.8s cubic-bezier(0.2, 0.8, 0.3, 1) 0.4s;
+}
+
+.popup-meta__msg {
+    margin: 0;
+    padding: 16px 18px;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 140%;
+    text-align: center;
+    color: #5B6B80;
+}
+
+/* --- CTA --- */
+
+.popup-meta__cta {
+    width: 100%;
+    margin-top: auto;
+    padding: 15px 0;
+    background: #0A6CB4;
+    border: 0;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    line-height: 22px;
+    letter-spacing: 1.8px;
+    color: #FFFFFF;
+    cursor: pointer;
+}
+
+.popup-meta__cta:active {
+    background: #085C9B;
+}
+
+/* ==========================================================================
+   Desktop: tarjeta centrada con backdrop completo
+   ========================================================================== */
+
+@media (min-width: 769px) {
+    .popup-meta__box {
+        min-height: 0;
+        max-height: calc(100dvh - 48px);
+        width: 390px;
+        border-radius: 4px;
+        box-shadow: 0 24px 60px rgba(14, 36, 56, 0.35);
+    }
+
+    .popup-meta__cta {
+        margin-top: 26px;
+    }
+}
+
+/* ==========================================================================
+   Animaciones
+   ========================================================================== */
+
+/* Moneda cayendo con rebote (desde arriba, entra al escenario) */
+@keyframes rachaMetaCoinDrop {
+    0%   { opacity: 0; transform: translateY(-180px); }
+    15%  { opacity: 1; }
+    55%  { opacity: 1; transform: translateY(0); }
+    70%  { opacity: 1; transform: translateY(-22px); }
+    82%  { opacity: 1; transform: translateY(0); }
+    90%  { opacity: 1; transform: translateY(-8px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Flotación suave de la moneda ya en reposo */
+@keyframes rachaMetaCoinFloat {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-5px); }
+}
+
+/* Salto del chanchito al recibir la primera moneda */
+@keyframes rachaMetaHop {
+    0%   { transform: translateY(0); }
+    35%  { transform: translateY(-16px); }
+    60%  { transform: translateY(0); }
+    75%  { transform: translateY(-6px); }
+    100% { transform: translateY(0); }
+}
+
+/* Flotación suave del chanchito tras el salto */
+@keyframes rachaMetaFloat {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-7px); }
+}
+
+/* Brillos parpadeando (compartido con racha) */
+@keyframes rachaSpark {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.2; transform: scale(0.7); }
+}
+
+/* Respeta la preferencia de menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+    .popup-meta__pig,
+    .popup-meta__coin,
+    .popup-meta__spark {
+        animation: none;
+        opacity: 1;
+    }
+}

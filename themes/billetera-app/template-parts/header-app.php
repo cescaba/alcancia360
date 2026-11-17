@@ -362,3 +362,39 @@ $user_menu_html = ob_get_clean();
     }
 })();
 </script>
+
+<?php
+// Popup "Meta del mes superada" (solo asesores): CSS + markup + controlador.
+// Se evalúa en cualquier página de la app al primer ingreso del mes.
+$es_asesor_popup = in_array('asesor', $roles, true);
+?>
+<link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/popup-meta.css'); ?>">
+<link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/popup-rank.css'); ?>">
+<?php if ($es_asesor_popup && isset($_GET['meta_test'])): ?>
+<script>
+// PRUEBA del popup de meta: ?meta_test=1 (datos de ejemplo).
+window.__popupMetaEnabled = true;
+window.__popupMetaTest = { pct: 111, ahorrado: 1330, meta: 1200, mes: 'septiembre', mes_key: 'test', es_mejor_mes: true };
+</script>
+<?php elseif ($es_asesor_popup): ?>
+<script>window.__popupMetaEnabled = true;</script>
+<?php endif; ?>
+<?php if ($es_asesor_popup && isset($_GET['rank_test'])): ?>
+<script>
+// PRUEBA del popup de ranking: ?rank_test=1 (datos de ejemplo).
+window.__popupRankEnabled = true;
+window.__popupRankTest = {
+    top: [
+        { pos: 1, nombre: 'Tú (ejemplo)', ventas: 1, es_yo: true },
+        { pos: 2, nombre: 'Eva Rafaella Cuenca', ventas: 0, es_yo: false },
+        { pos: 3, nombre: 'José Luis Pardo', ventas: 0, es_yo: false },
+    ],
+    tienda: 'WIGO MOTORS · Surquillo',
+    mes_key: 'test'
+};
+</script>
+<?php elseif ($es_asesor_popup): ?>
+<script>window.__popupRankEnabled = true;</script>
+<?php endif; ?>
+<?php get_template_part('template-parts/popup-meta'); ?>
+<?php get_template_part('template-parts/popup-rank'); ?>

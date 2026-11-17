@@ -513,6 +513,12 @@
                             gainBonus.hidden = true;
                         }
                     }
+                    // Popup de racha (semana perfecta): se muestra al cerrar esta celebración.
+                    window.__popupRachaPending = data.data.popup_racha || null;
+                    // Popup de ranking #1 de la tienda (entra a la misma cola).
+                    window.__popupRankPending = data.data.popup_rank || null;
+                    // Popup de primera moneda del mes (entra a la misma cola).
+                    window.__popupPrimeraPending = data.data.popup_primera || null;
                     if (overlay) overlay.classList.add('show');
                     spawnCoins(burstZone);
                     resetForm();

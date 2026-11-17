@@ -1,0 +1,303 @@
+/* ============================================================================
+   Popup de racha (semana perfecta de días) — Mi alcancia 360
+   Diseño: modal full-screen en móvil (390px), centrado con backdrop en desktop.
+   Animaciones: chanchito flotando, llama flameando, brillos parpadeando.
+   ========================================================================== */
+
+.popup-racha {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(14, 36, 56, 0.5);
+}
+
+.popup-racha[hidden] {
+    display: none;
+}
+
+.popup-racha__box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 18px 24px 28px;
+    width: 100%;
+    max-width: 390px;
+    min-height: 100dvh;
+    max-height: none;
+    background: #FFFFFF;
+    overflow-y: auto;
+}
+
+/* --- Header --- */
+
+.popup-racha__head {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    flex: none;
+}
+
+.popup-racha__close {
+    background: none;
+    border: 0;
+    padding: 0;
+    width: 16px;
+    height: 22px;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 500;
+    font-size: 18px;
+    line-height: 22px;
+    color: #8494A6;
+    cursor: pointer;
+}
+
+.popup-racha__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    background: #FBF6EA;
+    border: 1px solid #F0D9A8;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    line-height: 12px;
+    letter-spacing: 1.2px;
+    color: #8A5F0F;
+}
+
+/* --- Escenario (llama + chanchito + brillos) --- */
+
+.popup-racha__stage {
+    position: relative;
+    width: 100%;
+    height: 260px;
+    margin-top: 18px;
+    background: linear-gradient(180deg, #FBF6EA 0%, #FFFFFF 100%);
+    border: 1px solid #F0D9A8;
+    overflow: hidden;
+}
+
+.popup-racha__llama {
+    position: absolute;
+    width: 244px;
+    height: auto;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    transform-origin: 50% 100%;
+    animation: rachaLlamaFlicker 3s ease-in-out infinite;
+}
+
+/* Llama interior: danza un poco más rápido que la exterior, anclada a su base */
+.popup-racha__llama-inner {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: rachaLlamaInner 1.2s ease-in-out infinite;
+}
+
+.popup-racha__pig {
+    position: absolute;
+    width: 160.31px;
+    height: 141.69px;
+    left: 50%;
+    top: 96.31px;
+    transform: translateX(-50.5%);
+    animation: rachaPigFloat 3s ease-in-out infinite;
+}
+
+/* Brillos (estrellitas doradas) en 4 posiciones */
+.popup-racha__spark {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: #E3A94A;
+    clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+    animation: rachaSpark 2.4s ease-in-out infinite;
+}
+
+.popup-racha__spark--1 { width: 16px; height: 16px; left: 34px;  top: 40px; }
+.popup-racha__spark--2 { width: 12px; height: 12px; left: 300px; top: 36px;  animation-delay: .6s; }
+.popup-racha__spark--3 { width: 18px; height: 18px; left: 310px; top: 170px; animation-delay: 1.2s; }
+.popup-racha__spark--4 { width: 10px; height: 10px; left: 26px;  top: 180px; animation-delay: 1.8s; }
+
+/* --- Número + título --- */
+
+.popup-racha__num {
+    margin-top: 10px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 92px;
+    line-height: 110px;
+    color: #0A6CB4;
+}
+
+.popup-racha__title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    line-height: 29px;
+    text-align: center;
+    letter-spacing: 1.2px;
+    color: #0E2438;
+}
+
+/* --- Tarjeta: monedas + mensaje --- */
+
+.popup-racha__card {
+    width: 100%;
+    margin-top: 26px;
+    background: #FFFFFF;
+    border: 1px solid #DCE3EB;
+}
+
+.popup-racha__coins {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px;
+    width: 100%;
+}
+
+.popup-racha__coin-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.popup-racha__coin-label {
+    font-family: 'Barlow', sans-serif;
+    font-weight: 600;
+    font-size: 10px;
+    line-height: 12px;
+    letter-spacing: 1px;
+    color: #8494A6;
+    white-space: nowrap;
+}
+
+.popup-racha__coin {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 30px;
+    height: 30px;
+    background: linear-gradient(180deg, #F8D27A 0%, #C98A1E 100%);
+    border: 1px solid #B77C16;
+    box-shadow: 0px 2px 4px rgba(138, 94, 15, 0.3);
+    border-radius: 15px;
+}
+
+.popup-racha__coin > span {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 16px;
+    color: #5A3D06;
+}
+
+/* Día actual (HOY): etiqueta azul + borde azul */
+.popup-racha__coin-slot.is-today .popup-racha__coin-label {
+    color: #0A6CB4;
+}
+
+.popup-racha__coin-slot.is-today .popup-racha__coin {
+    border: 2px solid #0A6CB4;
+}
+
+.popup-racha__msg {
+    margin: 0;
+    padding: 16px 18px;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 140%;
+    text-align: center;
+    color: #5B6B80;
+}
+
+/* --- CTA --- */
+
+.popup-racha__cta {
+    width: 100%;
+    margin-top: auto;
+    padding: 15px 0;
+    background: #0A6CB4;
+    border: 0;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    line-height: 22px;
+    letter-spacing: 1.8px;
+    color: #FFFFFF;
+    cursor: pointer;
+}
+
+.popup-racha__cta:active {
+    background: #085C9B;
+}
+
+/* ==========================================================================
+   Desktop: la caja se vuelve tarjeta centrada con backdrop completo
+   ========================================================================== */
+
+@media (min-width: 769px) {
+    .popup-racha__box {
+        min-height: 0;
+        max-height: calc(100dvh - 48px);
+        width: 390px;
+        border-radius: 4px;
+        box-shadow: 0 24px 60px rgba(14, 36, 56, 0.35);
+    }
+
+    .popup-racha__cta {
+        margin-top: 26px;
+    }
+}
+
+/* ==========================================================================
+   Animaciones
+   ========================================================================== */
+
+/* Chanchito flotando (sube y baja suave) */
+@keyframes rachaPigFloat {
+    0%, 100% { transform: translateX(-50.5%) translateY(0); }
+    50%      { transform: translateX(-50.5%) translateY(-9px); }
+}
+
+/* Llama exterior: respiración suave y lenta, casi imperceptible el vaivén
+   (anclada a la base para que "arde" desde abajo sin cortarse arriba) */
+@keyframes rachaLlamaFlicker {
+    0%, 100% { transform: translateX(-50%) scale(1, 1) skewX(0deg); }
+    30%      { transform: translateX(-50%) scale(1.015, 1.035) skewX(-1deg); }
+    55%      { transform: translateX(-50%) scale(0.99, 0.975) skewX(0deg); }
+    80%      { transform: translateX(-50%) scale(1.02, 1.045) skewX(1deg); }
+}
+
+/* Llama interior: pulso más vivo (danza dentro de la exterior) */
+@keyframes rachaLlamaInner {
+    0%, 100% { transform: scale(1, 1) skewX(0deg); opacity: 1; }
+    35%      { transform: scale(1.04, 1.06) skewX(-1.5deg); opacity: 0.95; }
+    70%      { transform: scale(0.96, 0.94) skewX(1.2deg); opacity: 0.9; }
+}
+
+/* Brillos parpadeando */
+@keyframes rachaSpark {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.2; transform: scale(0.7); }
+}
+
+/* Respeta la preferencia de menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+    .popup-racha__pig,
+    .popup-racha__llama,
+    .popup-racha__llama-inner,
+    .popup-racha__spark {
+        animation: none;
+    }
+}

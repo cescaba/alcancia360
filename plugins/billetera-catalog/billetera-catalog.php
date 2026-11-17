@@ -806,6 +806,12 @@ function billetera_ajax_register_sale_v2() {
             'bonus_multiplier' => floatval($bonus_multiplier),
             'bonus_categoria' => $regla_bonus['categoria_nombre'],
             'bonus_aplicado' => $bonus_aplicado,
+            // Popup de racha (semana perfecta). null si no aplica.
+            'popup_racha' => billetera_popup_racha_check($user_id),
+            // Popup de ranking #1 de la tienda. null si no aplica.
+            'popup_rank' => billetera_popup_rank_check($user_id),
+            // Popup de primera moneda del mes. null si no aplica.
+            'popup_primera' => billetera_popup_primera_check($user_id, $monto_mostrado, $fecha_datetime),
         ]);
     } else {
         wp_send_json_error(['message' => 'Error al registrar venta']);
@@ -1030,7 +1036,471 @@ function billetera_ajax_register_sale_multi() {
         'bonus_multiplier' => floatval($bonus_max),
         'bonus_categoria' => $bonus_cat,
         'bonus_aplicado' => $bonus_any,
+        // Popup de racha (semana perfecta). null si no aplica.
+        'popup_racha' => billetera_popup_racha_check($user_id),
+        // Popup de ranking #1 de la tienda. null si no aplica.
+        'popup_rank' => billetera_popup_rank_check($user_id),
+        // Popup de primera moneda del mes. null si no aplica.
+        'popup_primera' => billetera_popup_primera_check($user_id, $total, $fecha_datetime),
     ]);
+}
+
+// ===========================================================================
+// POPUP DE RACHA (semana perfecta, solo asesores)
+// ===========================================================================
+
+/**
+ * Popup "Racha": el asesor vendió TODOS los días laborales de la semana
+ * (lunes a sábado, domingos no cuentan). Dispara solo el SÁBADO (último día
+ * laboral de la semana) en su primera venta de ese día, que completa el 6to
+ * día. Se muestra 1 vez por semana: meta _popup_racha_visto = semana ISO.
+ * Devuelve los datos del popup o null si no aplica.
+ */
+function billetera_popup_racha_check($user_id) {
+    $u = get_userdata($user_id);
+    if (!$u || !in_array('asesor', (array) $u->roles, true)) {
+        return null;
+    }
+
+    $now = new DateTime('now', wp_timezone());
+
+    // Solo el último día laboral de la semana (sábado) dispara el popup.
+    if (intval($now->format('w')) !== 6) {
+        return null;
+    }
+
+    // Rango de la semana laboral en curso: lunes (hoy -5 días) a sábado.
+    $lunes = (clone $now)->modify('-5 days');
+    $desde = $lunes->format('Y-m-d 00:00:00');
+    $hasta = $now->format('Y-m-d 23:59:59');
+
+    global $wpdb;
+    $ventas_table = $wpdb->prefix . 'billetera_ventas';
+
+    // Días con al menos 1 venta propia (la venta que dispara ya está guardada).
+    $dias = $wpdb->get_col($wpdb->prepare("
+        SELECT DISTINCT DATE(creado_en)
+        FROM $ventas_table
+        WHERE usuario_id = %d AND asesor_id IS NULL
+          AND creado_en >= %s AND creado_en <= %s
+    ", $user_id, $desde, $hasta));
+
+    if (count($dias) < 6) {
+        return null;
+    }
+
+    // 1 vez por semana: si ya vio el popup esta semana, no vuelve a salir.
+    $semana = $now->format('o-\WW');
+    if (get_user_meta($user_id, '_popup_racha_visto', true) === $semana) {
+        return null;
+    }
+
+    // % de asesores con ventas esta semana que vendieron los 6 días
+    // ("Solo el X% de los asesores lo logra").
+    $pct = 100;
+    $asesores = get_users(['role' => 'asesor', 'fields' => 'ID', 'number' => -1]);
+    if ($asesores) {
+        $in = implode(',', array_fill(0, count($asesores), '%d'));
+        $rows = $wpdb->get_results($wpdb->prepare("
+            SELECT usuario_id, COUNT(DISTINCT DATE(creado_en)) AS dias
+            FROM $ventas_table
+            WHERE usuario_id IN ($in) AND asesor_id IS NULL
+              AND creado_en >= %s AND creado_en <= %s
+            GROUP BY usuario_id
+        ", array_merge(array_map('intval', $asesores), [$desde, $hasta])));
+
+        $con_ventas = 0;
+        $lograron   = 0;
+        foreach ((array) $rows as $r) {
+            $con_ventas++;
+            if (intval($r->dias) >= 6) {
+                $lograron++;
+            }
+        }
+        if ($con_ventas > 0) {
+            $pct = (int) round(($lograron / $con_ventas) * 100);
+        }
+    }
+
+    return [
+        'dias'   => 6,
+        'pct'    => $pct,
+        'semana' => $semana,
+    ];
+}
+
+// AJAX: marca el popup de racha como visto (se guarda la semana ISO).
+add_action('wp_ajax_billetera_popup_racha_visto', 'billetera_ajax_popup_racha_visto');
+function billetera_ajax_popup_racha_visto() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_register_sale')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
+    $semana = sanitize_text_field($_POST['semana'] ?? '');
+    if (!$semana) {
+        wp_send_json_error(['message' => 'Semana inválida']);
+    }
+
+    update_user_meta(get_current_user_id(), '_popup_racha_visto', $semana);
+    wp_send_json_success([]);
+}
+
+// ===========================================================================
+// POPUP META DEL MES SUPERADA (solo asesores)
+// ===========================================================================
+
+/**
+ * Popup "Meta del mes": el asesor cerró el MES ANTERIOR con comisiones >= a
+ * su meta. Se evalúa al cargar cualquier página de la app y se muestra en el
+ * primer ingreso del mes (siempre que sea día laborable, Lun-Sáb, y ya haya
+ * pasado el primer día laborable del mes). 1 vez por mes: meta
+ * _popup_meta_visto = mes celebrado (Y-m). Devuelve los datos o null.
+ */
+function billetera_popup_meta_check($user_id) {
+    $u = get_userdata($user_id);
+    if (!$u || !in_array('asesor', (array) $u->roles, true)) {
+        return null;
+    }
+
+    $now = new DateTime('now', wp_timezone());
+
+    // Solo días laborables (domingo no dispara).
+    if (intval($now->format('w')) === 0) {
+        return null;
+    }
+
+    // Debe haber pasado el primer día laborable del mes en curso.
+    $primer_laborable = new DateTime($now->format('Y-m-01'), wp_timezone());
+    while (intval($primer_laborable->format('w')) === 0) {
+        $primer_laborable->modify('+1 day');
+    }
+    if ($now < $primer_laborable) {
+        return null;
+    }
+
+    // Mes que se celebra: el anterior al actual.
+    $mes_celebrado = (clone $now)->modify('first day of previous month');
+    $mes_key = $mes_celebrado->format('Y-m');
+    $desde   = $mes_celebrado->format('Y-m-01 00:00:00');
+    $hasta   = $mes_celebrado->format('Y-m-t 23:59:59');
+
+    // 1 vez por mes.
+    if (get_user_meta($user_id, '_popup_meta_visto', true) === $mes_key) {
+        return null;
+    }
+
+    global $wpdb;
+    $ventas_table = $wpdb->prefix . 'billetera_ventas';
+
+    // Comisiones ahorradas en el mes celebrado (ventas propias).
+    $ahorrado = floatval($wpdb->get_var($wpdb->prepare("
+        SELECT COALESCE(SUM(monto_comision_sol * bonus_multiplier), 0)
+        FROM $ventas_table
+        WHERE usuario_id = %d AND asesor_id IS NULL
+          AND creado_en >= %s AND creado_en <= %s
+    ", $user_id, $desde, $hasta)));
+
+    // Meta del asesor (específica o global). Sin meta no hay popup.
+    $meta = billetera_get_meta_por_usuario($user_id);
+    if ($meta <= 0 || $ahorrado < $meta) {
+        return null;
+    }
+
+    $pct = (int) round(($ahorrado / $meta) * 100);
+
+    // ¿Su mejor mes del año? Compara contra los meses anteriores del año
+    // (sin incluir el mes celebrado). Enero: no hay previos -> es el mejor.
+    $es_mejor_mes = true;
+    $anio = intval($mes_celebrado->format('Y'));
+    $rows = $wpdb->get_results($wpdb->prepare("
+        SELECT DATE_FORMAT(creado_en, '%Y-%m') AS mes, SUM(monto_comision_sol * bonus_multiplier) AS total
+        FROM $ventas_table
+        WHERE usuario_id = %d AND asesor_id IS NULL
+          AND creado_en >= %s AND creado_en < %s
+        GROUP BY mes
+    ", $user_id, $anio . '-01-01 00:00:00', $desde));
+    foreach ((array) $rows as $r) {
+        if (floatval($r->total) > $ahorrado) {
+            $es_mejor_mes = false;
+            break;
+        }
+    }
+
+    $meses = [1 => 'enero', 2 => 'febrero', 3 => 'marzo', 4 => 'abril', 5 => 'mayo', 6 => 'junio',
+              7 => 'julio', 8 => 'agosto', 9 => 'septiembre', 10 => 'octubre', 11 => 'noviembre', 12 => 'diciembre'];
+
+    return [
+        'pct'          => $pct,
+        'ahorrado'     => round($ahorrado, 2),
+        'meta'         => round($meta, 2),
+        'mes'          => $meses[intval($mes_celebrado->format('n'))],
+        'mes_key'      => $mes_key,
+        'es_mejor_mes' => $es_mejor_mes,
+    ];
+}
+
+// AJAX: consulta del popup de meta (se llama al cargar cualquier página de la
+// app). Lectura simple, sin cambios de estado: no requiere nonce.
+add_action('wp_ajax_billetera_popup_meta_check', 'billetera_ajax_popup_meta_check');
+function billetera_ajax_popup_meta_check() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    $data = billetera_popup_meta_check(get_current_user_id());
+    wp_send_json_success($data);
+}
+
+// AJAX: marca el popup de meta como visto (se guarda el mes celebrado Y-m).
+add_action('wp_ajax_billetera_popup_meta_visto', 'billetera_ajax_popup_meta_visto');
+function billetera_ajax_popup_meta_visto() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_popup_meta')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
+    $mes_key = sanitize_text_field($_POST['mes_key'] ?? '');
+    if (!$mes_key || !preg_match('/^\d{4}-\d{2}$/', $mes_key)) {
+        wp_send_json_error(['message' => 'Mes inválido']);
+    }
+
+    update_user_meta(get_current_user_id(), '_popup_meta_visto', $mes_key);
+    wp_send_json_success([]);
+}
+
+// ===========================================================================
+// POPUP RANKING #1 DE LA TIENDA (solo asesores)
+// ===========================================================================
+
+/**
+ * Popup "#1 en tu tienda": el asesor es el primero del ranking de su tienda
+ * (mismo criterio de la app: monto de comisiones del mes DESC, empates
+ * comparten posición). Requiere al menos 1 venta en el mes (cubre el
+ * reinicio del mes con todos en 0). Se chequea al cargar páginas y tras cada
+ * venta. Si ya vio siendo #1 no repite; si baja de #1 se borra la marca y
+ * vuelve a salir cuando recupere el puesto. Meta: _popup_rank_visto = Y-m.
+ */
+function billetera_popup_rank_check($user_id) {
+    $user_id = intval($user_id);
+    $u = get_userdata($user_id);
+    if (!$u || !in_array('asesor', (array) $u->roles, true)) {
+        return null;
+    }
+
+    // Solo usuarios de su tienda, de su tipo (mismo scope del ranking "tienda").
+    $ids = billetera_ranking_scope_ids($user_id, 'tienda');
+    if (count($ids) < 1) {
+        return null;
+    }
+
+    $stats = billetera_ranking_stats_mes();
+
+    // Solo competidores con al menos 1 venta (reinicio del mes: todos en 0
+    // => sin popup). El orden relativo no cambia al excluir a los de 0.
+    $con_ventas = [];
+    foreach ($ids as $id) {
+        $id = intval($id);
+        if (intval($stats[$id]['ventas'] ?? 0) > 0) {
+            $con_ventas[] = $id;
+        }
+    }
+
+    $mis_ventas = intval($stats[$user_id]['ventas'] ?? 0);
+    if ($mis_ventas < 1) {
+        // Ya está en 0: si la marca de visto de este mes quedó activa, se
+        // libera para que vuelva a salir cuando recupere el #1.
+        $mes_key = (new DateTime('now', wp_timezone()))->format('Y-m');
+        if (get_user_meta($user_id, '_popup_rank_visto', true) === $mes_key) {
+            delete_user_meta($user_id, '_popup_rank_visto');
+        }
+        return null;
+    }
+
+    list($orden, $pos_map) = billetera_ranking_ordenar_posiciones($con_ventas, $stats);
+
+    // ¿Es #1? (puede compartir la posición en empate, igual que la app).
+    if (intval($pos_map[$user_id] ?? 99) !== 1) {
+        $mes_key = (new DateTime('now', wp_timezone()))->format('Y-m');
+        if (get_user_meta($user_id, '_popup_rank_visto', true) === $mes_key) {
+            delete_user_meta($user_id, '_popup_rank_visto');
+        }
+        return null;
+    }
+
+    $mes_key = (new DateTime('now', wp_timezone()))->format('Y-m');
+    $ya_vio  = (get_user_meta($user_id, '_popup_rank_visto', true) === $mes_key);
+    if ($ya_vio) {
+        return null;
+    }
+
+    // Top 3 de la tienda para la tarjeta.
+    $top = [];
+    foreach (array_slice($orden, 0, 3) as $id) {
+        $s = $stats[$id] ?? [];
+        $top[] = [
+            'pos'    => intval($pos_map[$id]),
+            'nombre' => get_userdata($id) ? get_userdata($id)->display_name : ('Usuario #' . $id),
+            'ventas' => intval($s['ventas'] ?? 0),
+            'es_yo'  => ($id === $user_id),
+        ];
+    }
+
+    $tienda_id = intval(get_user_meta($user_id, '_tienda_asociada', true));
+    $tienda = $tienda_id ? get_post($tienda_id) : null;
+
+    return [
+        'top'    => $top,
+        'tienda' => $tienda ? html_entity_decode($tienda->post_title, ENT_QUOTES, 'UTF-8') : '',
+        'mes_key' => $mes_key,
+    ];
+}
+
+// AJAX: consulta del popup de ranking (al cargar cualquier página de la app).
+// Lectura simple: no requiere nonce.
+add_action('wp_ajax_billetera_popup_rank_check', 'billetera_ajax_popup_rank_check');
+function billetera_ajax_popup_rank_check() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    $data = billetera_popup_rank_check(get_current_user_id());
+    wp_send_json_success($data);
+}
+
+// AJAX: marca el popup de ranking como visto para el mes (Y-m).
+add_action('wp_ajax_billetera_popup_rank_visto', 'billetera_ajax_popup_rank_visto');
+function billetera_ajax_popup_rank_visto() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_popup_rank')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
+    $mes_key = sanitize_text_field($_POST['mes_key'] ?? '');
+    if (!$mes_key || !preg_match('/^\d{4}-\d{2}$/', $mes_key)) {
+        wp_send_json_error(['message' => 'Mes inválido']);
+    }
+
+    update_user_meta(get_current_user_id(), '_popup_rank_visto', $mes_key);
+    wp_send_json_success([]);
+}
+
+// ===========================================================================
+// POPUP PRIMERA MONEDA DEL MES (solo asesores)
+// ===========================================================================
+
+/**
+ * Popup "Primera moneda": la venta recién registrada es la PRIMERA del mes
+ * para el asesor (sin ventas propias previas en el mes en curso). 1 vez por
+ * mes: meta _popup_primera_visto = Y-m. Devuelve los datos del popup o null.
+ * $monto: comisión total de la venta (con bono); $fecha_datetime: fecha/hora
+ * de la venta (Y-m-d H:i:s local, ya insertada en la BD).
+ */
+function billetera_popup_primera_check($user_id, $monto, $fecha_datetime) {
+    $u = get_userdata($user_id);
+    if (!$u || !in_array('asesor', (array) $u->roles, true)) {
+        return null;
+    }
+    if (!$fecha_datetime || floatval($monto) <= 0) {
+        return null;
+    }
+
+    $dt = DateTime::createFromFormat('Y-m-d H:i:s', $fecha_datetime, wp_timezone());
+    if (!$dt) {
+        return null;
+    }
+
+    $mes_key = $dt->format('Y-m');
+    if (get_user_meta($user_id, '_popup_primera_visto', true) === $mes_key) {
+        return null;
+    }
+
+    global $wpdb;
+    $ventas_table = $wpdb->prefix . 'billetera_ventas';
+
+    // ¿Es su primera venta del mes? Sin ventas propias anteriores en el mes.
+    $desde   = $dt->format('Y-m-01 00:00:00');
+    $previas = intval($wpdb->get_var($wpdb->prepare("
+        SELECT COUNT(*)
+        FROM $ventas_table
+        WHERE usuario_id = %d AND asesor_id IS NULL
+          AND creado_en >= %s AND creado_en < %s
+    ", $user_id, $desde, $fecha_datetime)));
+
+    if ($previas > 0) {
+        return null;
+    }
+
+    // "antes que el X% de los asesores": de los asesores con al menos 1 venta
+    // propia este mes, qué % registró su primera venta DESPUÉS que esta.
+    $pct = 0;
+    $asesores = get_users(['role' => 'asesor', 'fields' => 'ID', 'number' => -1]);
+    if ($asesores) {
+        $in = implode(',', array_fill(0, count($asesores), '%d'));
+        $rows = $wpdb->get_results($wpdb->prepare("
+            SELECT usuario_id, MIN(creado_en) AS primera
+            FROM $ventas_table
+            WHERE usuario_id IN ($in) AND asesor_id IS NULL
+              AND creado_en >= %s
+            GROUP BY usuario_id
+        ", array_merge(array_map('intval', $asesores), [$desde])));
+
+        $total = 0;
+        $later = 0;
+        foreach ((array) $rows as $r) {
+            $total++;
+            if (strcmp((string) $r->primera, $fecha_datetime) > 0) {
+                $later++;
+            }
+        }
+        if ($total > 0) {
+            $pct = (int) round(($later / $total) * 100);
+        }
+    }
+
+    // Saludo según la hora de la venta.
+    $h = intval($dt->format('G'));
+    $saludo = $h < 10 ? '¡Madrugador!' : ($h < 15 ? '¡Temprano!' : '¡Buen arranque!');
+
+    // Hora para el chip: "7:42 a.m."
+    $hora = $dt->format('g:i') . ' ' . ($dt->format('a') === 'am' ? 'a.m.' : 'p.m.');
+
+    $meses = [1 => 'enero', 2 => 'febrero', 3 => 'marzo', 4 => 'abril', 5 => 'mayo', 6 => 'junio',
+              7 => 'julio', 8 => 'agosto', 9 => 'septiembre', 10 => 'octubre', 11 => 'noviembre', 12 => 'diciembre'];
+
+    return [
+        'monto'   => round(floatval($monto), 2),
+        'hora'    => $hora,
+        'mes'     => $meses[intval($dt->format('n'))],
+        'pct'     => $pct,
+        'saludo'  => $saludo,
+        'mes_key' => $mes_key,
+    ];
+}
+
+// AJAX: marca el popup de primera moneda como visto para el mes (Y-m).
+add_action('wp_ajax_billetera_popup_primera_visto', 'billetera_ajax_popup_primera_visto');
+function billetera_ajax_popup_primera_visto() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_popup_primera')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
+    $mes_key = sanitize_text_field($_POST['mes_key'] ?? '');
+    if (!$mes_key || !preg_match('/^\d{4}-\d{2}$/', $mes_key)) {
+        wp_send_json_error(['message' => 'Mes inválido']);
+    }
+
+    update_user_meta(get_current_user_id(), '_popup_primera_visto', $mes_key);
+    wp_send_json_success([]);
 }
 
 function billetera_get_tipo_cambio() {

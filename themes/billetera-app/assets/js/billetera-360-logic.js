@@ -508,6 +508,13 @@ function handleSubmit() {
                 const bonusCat = data.data.bonus_categoria || '';
                 const bonusAplicado = Number(data.data.bonus_aplicado) || 0;
 
+                // Popup de racha (semana perfecta): se muestra al cerrar esta celebración.
+                window.__popupRachaPending = data.data.popup_racha || null;
+                // Popup de ranking #1 de la tienda (entra a la misma cola).
+                window.__popupRankPending = data.data.popup_rank || null;
+                // Popup de primera moneda del mes (entra a la misma cola).
+                window.__popupPrimeraPending = data.data.popup_primera || null;
+
                 gainAmount.textContent = '+S/ ' + amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 const gainBonus = document.getElementById('gain-bonus');
                 if (gainBonus) {
@@ -577,7 +584,29 @@ function spawnCoins(zone) {
 }
 
 function goToMovimientos() {
+    // Cierra primero el overlay de celebración; los popups van encima.
     if (overlay) overlay.classList.remove('show');
+
+    // Cola de popups del flujo de venta: primero racha, luego ranking #1.
+    if (window.__popupRachaPending && window.BilleteraPopupRacha) {
+        const rachaData = window.__popupRachaPending;
+        window.__popupRachaPending = null;
+        window.BilleteraPopupRacha.show(rachaData);
+        return;
+    }
+    if (window.__popupRankPending && window.BilleteraPopupRank) {
+        const rankData = window.__popupRankPending;
+        window.__popupRankPending = null;
+        window.BilleteraPopupRank.show(rankData, { chain: true });
+        return;
+    }
+    if (window.__popupPrimeraPending && window.BilleteraPopupPrimera) {
+        const primeraData = window.__popupPrimeraPending;
+        window.__popupPrimeraPending = null;
+        window.BilleteraPopupPrimera.show(primeraData, { chain: true });
+        return;
+    }
+
     if (window.billetera && window.billetera.movimientos_url) {
         window.location.href = window.billetera.movimientos_url;
         return;
@@ -587,6 +616,9 @@ function goToMovimientos() {
         window.location.href = movLink.href;
     }
 }
+
+// Accesible para el popup de racha (continúa al cerrarlo).
+window.billeteraGoToMovimientos = goToMovimientos;
 
 function resetForm() {
     idInput.value = '';

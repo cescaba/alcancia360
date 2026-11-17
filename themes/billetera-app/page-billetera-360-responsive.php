@@ -51,6 +51,8 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-responsive.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-header.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-registro.css'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/popup-racha.css'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/popup-primera.css'); ?>">
 </head>
 <body <?php body_class(); ?>>
 
@@ -303,6 +305,26 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
     </div>
 </div>
 
+<!-- POPUP DE RACHA (semana perfecta): se muestra al cerrar la celebración -->
+<?php get_template_part('template-parts/popup-racha'); ?>
+
+<!-- POPUP PRIMERA MONEDA DEL MES: entra a la misma cola tras una venta -->
+<?php get_template_part('template-parts/popup-primera'); ?>
+
+<?php if (isset($_GET['primera_test'])): ?>
+<script>
+// PRUEBA del popup de primera moneda: ?primera_test=1 (datos de ejemplo).
+document.addEventListener('DOMContentLoaded', function () {
+    if (window.BilleteraPopupPrimera) {
+        window.BilleteraPopupPrimera.show({
+            monto: 175, hora: '7:42 a.m.', mes: 'noviembre',
+            pct: 89, saludo: '¡Madrugador!', mes_key: 'test'
+        });
+    }
+});
+</script>
+<?php endif; ?>
+
 <script>
 window.billetera = {
     ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
@@ -316,6 +338,19 @@ window.billetera = {
 </script>
 <script src="<?php echo billetera_asset_url('/assets/js/billetera-360-logic.js'); ?>"></script>
 <script src="<?php echo billetera_asset_url('/assets/js/billetera-360-logic-desk.js'); ?>"></script>
+
+<?php
+// PRUEBA del popup de racha: ?racha_test=1 (cualquier usuario de la app).
+// Muestra el popup al cargar la página sin necesidad de registrar una venta.
+if (isset($_GET['racha_test'])): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (window.BilleteraPopupRacha) {
+        window.BilleteraPopupRacha.show({ dias: 6, pct: 12, semana: 'test' });
+    }
+});
+</script>
+<?php endif; ?>
 
 </body>
 </html>

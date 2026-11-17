@@ -1,0 +1,356 @@
+/* ============================================================================
+   Popup "Ranking #1 en tu tienda" — Mi alcancia 360
+   Modal full-screen en móvil (390px), centrado con backdrop en desktop.
+   Animaciones: podio sube con el chanchito, corona cae con rebote y destello,
+   brillos parpadean.
+   ========================================================================== */
+
+.popup-rank {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(14, 36, 56, 0.5);
+}
+
+.popup-rank[hidden] {
+    display: none;
+}
+
+.popup-rank__box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 18px 24px 28px;
+    width: 100%;
+    max-width: 390px;
+    min-height: 100dvh;
+    background: #FFFFFF;
+    overflow-y: auto;
+}
+
+/* --- Header --- */
+
+.popup-rank__head {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    flex: none;
+}
+
+.popup-rank__close {
+    background: none;
+    border: 0;
+    padding: 0;
+    width: 16px;
+    height: 22px;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 500;
+    font-size: 18px;
+    line-height: 22px;
+    color: #8494A6;
+    cursor: pointer;
+}
+
+.popup-rank__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    background: #FBF6EA;
+    border: 1px solid #F0D9A8;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    line-height: 12px;
+    letter-spacing: 1.2px;
+    color: #8A5F0F;
+}
+
+/* --- Escenario (podio + chanchito + corona + brillos) --- */
+
+.popup-rank__stage {
+    position: relative;
+    width: 100%;
+    height: 250px;
+    margin-top: 18px;
+    background: linear-gradient(180deg, #FBF6EA 0%, #FFFFFF 100%);
+    border: 1px solid #F0D9A8;
+    overflow: hidden;
+}
+
+/* Podio azul: sube desde abajo junto con el chanchito */
+.popup-rank__podio {
+    position: absolute;
+    width: 200px;
+    height: 40px;
+    left: 71px;
+    top: 210px;
+    background: #0A6CB4;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    animation: rankPodioRise 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.1s both;
+}
+
+.popup-rank__podio::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 6px;
+    background: #3C8ED0;
+}
+
+.popup-rank__podio > span {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    line-height: 26px;
+    color: #FFFFFF;
+}
+
+.popup-rank__pig {
+    position: absolute;
+    width: 178.5px;
+    height: auto;
+    left: 81.75px;
+    top: 58.24px;
+    animation: rankPodioRise 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.1s both;
+}
+
+/* Corona: cae desde arriba con rebote y destello al encajar
+   (el SVG ya viene rotado 14°, sin transform en CSS) */
+.popup-rank__crown {
+    position: absolute;
+    width: 86px;
+    height: auto;
+    left: 169.3px;
+    top: 18.2px;
+    opacity: 0;
+    animation:
+        rankCrownDrop 0.9s cubic-bezier(0.3, 1.3, 0.5, 1) 0.85s both,
+        rankCrownGlint 0.6s ease-in-out 1.7s 1;
+}
+
+/* Brillos (estrellitas doradas) en 4 posiciones */
+.popup-rank__spark {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: #E3A94A;
+    clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+    animation: rachaSpark 2.4s ease-in-out infinite;
+}
+
+.popup-rank__spark--1 { width: 16px; height: 16px; left: 34px;  top: 40px; }
+.popup-rank__spark--2 { width: 12px; height: 12px; left: 300px; top: 36px;  animation-delay: .6s; }
+.popup-rank__spark--3 { width: 18px; height: 18px; left: 310px; top: 170px; animation-delay: 1.2s; }
+.popup-rank__spark--4 { width: 10px; height: 10px; left: 26px;  top: 180px; animation-delay: 1.8s; }
+
+/* --- Número + título --- */
+
+.popup-rank__num {
+    margin-top: 10px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 92px;
+    line-height: 110px;
+    color: #0A6CB4;
+}
+
+.popup-rank__title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    line-height: 29px;
+    text-align: center;
+    letter-spacing: 1.2px;
+    color: #0E2438;
+}
+
+/* --- Tarjeta: top 3 + mensaje --- */
+
+.popup-rank__card {
+    width: 100%;
+    margin-top: 26px;
+    background: #FFFFFF;
+    border: 1px solid #DCE3EB;
+}
+
+.popup-rank__row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    background: #FFFFFF;
+}
+
+.popup-rank__row--first {
+    background: #FBF6EA;
+}
+
+/* Posición: moneda dorada en la 1ra fila, círculo gris en las demás */
+.popup-rank__pos {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 24px;
+    height: 24px;
+    background: #FFFFFF;
+    border: 1px solid #DCE3EB;
+    border-radius: 12px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 14px;
+    color: #5B6B80;
+    flex: none;
+}
+
+.popup-rank__pos--gold {
+    background: linear-gradient(180deg, #F8D27A 0%, #C98A1E 100%);
+    border: 1px solid #B77C16;
+    box-shadow: 0px 2px 4px rgba(138, 94, 15, 0.3);
+    color: #5A3D06;
+}
+
+.popup-rank__name {
+    flex: 1;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    line-height: 15px;
+    color: #0E2438;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.popup-rank__you {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 4px;
+    background: #0A6CB4;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 700;
+    font-size: 9px;
+    line-height: 11px;
+    letter-spacing: 0.6px;
+    color: #FFFFFF;
+    flex: none;
+}
+
+.popup-rank__ventas {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 17px;
+    color: #8494A6;
+    flex: none;
+}
+
+.popup-rank__row--first .popup-rank__ventas {
+    color: #8A5F0F;
+}
+
+.popup-rank__msg {
+    margin: 0;
+    padding: 16px 18px;
+    font-family: 'Barlow', sans-serif;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 140%;
+    text-align: center;
+    color: #5B6B80;
+}
+
+/* --- CTA --- */
+
+.popup-rank__cta {
+    width: 100%;
+    margin-top: auto;
+    padding: 15px 0;
+    background: #0A6CB4;
+    border: 0;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    line-height: 22px;
+    letter-spacing: 1.8px;
+    color: #FFFFFF;
+    cursor: pointer;
+}
+
+.popup-rank__cta:active {
+    background: #085C9B;
+}
+
+/* ==========================================================================
+   Desktop: tarjeta centrada con backdrop completo
+   ========================================================================== */
+
+@media (min-width: 769px) {
+    .popup-rank__box {
+        min-height: 0;
+        max-height: calc(100dvh - 48px);
+        width: 390px;
+        border-radius: 4px;
+        box-shadow: 0 24px 60px rgba(14, 36, 56, 0.35);
+    }
+
+    .popup-rank__cta {
+        margin-top: 26px;
+    }
+}
+
+/* ==========================================================================
+   Animaciones
+   ========================================================================== */
+
+/* Podio (con el chanchito encima) sube desde abajo con leve rebote */
+@keyframes rankPodioRise {
+    0%   { transform: translateY(220px); }
+    80%  { transform: translateY(-6px); }
+    100% { transform: translateY(0); }
+}
+
+/* Corona cae desde arriba con rebote */
+@keyframes rankCrownDrop {
+    0%   { opacity: 0; transform: translateY(-140px); }
+    20%  { opacity: 1; }
+    60%  { opacity: 1; transform: translateY(0); }
+    75%  { opacity: 1; transform: translateY(-14px); }
+    88%  { opacity: 1; transform: translateY(0); }
+    94%  { opacity: 1; transform: translateY(-5px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Destello dorado cuando la corona encaja */
+@keyframes rankCrownGlint {
+    0%, 100% { filter: brightness(1); }
+    50%      { filter: brightness(1.6) drop-shadow(0 0 6px #F5C563); }
+}
+
+/* Brillos parpadeando (compartido) */
+@keyframes rachaSpark {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.2; transform: scale(0.7); }
+}
+
+/* Respeta la preferencia de menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+    .popup-rank__podio,
+    .popup-rank__pig,
+    .popup-rank__crown,
+    .popup-rank__spark {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+}
