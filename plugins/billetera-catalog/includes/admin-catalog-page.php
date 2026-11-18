@@ -274,7 +274,7 @@ function billetera_render_categorias_page() {
     $rows = $wpdb->get_results("
         SELECT c.*,
                (SELECT COUNT(*) FROM {$wpdb->prefix}billetera_subcategorias s WHERE s.categoria_id = c.id) AS total_subs,
-               (SELECT GROUP_CONCAT(l.nombre ORDER BY l.orden_display SEPARATOR ', ')
+               (SELECT GROUP_CONCAT(DISTINCT l.nombre ORDER BY l.orden_display SEPARATOR ', ')
                   FROM {$wpdb->prefix}billetera_subcategoria_lineas b
                   JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = b.linea_codigo
                   WHERE b.subcategoria_id IN (SELECT id FROM {$wpdb->prefix}billetera_subcategorias WHERE categoria_id = c.id)) AS lineas_txt
