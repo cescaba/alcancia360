@@ -296,7 +296,7 @@
         fetch(billetera.ajax_url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'action=billetera_get_comision&nonce=' + encodeURIComponent(billetera.nonce_get_comision) + '&subcategoria_id=' + subId + '&cantidad=' + cantidad
+            body: 'action=billetera_get_comision&nonce=' + encodeURIComponent(billetera.nonce_get_comision) + '&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&linea_codigo=' + encodeURIComponent((marcaSelect && marcaSelect.value) || '')
         })
             .then(function (r) { return r.json(); })
             .then(function (res) {
@@ -488,7 +488,7 @@
         fetch(billetera.ajax_url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'action=billetera_register_sale_multi&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha + '&items=' + encodeURIComponent(JSON.stringify(items))
+            body: 'action=billetera_register_sale_multi&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha + '&linea_codigo=' + encodeURIComponent((marcaSelect && marcaSelect.value) || '') + '&items=' + encodeURIComponent(JSON.stringify(items))
         })
             .then(function (r) { return r.json(); })
             .then(function (data) {

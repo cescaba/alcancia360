@@ -253,7 +253,7 @@ function billetera_summary_stats_usuario($user_id, $desde, $hasta) {
         FROM $v v
         JOIN $sub s ON s.id = v.subcategoria_id
         JOIN $cat c ON c.id = s.categoria_id
-        JOIN $lin l ON l.codigo = c.linea_codigo
+        JOIN $lin l ON l.codigo = COALESCE(v.linea_codigo, (SELECT b.linea_codigo FROM {$wpdb->prefix}billetera_subcategoria_lineas b WHERE b.subcategoria_id = s.id ORDER BY b.linea_codigo ASC LIMIT 1))
         WHERE v.usuario_id = %d
           AND v.creado_en >= %s AND v.creado_en < %s
           AND (v.monto_comision_sol * v.bonus_multiplier) > 0

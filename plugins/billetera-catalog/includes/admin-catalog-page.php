@@ -173,15 +173,13 @@ function billetera_bc_tiendas() {
 function billetera_bc_categorias_options($selected = 0) {
     global $wpdb;
     $rows = $wpdb->get_results("
-        SELECT c.id, c.nombre, c.linea_codigo, l.nombre AS linea_nombre
+        SELECT c.id, c.nombre
         FROM {$wpdb->prefix}billetera_categorias c
-        LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
-        ORDER BY c.linea_codigo, c.orden_display, c.nombre
+        ORDER BY c.orden_display, c.nombre
     ");
     $html = '';
     foreach ($rows as $r) {
-        $label = ($r->linea_nombre ?: $r->linea_codigo) . ' · ' . $r->nombre;
-        $html .= '<option value="' . intval($r->id) . '" data-linea="' . esc_attr($r->linea_codigo ?? '') . '"' . selected($selected, $r->id, false) . '>' . esc_html($label) . '</option>';
+        $html .= '<option value="' . intval($r->id) . '"' . selected($selected, $r->id, false) . '>' . esc_html($r->nombre) . '</option>';
     }
     return $html;
 }
@@ -189,16 +187,19 @@ function billetera_bc_categorias_options($selected = 0) {
 function billetera_bc_subcategorias_options($selected = 0) {
     global $wpdb;
     $rows = $wpdb->get_results("
-        SELECT s.id, s.nombre, c.id AS categoria_id, c.nombre AS categoria, c.linea_codigo, l.nombre AS linea
+        SELECT s.id, s.nombre, c.id AS categoria_id, c.nombre AS categoria,
+               (SELECT GROUP_CONCAT(l.nombre ORDER BY l.orden_display SEPARATOR ', ')
+                  FROM {$wpdb->prefix}billetera_subcategoria_lineas b
+                  JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = b.linea_codigo
+                  WHERE b.subcategoria_id = s.id) AS lineas
         FROM {$wpdb->prefix}billetera_subcategorias s
         JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
-        LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
-        ORDER BY c.linea_codigo, c.orden_display, s.orden_display, s.nombre
+        ORDER BY c.orden_display, c.nombre, s.orden_display, s.nombre
     ");
     $html = '';
     foreach ($rows as $r) {
-        $label = ($r->linea ?: '—') . ' · ' . $r->categoria . ' · ' . $r->nombre;
-        $html .= '<option value="' . intval($r->id) . '" data-cat="' . intval($r->categoria_id) . '" data-linea="' . esc_attr($r->linea_codigo ?? '') . '"' . selected($selected, $r->id, false) . '>' . esc_html($label) . '</option>';
+        $label = $r->categoria . ' · ' . $r->nombre . ' [' . ($r->lineas ?: 'sin líneas') . ']';
+        $html .= '<option value="' . intval($r->id) . '" data-cat="' . intval($r->categoria_id) . '"' . selected($selected, $r->id, false) . '>' . esc_html($label) . '</option>';
     }
     return $html;
 }
@@ -225,7 +226,6 @@ function billetera_render_categorias_page() {
 
         if ($action === 'save') {
             $id     = intval(billetera_bc_post('id', 0));
-            $linea  = sanitize_text_field(billetera_bc_post('linea_codigo'));
             $nombre = sanitize_text_field(billetera_bc_post('nombre'));
             $slug   = sanitize_title(billetera_bc_post('slug'));
             if ($slug === '') {
@@ -234,11 +234,11 @@ function billetera_render_categorias_page() {
             $orden  = intval(billetera_bc_post('orden_display', 0));
             $activo = isset($_POST['activo']) ? 1 : 0;
 
-            if ($linea === '' || $nombre === '') {
-                $err = 'Línea y nombre son obligatorios.';
+            if ($nombre === '') {
+                $err = 'El nombre es obligatorio.';
             } else {
-                $data = ['linea_codigo' => $linea, 'nombre' => $nombre, 'slug' => $slug, 'orden_display' => $orden, 'activo' => $activo];
-                $fmt  = ['%s', '%s', '%s', '%d', '%d'];
+                $data = ['nombre' => $nombre, 'slug' => $slug, 'orden_display' => $orden, 'activo' => $activo];
+                $fmt  = ['%s', '%s', '%d', '%d'];
                 if ($id > 0) {
                     $wpdb->update($table, $data, ['id' => $id], $fmt, ['%d']);
                     $msg = 'Categoría actualizada.';
@@ -247,7 +247,7 @@ function billetera_render_categorias_page() {
                     if ($wpdb->insert_id) {
                         $msg = 'Categoría creada.';
                     } else {
-                        $err = 'No se pudo crear. ¿Ya existe ese slug en la misma línea?';
+                        $err = 'No se pudo crear. ¿Ya existe una categoría con ese slug?';
                     }
                 }
             }
@@ -257,10 +257,11 @@ function billetera_render_categorias_page() {
                 $subs = $wpdb->get_col($wpdb->prepare("SELECT id FROM {$wpdb->prefix}billetera_subcategorias WHERE categoria_id = %d", $id));
                 foreach ($subs as $sid) {
                     $wpdb->delete($wpdb->prefix . 'billetera_comisiones', ['subcategoria_id' => intval($sid)], ['%d']);
+                    $wpdb->delete($wpdb->prefix . 'billetera_subcategoria_lineas', ['subcategoria_id' => intval($sid)], ['%d']);
                 }
                 $wpdb->delete($wpdb->prefix . 'billetera_subcategorias', ['categoria_id' => $id], ['%d']);
                 $wpdb->delete($table, ['id' => $id], ['%d']);
-                $msg = 'Categoría eliminada junto con sus subcategorías y comisiones.';
+                $msg = 'Categoría eliminada junto con sus subcategorías, líneas y comisiones.';
             }
         }
     }
@@ -270,16 +271,18 @@ function billetera_render_categorias_page() {
         $edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id = %d", intval($_GET['id'])));
     }
 
-    $lineas = billetera_bc_lineas();
     $rows = $wpdb->get_results("
-        SELECT c.*, l.nombre AS linea_nombre,
-               (SELECT COUNT(*) FROM {$wpdb->prefix}billetera_subcategorias s WHERE s.categoria_id = c.id) AS total_subs
+        SELECT c.*,
+               (SELECT COUNT(*) FROM {$wpdb->prefix}billetera_subcategorias s WHERE s.categoria_id = c.id) AS total_subs,
+               (SELECT GROUP_CONCAT(l.nombre ORDER BY l.orden_display SEPARATOR ', ')
+                  FROM {$wpdb->prefix}billetera_subcategoria_lineas b
+                  JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = b.linea_codigo
+                  WHERE b.subcategoria_id IN (SELECT id FROM {$wpdb->prefix}billetera_subcategorias WHERE categoria_id = c.id)) AS lineas_txt
         FROM $table c
-        LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
-        ORDER BY c.linea_codigo, c.orden_display, c.nombre
+        ORDER BY c.orden_display, c.nombre
     ");
 
-    billetera_bc_open('Categorías', 'Las categorías pertenecen a una línea (Hyundai Autos, Camiones, Geely, JMC).');
+    billetera_bc_open('Categorías', 'Categorías globales: una sola lista (la línea se define en cada subcategoría).');
     billetera_bc_notices($msg, $err);
     ?>
     <div class="bc-card">
@@ -289,15 +292,6 @@ function billetera_render_categorias_page() {
             <input type="hidden" name="bc_action" value="save">
             <input type="hidden" name="id" value="<?php echo $edit ? intval($edit->id) : 0; ?>">
 
-            <div class="bc-field">
-                <label class="bc-label">Línea *</label>
-                <select name="linea_codigo" class="bc-select" required>
-                    <option value="">— Selecciona —</option>
-                    <?php foreach ($lineas as $l): ?>
-                        <option value="<?php echo esc_attr($l->codigo); ?>" <?php echo selected($edit->linea_codigo ?? '', $l->codigo, false); ?>><?php echo esc_html($l->nombre); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
             <div class="bc-field">
                 <label class="bc-label">Nombre *</label>
                 <input type="text" name="nombre" class="bc-input" required value="<?php echo esc_attr($edit->nombre ?? ''); ?>" placeholder="Ej: Prepagados">
@@ -325,7 +319,7 @@ function billetera_render_categorias_page() {
             <thead>
                 <tr>
                     <th style="width:60px;">ID</th>
-                    <th>Línea</th>
+                    <th>Líneas</th>
                     <th>Nombre</th>
                     <th>Slug</th>
                     <th style="width:90px;">Subcat.</th>
@@ -339,7 +333,7 @@ function billetera_render_categorias_page() {
                 <?php else: foreach ($rows as $r): ?>
                     <tr>
                         <td><?php echo intval($r->id); ?></td>
-                        <td><?php echo esc_html($r->linea_nombre ?: $r->linea_codigo); ?></td>
+                        <td><?php echo esc_html($r->lineas_txt ?: '—'); ?></td>
                         <td><strong><?php echo esc_html($r->nombre); ?></strong></td>
                         <td><code><?php echo esc_html($r->slug); ?></code></td>
                         <td><?php echo intval($r->total_subs); ?></td>
@@ -378,19 +372,28 @@ function billetera_render_subcategorias_page() {
             $por_unid = isset($_POST['por_unidad']) ? 1 : 0;
             $orden    = intval(billetera_bc_post('orden_display', 0));
             $activo   = isset($_POST['activo']) ? 1 : 0;
+            $lineas_sel = isset($_POST['lineas']) && is_array($_POST['lineas'])
+                ? array_map('sanitize_text_field', wp_unslash($_POST['lineas']))
+                : [];
 
             if ($cat <= 0 || $nombre === '') {
                 $err = 'Categoría y nombre son obligatorios.';
+            } elseif (empty($lineas_sel)) {
+                $err = 'Marca al menos una línea (dónde se venderá esta subcategoría).';
             } else {
                 $data = ['categoria_id' => $cat, 'nombre' => $nombre, 'por_unidad' => $por_unid, 'orden_display' => $orden, 'activo' => $activo];
                 $fmt  = ['%d', '%s', '%d', '%d', '%d'];
                 if ($id > 0) {
                     $wpdb->update($table, $data, ['id' => $id], $fmt, ['%d']);
+                    billetera_set_sub_lineas($id, $lineas_sel);
                     $msg = 'Subcategoría actualizada.';
                 } else {
                     $wpdb->insert($table, $data, $fmt);
-                    $msg = $wpdb->insert_id ? 'Subcategoría creada.' : '';
-                    if (!$wpdb->insert_id) {
+                    $new_id = intval($wpdb->insert_id);
+                    if ($new_id) {
+                        billetera_set_sub_lineas($new_id, $lineas_sel);
+                        $msg = 'Subcategoría creada.';
+                    } else {
                         $err = 'No se pudo crear la subcategoría.';
                     }
                 }
@@ -399,6 +402,7 @@ function billetera_render_subcategorias_page() {
             $id = intval(billetera_bc_post('id', 0));
             if ($id) {
                 $wpdb->delete($wpdb->prefix . 'billetera_comisiones', ['subcategoria_id' => $id], ['%d']);
+                $wpdb->delete($wpdb->prefix . 'billetera_subcategoria_lineas', ['subcategoria_id' => $id], ['%d']);
                 $wpdb->delete($table, ['id' => $id], ['%d']);
                 $msg = 'Subcategoría eliminada junto con sus comisiones.';
             }
@@ -415,19 +419,32 @@ function billetera_render_subcategorias_page() {
     $filtro_linea = billetera_bc_filtro_linea();
 
     $rows_sql_base = "
-        SELECT s.*, c.nombre AS categoria, l.nombre AS linea,
+        SELECT s.*, c.nombre AS categoria,
+               (SELECT GROUP_CONCAT(b.linea_codigo ORDER BY l.orden_display SEPARATOR ',')
+                  FROM {$wpdb->prefix}billetera_subcategoria_lineas b
+                  JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = b.linea_codigo
+                  WHERE b.subcategoria_id = s.id) AS lineas_codigos,
+               (SELECT GROUP_CONCAT(l.nombre ORDER BY l.orden_display SEPARATOR ', ')
+                  FROM {$wpdb->prefix}billetera_subcategoria_lineas b
+                  JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = b.linea_codigo
+                  WHERE b.subcategoria_id = s.id) AS lineas_nombres,
                (SELECT COUNT(*) FROM {$wpdb->prefix}billetera_comisiones co WHERE co.subcategoria_id = s.id) AS total_com
         FROM $table s
         JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
-        LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
     ";
-    $rows_orden = "ORDER BY c.linea_codigo, c.orden_display, s.orden_display, s.nombre";
+    $rows_orden = "ORDER BY c.orden_display, c.nombre, s.orden_display, s.nombre";
     $rows = ($filtro_linea !== '')
         ? $wpdb->get_results($wpdb->prepare(
-            $rows_sql_base . " WHERE c.linea_codigo = %s $rows_orden", $filtro_linea))
+            $rows_sql_base . " WHERE EXISTS (
+                SELECT 1 FROM {$wpdb->prefix}billetera_subcategoria_lineas b
+                WHERE b.subcategoria_id = s.id AND b.linea_codigo = %s
+            ) $rows_orden", $filtro_linea))
         : $wpdb->get_results($rows_sql_base . $rows_orden);
 
-    billetera_bc_open('Subcategorías', 'Las subcategorías son los productos/servicios que reciben comisión.');
+    // Líneas de la subcategoría en edición (para marcar los checkboxes)
+    $edit_lineas = $edit ? billetera_sub_lineas(intval($edit->id)) : [];
+
+    billetera_bc_open('Subcategorías', 'Las subcategorías son los productos/servicios que reciben comisión. Cada una se vende en una o varias líneas.');
     billetera_bc_notices($msg, $err);
     ?>
     <div class="bc-card">
@@ -443,6 +460,17 @@ function billetera_render_subcategorias_page() {
                     <option value="">— Selecciona —</option>
                     <?php echo billetera_bc_categorias_options($edit->categoria_id ?? 0); ?>
                 </select>
+            </div>
+            <div class="bc-field bc-field--full">
+                <label class="bc-label">Líneas donde se vende *</label>
+                <div class="bc-checks">
+                    <?php foreach ($lineas as $l): ?>
+                        <label class="bc-check">
+                            <input type="checkbox" name="lineas[]" value="<?php echo esc_attr($l->codigo); ?>" <?php checked(in_array($l->codigo, $edit_lineas, true), true); ?>>
+                            <?php echo esc_html($l->nombre); ?>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
             </div>
             <div class="bc-field bc-field--full">
                 <label class="bc-label">Nombre *</label>
@@ -492,7 +520,7 @@ function billetera_render_subcategorias_page() {
             <thead>
                 <tr>
                     <th style="width:60px;">ID</th>
-                    <th>Línea</th>
+                    <th>Líneas</th>
                     <th>Categoría</th>
                     <th>Subcategoría</th>
                     <th style="width:90px;">x Unidad</th>
@@ -507,7 +535,7 @@ function billetera_render_subcategorias_page() {
                 <?php else: foreach ($rows as $r): ?>
                     <tr>
                         <td><?php echo intval($r->id); ?></td>
-                        <td><?php echo esc_html($r->linea ?: '—'); ?></td>
+                        <td><?php echo esc_html($r->lineas_nombres ?: '—'); ?></td>
                         <td><?php echo esc_html($r->categoria); ?></td>
                         <td><strong><?php echo esc_html($r->nombre); ?></strong></td>
                         <td><?php echo (int) $r->por_unidad ? 'Sí' : 'No'; ?></td>
@@ -549,37 +577,61 @@ function billetera_render_comisiones_page() {
             $monto      = floatval(billetera_bc_post('monto', 0));
             $moneda     = strtoupper(sanitize_text_field(billetera_bc_post('moneda', 'PEN')));
             $activo     = isset($_POST['activo']) ? 1 : 0;
+            $linea      = strtolower(sanitize_text_field(billetera_bc_post('linea_codigo', '')));
+            $copiar     = isset($_POST['copiar_lineas']) ? 1 : 0;
+
+            $lineas_sub = ($sub > 0) ? billetera_sub_lineas($sub) : [];
 
             if ($sub <= 0 || !in_array($rol, ['asesor', 'jefe_venta'], true)) {
                 $err = 'Subcategoría y rol son obligatorios.';
+            } elseif (empty($lineas_sub)) {
+                $err = 'La subcategoría no tiene líneas asignadas. Edítala y márcalas primero.';
+            } elseif (!$linea || !in_array($linea, $lineas_sub, true)) {
+                $err = 'Elige una línea en la que se venda esta subcategoría.';
             } else {
-                if ($id <= 0) {
-                    if ($dist === null) {
-                        $id = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE subcategoria_id = %d AND distribuidor_id IS NULL AND rol = %s", $sub, $rol)));
+                // Líneas destino: solo la elegida, o todas las de la subcategoría
+                // (copiar a todas y editar una por una después).
+                $lineas_dest = $copiar ? $lineas_sub : [$linea];
+
+                foreach ($lineas_dest as $lin) {
+                    $id_lin = 0;
+                    if ($id > 0) {
+                        // Edición: solo la línea elegida lleva el id
+                        $id_lin = ($lin === $linea) ? $id : 0;
+                    }
+                    if ($id_lin <= 0) {
+                        if ($dist === null) {
+                            $id_lin = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE subcategoria_id = %d AND linea_codigo = %s AND distribuidor_id IS NULL AND rol = %s", $sub, $lin, $rol)));
+                        } else {
+                            $id_lin = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE subcategoria_id = %d AND linea_codigo = %s AND distribuidor_id = %d AND rol = %s", $sub, $lin, $dist, $rol)));
+                        }
+                    }
+
+                    $data = [
+                        'subcategoria_id' => $sub,
+                        'linea_codigo'    => $lin,
+                        'distribuidor_id' => $dist,
+                        'rol'             => $rol,
+                        'monto'           => $monto,
+                        'moneda'          => $moneda,
+                        'activo'          => $activo,
+                    ];
+                    $fmt = ['%d', '%s', '%d', '%s', '%f', '%s', '%d'];
+
+                    if ($id_lin > 0) {
+                        $wpdb->update($table, $data, ['id' => $id_lin], $fmt, ['%d']);
+                        $msg = 'Comisión guardada.';
                     } else {
-                        $id = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE subcategoria_id = %d AND distribuidor_id = %d AND rol = %s", $sub, $dist, $rol)));
+                        $ok = $wpdb->insert($table, $data, $fmt);
+                        $msg = $ok ? 'Comisión guardada.' : $msg;
+                        if (!$ok) {
+                            $err = 'No se pudo guardar la comisión de la línea ' . $lin . '.';
+                        }
                     }
                 }
 
-                $data = [
-                    'subcategoria_id' => $sub,
-                    'distribuidor_id' => $dist,
-                    'rol'             => $rol,
-                    'monto'           => $monto,
-                    'moneda'          => $moneda,
-                    'activo'          => $activo,
-                ];
-                $fmt = ['%d', '%d', '%s', '%f', '%s', '%d'];
-
-                if ($id > 0) {
-                    $wpdb->update($table, $data, ['id' => $id], $fmt, ['%d']);
-                    $msg = 'Comisión guardada.';
-                } else {
-                    $wpdb->insert($table, $data, $fmt);
-                    $msg = $wpdb->insert_id ? 'Comisión creada.' : '';
-                    if (!$wpdb->insert_id) {
-                        $err = 'No se pudo crear la comisión.';
-                    }
+                if ($copiar && empty($err)) {
+                    $msg = 'Comisión guardada y copiada a todas las líneas de la subcategoría.';
                 }
             }
         } elseif ($action === 'delete') {
@@ -605,7 +657,7 @@ function billetera_render_comisiones_page() {
     $wheres = [];
     $params = [];
     if ($filtro_linea !== '') {
-        $wheres[] = 'c.linea_codigo = %s';
+        $wheres[] = 'co.linea_codigo = %s';
         $params[] = $filtro_linea;
     }
     if ($filtro_sub) {
@@ -628,7 +680,7 @@ function billetera_render_comisiones_page() {
         FROM $table co
         JOIN {$wpdb->prefix}billetera_subcategorias s ON s.id = co.subcategoria_id
         JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
-        LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
+        LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = co.linea_codigo
         $where_sql
     ";
 
@@ -642,7 +694,7 @@ function billetera_render_comisiones_page() {
 
     $data_sql = "SELECT co.*, s.nombre AS subcategoria, c.nombre AS categoria, l.nombre AS linea
         $from_sql
-        ORDER BY c.linea_codigo, c.orden_display, s.orden_display, s.nombre, co.rol
+        ORDER BY l.orden_display, c.orden_display, s.orden_display, s.nombre, co.rol
         LIMIT %d OFFSET %d";
     $data_params = array_merge($params, [$per_page, $offset]);
     $rows = $wpdb->get_results($wpdb->prepare($data_sql, ...$data_params));
@@ -659,10 +711,30 @@ function billetera_render_comisiones_page() {
 
             <div class="bc-field bc-field--full">
                 <label class="bc-label">Subcategoría *</label>
-                <select name="subcategoria_id" class="bc-select" required>
+                <select name="subcategoria_id" id="bc-c-subcategoria" class="bc-select" required>
                     <option value="">— Selecciona —</option>
                     <?php echo billetera_bc_subcategorias_options($edit->subcategoria_id ?? 0); ?>
                 </select>
+            </div>
+            <div class="bc-field">
+                <label class="bc-label">Línea *</label>
+                <?php $edit_lineas_com = ($edit && $edit->subcategoria_id) ? billetera_sub_lineas(intval($edit->subcategoria_id)) : []; ?>
+                <select name="linea_codigo" id="bc-c-linea" class="bc-select" required>
+                    <?php if (!$edit): ?>
+                        <option value="">— Selecciona subcategoría —</option>
+                    <?php else: ?>
+                        <?php foreach ($edit_lineas_com as $lin_cod): ?>
+                            <?php
+                            $lin_row = null;
+                            foreach (billetera_bc_lineas() as $l) { if ($l->codigo === $lin_cod) { $lin_row = $l; break; } }
+                            ?>
+                            <option value="<?php echo esc_attr($lin_cod); ?>" <?php echo selected(($edit->linea_codigo ?? '') === $lin_cod, true, false); ?>><?php echo esc_html($lin_row ? $lin_row->nombre : $lin_cod); ?></option>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </select>
+            </div>
+            <div class="bc-field bc-field--check">
+                <label><input type="checkbox" name="copiar_lineas" value="1" <?php checked(!$edit, true); ?>> Copiar a todas las líneas de la subcategoría</label>
             </div>
             <div class="bc-field">
                 <label class="bc-label">Concesionaria</label>
@@ -700,6 +772,54 @@ function billetera_render_comisiones_page() {
             </div>
         </form>
     </div>
+    <script>
+    (function () {
+        var map = <?php
+            // subcategoría_id -> [ {codigo, nombre} ] desde la tabla puente
+            $sub_lineas_map = [];
+            $map_rows = $wpdb->get_results("
+                SELECT b.subcategoria_id, b.linea_codigo, l.nombre
+                FROM {$wpdb->prefix}billetera_subcategoria_lineas b
+                JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = b.linea_codigo AND l.activo = 1
+                ORDER BY l.orden_display ASC
+            ");
+            foreach ((array) $map_rows as $mr) {
+                $sub_lineas_map[intval($mr->subcategoria_id)][] = ['c' => $mr->linea_codigo, 'n' => $mr->nombre];
+            }
+            echo json_encode($sub_lineas_map);
+        ?>;
+        var subSel = document.getElementById('bc-c-subcategoria');
+        var linSel = document.getElementById('bc-c-linea');
+        if (!subSel || !linSel) return;
+
+        function refill() {
+            var current = linSel.value;
+            var lines = map[subSel.value] || [];
+            linSel.innerHTML = '';
+            if (!lines.length) {
+                var o0 = document.createElement('option');
+                o0.value = '';
+                o0.textContent = '— La subcategoría no tiene líneas —';
+                linSel.appendChild(o0);
+            } else {
+                lines.forEach(function (it) {
+                    var o = document.createElement('option');
+                    o.value = it.c;
+                    o.textContent = it.n;
+                    linSel.appendChild(o);
+                });
+                for (var i = 0; i < linSel.options.length; i++) {
+                    if (linSel.options[i].value === current) {
+                        linSel.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+        subSel.addEventListener('change', refill);
+        refill();
+    })();
+    </script>
 
     <div class="bc-card">
         <div class="bc-table-tools">
@@ -958,10 +1078,10 @@ function billetera_render_metas_page() {
 // METAS POR SUCURSAL (unidades por categoría)
 // ===========================================================================
 
-// AJAX (admin): categorías activas de una línea, para el cascada del
-// formulario "Metas por sucursal". A diferencia de billetera_get_categorias
-// (que valida permisos de línea del asesor), aquí solo se exige la
-// capability del catálogo porque lo usa un administrador.
+// AJAX (admin): categorías que tienen subcategorías en una línea, para el
+// cascada del formulario "Metas por sucursal". A diferencia de
+// billetera_get_categorias (que valida permisos de línea del asesor), aquí
+// solo se exige la capability del catálogo porque lo usa un administrador.
 add_action('wp_ajax_billetera_bc_admin_categorias', 'billetera_bc_admin_get_categorias');
 function billetera_bc_admin_get_categorias() {
     if (!current_user_can(BILLETERA_CATALOG_CAP)) {
@@ -975,10 +1095,12 @@ function billetera_bc_admin_get_categorias() {
     }
 
     $rows = $wpdb->get_results($wpdb->prepare("
-        SELECT id, nombre
-        FROM {$wpdb->prefix}billetera_categorias
-        WHERE linea_codigo = %s AND activo = 1
-        ORDER BY orden_display ASC, nombre ASC
+        SELECT DISTINCT c.id, c.nombre
+        FROM {$wpdb->prefix}billetera_categorias c
+        INNER JOIN {$wpdb->prefix}billetera_subcategorias s ON s.categoria_id = c.id AND s.activo = 1
+        INNER JOIN {$wpdb->prefix}billetera_subcategoria_lineas b ON b.subcategoria_id = s.id AND b.linea_codigo = %s
+        WHERE c.activo = 1
+        ORDER BY c.orden_display ASC, c.nombre ASC
     ", $linea));
 
     wp_send_json_success($rows);
@@ -1002,12 +1124,16 @@ function billetera_render_metas_sucursal_admin_page() {
             $tipo    = sanitize_text_field(billetera_bc_post('tipo'));
             $unid    = intval(billetera_bc_post('unidades', 0));
 
-            // La categoría debe existir, estar activa y pertenecer a la línea.
+            // La categoría debe existir, estar activa y tener subcategorías en la línea.
             $cat_ok = 0;
             if ($catid > 0 && $linea !== '') {
                 $cat_ok = intval($wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$wpdb->prefix}billetera_categorias WHERE id = %d AND linea_codigo = %s AND activo = 1",
-                    $catid, $linea
+                    "SELECT COUNT(*)
+                     FROM {$wpdb->prefix}billetera_categorias c
+                     INNER JOIN {$wpdb->prefix}billetera_subcategorias s ON s.categoria_id = c.id AND s.activo = 1
+                     INNER JOIN {$wpdb->prefix}billetera_subcategoria_lineas b ON b.subcategoria_id = s.id AND b.linea_codigo = %s
+                     WHERE c.id = %d AND c.activo = 1",
+                    $linea, $catid
                 )));
             }
 
@@ -1051,11 +1177,17 @@ function billetera_render_metas_sucursal_admin_page() {
     $tiendas = billetera_bc_tiendas();
     $lineas  = billetera_bc_lineas();
 
-    // En modo edición se precargan las categorías de la línea de la meta.
+    // En modo edición se precargan las categorías (globales) con subcategorías
+    // en la línea de la meta.
     $cats_edit = [];
     if ($edit) {
         $cats_edit = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, nombre FROM {$wpdb->prefix}billetera_categorias WHERE linea_codigo = %s AND activo = 1 ORDER BY orden_display ASC, nombre ASC",
+            "SELECT DISTINCT c.id, c.nombre
+             FROM {$wpdb->prefix}billetera_categorias c
+             INNER JOIN {$wpdb->prefix}billetera_subcategorias s ON s.categoria_id = c.id AND s.activo = 1
+             INNER JOIN {$wpdb->prefix}billetera_subcategoria_lineas b ON b.subcategoria_id = s.id AND b.linea_codigo = %s
+             WHERE c.activo = 1
+             ORDER BY c.orden_display ASC, c.nombre ASC",
             $edit->linea_codigo
         ));
     }
@@ -1324,9 +1456,9 @@ function billetera_render_lineas_page() {
         } elseif ($action === 'delete_linea') {
             $codigo = sanitize_text_field(billetera_bc_post('codigo'));
             if ($codigo !== '') {
-                $en_uso = intval($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}billetera_categorias WHERE linea_codigo = %s", $codigo)));
+                $en_uso = intval($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}billetera_subcategoria_lineas WHERE linea_codigo = %s", $codigo)));
                 if ($en_uso > 0) {
-                    $err = 'No se puede eliminar: hay categorías asociadas a esta línea.';
+                    $err = 'No se puede eliminar: hay subcategorías asociadas a esta línea.';
                 } else {
                     $wpdb->delete($lineas_t, ['codigo' => $codigo], ['%s']);
                     $msg = 'Línea eliminada.';
@@ -1728,10 +1860,9 @@ function billetera_render_bonus_page() {
                 $nota_sub = '';
                 if ($scope_sub_id > 0) {
                     $subrow = $wpdb->get_row($wpdb->prepare(
-                        "SELECT s.id, s.nombre AS sub_nombre, c.id AS cat_id, c.nombre AS cat_nombre, c.slug AS cat_slug, c.linea_codigo AS linea_codigo, l.marca_id AS marca_id
+                        "SELECT s.id, s.nombre AS sub_nombre, c.id AS cat_id, c.nombre AS cat_nombre, c.slug AS cat_slug
                          FROM {$wpdb->prefix}billetera_subcategorias s
                          JOIN $cat_table c ON c.id = s.categoria_id
-                         LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
                          WHERE s.id = %d",
                         $scope_sub_id
                     ));
@@ -1739,8 +1870,19 @@ function billetera_render_bonus_page() {
                         $err = 'La subcategoría elegida no existe.';
                     } else {
                         $scope_slug = strtolower(trim((string) $subrow->cat_slug));
-                        $scope_linea_codigo = strtolower(trim((string) ($subrow->linea_codigo ?? '')));
-                        $scope_marca_id = intval($subrow->marca_id ?? 0);
+                        // La línea se define desde la puente: si el scope_linea
+                        // enviado no pertenece a la subcategoría, se limpia.
+                        $lineas_sub = billetera_sub_lineas($scope_sub_id);
+                        if ($scope_linea_codigo !== '' && !in_array($scope_linea_codigo, $lineas_sub, true)) {
+                            $scope_linea_codigo = '';
+                        }
+                        if ($scope_linea_codigo !== '') {
+                            $scope_marca_id = intval($wpdb->get_var($wpdb->prepare(
+                                "SELECT marca_id FROM {$wpdb->prefix}billetera_lineas WHERE codigo = %s", $scope_linea_codigo
+                            )));
+                        } else {
+                            $scope_marca_id = 0;
+                        }
                         $subcat_cat_id = intval($subrow->cat_id);
                         $nota_sub = ' (alcance ajustado a la subcategoría “' . $subrow->sub_nombre . '”)';
                     }
@@ -1760,7 +1902,7 @@ function billetera_render_bonus_page() {
                     if ($subcat_cat_id > 0) {
                         $legacy_cat_id = $subcat_cat_id;
                     } elseif ($scope_linea_codigo !== '' && $scope_slug !== '') {
-                        $legacy_cat_id = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $cat_table WHERE LOWER(slug) = %s AND linea_codigo = %s ORDER BY id ASC LIMIT 1", $scope_slug, $scope_linea_codigo)));
+                        $legacy_cat_id = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $cat_table WHERE LOWER(slug) = %s ORDER BY id ASC LIMIT 1", $scope_slug)));
                     } else {
                         $legacy_cat_id = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $cat_table WHERE LOWER(slug) = %s OR LOWER(nombre) = %s ORDER BY id ASC LIMIT 1", $scope_slug, $scope_slug)));
                     }
@@ -1969,20 +2111,21 @@ function billetera_render_bonus_page() {
     $lineas_all = billetera_bc_lineas();
     // Marcas para el filtro (0 = todas).
     $marcas_all = $wpdb->get_results("SELECT id, nombre, slug FROM {$wpdb->prefix}billetera_marcas ORDER BY nombre");
-    // Categorías con slug y línea (para el select de categoría por slug).
+    // Categorías (globales) para el select por slug.
     $cats_all = $wpdb->get_results(
-        "SELECT c.id, c.nombre, c.slug, c.linea_codigo, l.nombre AS linea_nombre, l.marca_id AS marca_id
+        "SELECT c.id, c.nombre, c.slug
          FROM {$wpdb->prefix}billetera_categorias c
-         LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
-         ORDER BY c.linea_codigo, c.orden_display, c.nombre"
+         ORDER BY c.orden_display, c.nombre"
     );
-    // Subcategorías con su categoría y línea (para cascada).
+    // Subcategorías con su categoría y sus líneas (para cascada).
     $subs_all = $wpdb->get_results(
-        "SELECT s.id, s.nombre AS sub_nombre, c.id AS cat_id, c.slug AS cat_slug, c.linea_codigo AS linea_codigo, l.marca_id AS marca_id
+        "SELECT s.id, s.nombre AS sub_nombre, c.id AS cat_id, c.slug AS cat_slug,
+                (SELECT GROUP_CONCAT(b.linea_codigo ORDER BY b.linea_codigo)
+                   FROM {$wpdb->prefix}billetera_subcategoria_lineas b
+                   WHERE b.subcategoria_id = s.id) AS lineas_codigos
          FROM {$wpdb->prefix}billetera_subcategorias s
          JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
-         LEFT JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = c.linea_codigo
-         ORDER BY c.linea_codigo, s.nombre"
+         ORDER BY c.nombre, s.nombre"
     );
 
     $edit = null;
@@ -2074,7 +2217,7 @@ function billetera_render_bonus_page() {
                 <select name="scope_subcategoria_id" id="bc-scope-sub" class="bc-select">
                     <option value="0">— Todas las subcategorías —</option>
                     <?php foreach ($subs_all as $s): ?>
-                        <option value="<?php echo intval($s->id); ?>" data-cat="<?php echo esc_attr(strtolower(trim((string) $s->cat_slug))); ?>" data-linea="<?php echo esc_attr(strtolower(trim((string) ($s->linea_codigo ?? '')))); ?>" data-marca="<?php echo intval($s->marca_id ?? 0); ?>" <?php selected($sel_sub, intval($s->id)); ?>><?php echo esc_html($s->sub_nombre . ' (' . $s->cat_slug . ')'); ?></option>
+                        <option value="<?php echo intval($s->id); ?>" data-cat="<?php echo esc_attr(strtolower(trim((string) $s->cat_slug))); ?>" data-lineas="<?php echo esc_attr(strtolower(trim((string) ($s->lineas_codigos ?? '')))); ?>" <?php selected($sel_sub, intval($s->id)); ?>><?php echo esc_html($s->sub_nombre . ' (' . $s->cat_slug . ')'); ?></option>
                     <?php endforeach; ?>
                 </select>
                 <p class="bc-desc" style="margin:6px 0 0;">La opción más específica: si la eliges, tiene prioridad sobre las reglas generales.</p>

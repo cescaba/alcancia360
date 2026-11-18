@@ -41,7 +41,7 @@ register_deactivation_hook(__FILE__, 'billetera_summary_unschedule');
 add_action('plugins_loaded', 'billetera_maybe_upgrade_schema');
 
 function billetera_maybe_upgrade_schema() {
-    if (get_option('billetera_db_version') === '1.7') {
+    if (get_option('billetera_db_version') === '1.8') {
         return;
     }
 
@@ -66,12 +66,17 @@ function billetera_maybe_upgrade_schema() {
         if (!in_array('tc_aplicado', $column_names)) {
             $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN tc_aplicado decimal(10, 4) NULL");
         }
+        // --- 1.8: línea de la venta (la subcategoría ya no implica línea) ---
+        if (!in_array('linea_codigo', $column_names)) {
+            $wpdb->query("ALTER TABLE $ventas_table ADD COLUMN linea_codigo varchar(3) NULL AFTER subcategoria_id");
+        }
     }
 
     // --- 1.3: líneas (hyu/hcv/gee/jmc) independientes de las marcas ---
     billetera_create_lineas_table();
     billetera_seed_lineas();
-    billetera_migrate_categorias_to_lineas();
+    // --- 1.8: categoría global + subcategoría con líneas (checkboxes) ---
+    billetera_migrate_categorias_globales();
     billetera_reset_metas_table();
 
     // --- 1.4: tabla de cola del resumen semanal por correo ---
@@ -80,7 +85,7 @@ function billetera_maybe_upgrade_schema() {
     // --- 1.7: metas de sucursal en unidades (línea x categoría x tipo) ---
     billetera_create_metas_sucursal_table();
 
-    update_option('billetera_db_version', '1.7');
+    update_option('billetera_db_version', '1.8');
 }
 
 /**
@@ -129,10 +134,11 @@ function billetera_seed_lineas() {
     }
 
     $lineas = [
-        ['hyu', 'Hyundai Autos',    'hyundai', 1],
-        ['hcv', 'Hyundai Camiones', 'hyundai', 2],
-        ['gee', 'Geely',            'geely',   3],
-        ['jmc', 'JMC',              'jmc',     4],
+        ['hyu', 'Hyundai Autos',    'hyundai',   1],
+        ['hcv', 'Hyundai Camiones', 'hyundai',   2],
+        ['gee', 'Geely',            'geely',     3],
+        ['jmc', 'JMC',              'jmc',       4],
+        ['mul', 'Multimarcas',      'multimarca', 5],
     ];
 
     foreach ($lineas as $l) {
@@ -147,118 +153,175 @@ function billetera_seed_lineas() {
 }
 
 /**
- * Migra categorías de marca_id a linea_codigo.
- * hyundai → hyu, y además clona toda su rama (subcategorías y comisiones) a hcv.
+ * Migra al modelo GLOBAL: categoría global (sin linea_codigo, UNIQUE slug),
+ * subcategoría global (merge de duplicadas) + tabla puente
+ * subcategoria_lineas (checkboxes) + comisiones con linea_codigo.
+ * Idempotente: detecta el esquema viejo por la columna linea_codigo de
+ * categorías. Es la misma migración aplicada manualmente en dev.
  */
-function billetera_migrate_categorias_to_lineas() {
+function billetera_migrate_categorias_globales() {
     global $wpdb;
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
-    $marcas_table = $wpdb->prefix . 'billetera_marcas';
+    $sub_table = $wpdb->prefix . 'billetera_subcategorias';
+    $com_table = $wpdb->prefix . 'billetera_comisiones';
+    $ventas_table = $wpdb->prefix . 'billetera_ventas';
+    $bridge_table = $wpdb->prefix . 'billetera_subcategoria_lineas';
 
     if ($wpdb->get_var("SHOW TABLES LIKE '$categorias_table'") != $categorias_table) {
         return;
     }
 
-    $columns = array_column((array) $wpdb->get_results("SHOW COLUMNS FROM $categorias_table"), 'Field');
-    if (!in_array('linea_codigo', $columns)) {
-        $wpdb->query("ALTER TABLE $categorias_table ADD COLUMN linea_codigo varchar(3) NULL AFTER id");
+    $charset_collate = $wpdb->get_charset_collate();
+
+    // --- Tabla puente (siempre debe existir, incluso en installs nuevos) ---
+    if ($wpdb->get_var("SHOW TABLES LIKE '$bridge_table'") != $bridge_table) {
+        $wpdb->query("CREATE TABLE $bridge_table (
+            subcategoria_id mediumint(9) NOT NULL,
+            linea_codigo varchar(3) NOT NULL,
+            PRIMARY KEY (subcategoria_id, linea_codigo),
+            KEY linea_codigo (linea_codigo)
+        ) $charset_collate;");
     }
 
-    if (in_array('marca_id', $columns)) {
-        $map = [
-            'hyundai' => 'hyu',
-            'jmc'     => 'jmc',
-            'geely'   => 'gee',
-        ];
-        foreach ($wpdb->get_results("SELECT id, slug FROM $marcas_table") as $m) {
-            if (!isset($map[$m->slug])) {
-                continue;
-            }
-            $wpdb->query($wpdb->prepare(
-                "UPDATE $categorias_table SET linea_codigo = %s WHERE marca_id = %d AND (linea_codigo IS NULL OR linea_codigo = '')",
-                $map[$m->slug], $m->id
-            ));
+    $cat_columns = array_column((array) $wpdb->get_results("SHOW COLUMNS FROM $categorias_table"), 'Field');
+    $com_columns = array_column((array) $wpdb->get_results("SHOW COLUMNS FROM $com_table"), 'Field');
+
+    // Esquema viejo: comisiones sin linea_codigo
+    $com_sin_linea = !in_array('linea_codigo', $com_columns, true);
+
+    // --- Caso 1: esquema por línea (tiene linea_codigo) → migrar a global ---
+    if (in_array('linea_codigo', $cat_columns, true)) {
+        // A. Vínculo original subcategoría → línea (fuente de verdad del checkbox)
+        $wpdb->query("CREATE TABLE IF NOT EXISTS {$wpdb->prefix}tmp_bridge_old (
+            subcategoria_id mediumint(9) NOT NULL,
+            linea_codigo varchar(3) NOT NULL,
+            PRIMARY KEY (subcategoria_id, linea_codigo)
+        ) $charset_collate");
+        $wpdb->query("INSERT IGNORE INTO {$wpdb->prefix}tmp_bridge_old (subcategoria_id, linea_codigo)
+            SELECT s.id, c.linea_codigo
+            FROM $sub_table s
+            JOIN $categorias_table c ON c.id = s.categoria_id");
+
+        // B. comisiones: agregar y llenar linea_codigo con la línea ORIGINAL
+        if ($com_sin_linea) {
+            $wpdb->query("ALTER TABLE $com_table ADD COLUMN linea_codigo varchar(3) NULL AFTER subcategoria_id");
         }
+        $wpdb->query("UPDATE $com_table com
+            JOIN $sub_table s ON s.id = com.subcategoria_id
+            JOIN $categorias_table c ON c.id = s.categoria_id
+            SET com.linea_codigo = c.linea_codigo");
 
-        // Quitar marca_id ANTES de clonar (es NOT NULL y bloquearía los inserts)
-        $pending = intval($wpdb->get_var("SELECT COUNT(*) FROM $categorias_table WHERE linea_codigo IS NULL OR linea_codigo = ''"));
-        if ($pending > 0) {
-            return; // Hay filas sin línea; no continuar para no perder datos
+        // C. Fusionar categorías duplicadas (mismo slug → queda el id menor)
+        $wpdb->query("CREATE TABLE IF NOT EXISTS {$wpdb->prefix}tmp_cat_map (
+            old_id mediumint(9) NOT NULL PRIMARY KEY,
+            new_id mediumint(9) NOT NULL,
+            KEY new_id (new_id)
+        ) $charset_collate");
+        $wpdb->query("INSERT INTO {$wpdb->prefix}tmp_cat_map (old_id, new_id)
+            SELECT c.id,
+                   (SELECT MIN(c2.id) FROM $categorias_table c2 WHERE c2.slug = c.slug)
+            FROM $categorias_table c");
+        $wpdb->query("UPDATE $sub_table s
+            JOIN {$wpdb->prefix}tmp_cat_map m ON m.old_id = s.categoria_id
+            SET s.categoria_id = m.new_id
+            WHERE m.old_id <> m.new_id");
+        $wpdb->query("DELETE c FROM $categorias_table c
+            JOIN {$wpdb->prefix}tmp_cat_map m ON m.old_id = c.id
+            WHERE m.old_id <> m.new_id");
+
+        // D. Quitar la dependencia de línea de las categorías
+        $cat_indexes = $wpdb->get_col("SHOW INDEX FROM $categorias_table", 2);
+        if (in_array('categoria_unica', (array) $cat_indexes, true)) {
+            $wpdb->query("ALTER TABLE $categorias_table DROP INDEX categoria_unica");
         }
-
-        $wpdb->query("ALTER TABLE $categorias_table DROP INDEX categoria_unica");
-        $wpdb->query("ALTER TABLE $categorias_table DROP INDEX marca_id");
-        $wpdb->query("ALTER TABLE $categorias_table DROP COLUMN marca_id");
-        $wpdb->query("ALTER TABLE $categorias_table ADD UNIQUE KEY categoria_unica (linea_codigo, slug)");
-        $wpdb->query("ALTER TABLE $categorias_table ADD KEY linea_codigo (linea_codigo)");
-
-        // Clonar la rama de hyu hacia hcv
-        $hyu_cats = $wpdb->get_col($wpdb->prepare(
-            "SELECT id FROM $categorias_table WHERE linea_codigo = %s", 'hyu'
-        ));
-        foreach ($hyu_cats as $cat_id) {
-            billetera_clone_categoria((int) $cat_id, 'hcv');
+        if (in_array('linea_codigo', (array) $cat_indexes, true)) {
+            $wpdb->query("ALTER TABLE $categorias_table DROP INDEX linea_codigo");
         }
-    }
-}
+        $wpdb->query("ALTER TABLE $categorias_table DROP COLUMN linea_codigo");
+        $wpdb->query("ALTER TABLE $categorias_table ADD UNIQUE KEY categoria_unica (slug)");
 
-/**
- * Clona una categoría (con sus subcategorías y comisiones) a otra línea.
- */
-function billetera_clone_categoria($categoria_id, $target_linea) {
-    global $wpdb;
-    $cat_table = $wpdb->prefix . 'billetera_categorias';
-    $sub_table = $wpdb->prefix . 'billetera_subcategorias';
-    $com_table = $wpdb->prefix . 'billetera_comisiones';
+        // E. Fusionar subcategorías duplicadas (misma categoría + mismo nombre)
+        $wpdb->query("CREATE TABLE IF NOT EXISTS {$wpdb->prefix}tmp_sub_map (
+            old_id mediumint(9) NOT NULL PRIMARY KEY,
+            new_id mediumint(9) NOT NULL,
+            KEY new_id (new_id)
+        ) $charset_collate");
+        $wpdb->query("INSERT INTO {$wpdb->prefix}tmp_sub_map (old_id, new_id)
+            SELECT s.id,
+                   (SELECT MIN(s2.id) FROM $sub_table s2
+                    WHERE s2.categoria_id = s.categoria_id AND s2.nombre = s.nombre)
+            FROM $sub_table s");
 
-    $cat = $wpdb->get_row($wpdb->prepare("SELECT * FROM $cat_table WHERE id = %d", $categoria_id));
-    if (!$cat) {
-        return;
-    }
-
-    // Evitar duplicar si ya existe esa línea+slug
-    $exists = $wpdb->get_var($wpdb->prepare(
-        "SELECT id FROM $cat_table WHERE linea_codigo = %s AND slug = %s",
-        $target_linea, $cat->slug
-    ));
-    if ($exists) {
-        return;
-    }
-
-    $wpdb->insert($cat_table, [
-        'linea_codigo'  => $target_linea,
-        'nombre'        => $cat->nombre,
-        'slug'          => $cat->slug,
-        'orden_display' => $cat->orden_display,
-        'activo'        => $cat->activo,
-    ], ['%s', '%s', '%s', '%d', '%d']);
-    $new_cat_id = intval($wpdb->insert_id);
-    if (!$new_cat_id) {
-        return;
-    }
-
-    foreach ($wpdb->get_results($wpdb->prepare("SELECT * FROM $sub_table WHERE categoria_id = %d", $categoria_id)) as $sub) {
-        $wpdb->insert($sub_table, [
-            'categoria_id'  => $new_cat_id,
-            'nombre'        => $sub->nombre,
-            'por_unidad'    => $sub->por_unidad,
-            'orden_display' => $sub->orden_display,
-            'activo'        => $sub->activo,
-        ], ['%d', '%s', '%d', '%d', '%d']);
-        $new_sub_id = intval($wpdb->insert_id);
-        if (!$new_sub_id) {
-            continue;
+        // La clave única vieja (sin línea) CHOCARÍA al fusionar: se cambia ANTES.
+        $com_indexes = $wpdb->get_col("SHOW INDEX FROM $com_table", 2);
+        if (in_array('comision_unica', (array) $com_indexes, true)) {
+            $wpdb->query("ALTER TABLE $com_table DROP INDEX comision_unica");
         }
+        $wpdb->query("ALTER TABLE $com_table
+            ADD UNIQUE KEY comision_unica (subcategoria_id, linea_codigo, distribuidor_id, rol)");
 
-        foreach ($wpdb->get_results($wpdb->prepare("SELECT * FROM $com_table WHERE subcategoria_id = %d", $sub->id)) as $com) {
-            $wpdb->insert($com_table, [
-                'subcategoria_id' => $new_sub_id,
-                'distribuidor_id' => $com->distribuidor_id,
-                'rol'             => $com->rol,
-                'monto'           => $com->monto,
-                'moneda'          => $com->moneda,
-                'activo'          => $com->activo,
-            ], ['%d', '%d', '%s', '%f', '%s', '%d']);
+        $wpdb->query("UPDATE $com_table com
+            JOIN {$wpdb->prefix}tmp_sub_map m ON m.old_id = com.subcategoria_id
+            SET com.subcategoria_id = m.new_id
+            WHERE m.old_id <> m.new_id");
+        $wpdb->query("UPDATE $ventas_table v
+            JOIN {$wpdb->prefix}tmp_sub_map m ON m.old_id = v.subcategoria_id
+            SET v.subcategoria_id = m.new_id
+            WHERE m.old_id <> m.new_id");
+        $wpdb->query("DELETE s FROM $sub_table s
+            JOIN {$wpdb->prefix}tmp_sub_map m ON m.old_id = s.id
+            WHERE m.old_id <> m.new_id");
+
+        // F. Reconstruir la tabla puente con los ids nuevos
+        $wpdb->query("TRUNCATE TABLE $bridge_table");
+        $wpdb->query("INSERT IGNORE INTO $bridge_table (subcategoria_id, linea_codigo)
+            SELECT m.new_id, b.linea_codigo
+            FROM {$wpdb->prefix}tmp_bridge_old b
+            JOIN {$wpdb->prefix}tmp_sub_map m ON m.old_id = b.subcategoria_id");
+
+        $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}tmp_bridge_old");
+        $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}tmp_cat_map");
+        $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}tmp_sub_map");
+    }
+
+    // --- Caso 2: comisiones sin linea_codigo (installs nuevos o muy viejos) ---
+    if (!in_array('linea_codigo', array_column((array) $wpdb->get_results("SHOW COLUMNS FROM $com_table"), 'Field'), true)) {
+        $wpdb->query("ALTER TABLE $com_table ADD COLUMN linea_codigo varchar(3) NULL AFTER subcategoria_id");
+        // Sin origen de línea: derivar de la puente de cada subcategoría
+        $wpdb->query("UPDATE $com_table com
+            JOIN $bridge_table b ON b.subcategoria_id = com.subcategoria_id
+            SET com.linea_codigo = b.linea_codigo");
+    }
+
+    // NOT NULL + índice de línea (idempotente)
+    $col_row = $wpdb->get_row("SHOW COLUMNS FROM $com_table LIKE 'linea_codigo'");
+    if ($col_row && $col_row->Null === 'YES') {
+        $wpdb->query("ALTER TABLE $com_table MODIFY linea_codigo varchar(3) NOT NULL AFTER subcategoria_id");
+    }
+    $com_indexes = $wpdb->get_col("SHOW INDEX FROM $com_table", 2);
+    if (!in_array('linea_codigo', (array) $com_indexes, true)) {
+        $wpdb->query("ALTER TABLE $com_table ADD KEY linea_codigo (linea_codigo)");
+    }
+
+    // Backfill histórico de ventas: la línea de una venta antigua se deduce de
+    // los permisos de línea del vendedor (billetera_hyu, billetera_gee, ...)
+    // cruzados con las líneas de la subcategoría. Queda NULL si es ambiguo.
+    if ($wpdb->get_var("SHOW TABLES LIKE '$ventas_table'") == $ventas_table) {
+        $ven_cols = array_column((array) $wpdb->get_results("SHOW COLUMNS FROM $ventas_table"), 'Field');
+        if (in_array('linea_codigo', $ven_cols, true)) {
+            $wpdb->query("UPDATE $ventas_table v
+                SET v.linea_codigo = (
+                    SELECT b.linea_codigo
+                    FROM $bridge_table b
+                    WHERE b.subcategoria_id = v.subcategoria_id
+                      AND EXISTS (SELECT 1 FROM {$wpdb->usermeta} um
+                                  WHERE um.user_id = v.usuario_id
+                                    AND um.meta_key = CONCAT('billetera_', b.linea_codigo)
+                                    AND um.meta_value IS NOT NULL AND um.meta_value <> '')
+                    ORDER BY b.linea_codigo ASC
+                    LIMIT 1
+                )
+                WHERE v.linea_codigo IS NULL");
         }
     }
 }
@@ -360,20 +423,19 @@ function billetera_create_catalog_tables() {
     billetera_create_lineas_table();
     billetera_seed_lineas();
 
-    // Tabla de CATEGORÍAS (pertenecen a una línea, no a la marca)
+    // Tabla de CATEGORÍAS (globales: sin línea; el vínculo con líneas vive
+    // en la tabla puente a nivel de SUBCATEGORÍA)
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
     if ($wpdb->get_var("SHOW TABLES LIKE '$categorias_table'") != $categorias_table) {
         $sql = "CREATE TABLE $categorias_table (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
-            linea_codigo varchar(3) NOT NULL,
             nombre varchar(100) NOT NULL,
             slug varchar(100) NOT NULL,
             orden_display int(3) DEFAULT 0,
             activo tinyint(1) DEFAULT 1,
             creado_en datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
-            KEY linea_codigo (linea_codigo),
-            UNIQUE KEY categoria_unica (linea_codigo, slug)
+            UNIQUE KEY categoria_unica (slug)
         ) $charset_collate;";
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -407,6 +469,7 @@ function billetera_create_catalog_tables() {
         $sql = "CREATE TABLE $comisiones_table (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             subcategoria_id mediumint(9) NOT NULL,
+            linea_codigo varchar(3) NOT NULL,
             distribuidor_id bigint(20),
             rol varchar(50) NOT NULL,
             monto decimal(10, 2) NOT NULL,
@@ -415,14 +478,18 @@ function billetera_create_catalog_tables() {
             creado_en datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY subcategoria_id (subcategoria_id),
+            KEY linea_codigo (linea_codigo),
             KEY distribuidor_id (distribuidor_id),
             KEY rol (rol),
-            UNIQUE KEY comision_unica (subcategoria_id, distribuidor_id, rol)
+            UNIQUE KEY comision_unica (subcategoria_id, linea_codigo, distribuidor_id, rol)
         ) $charset_collate;";
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
     }
+
+    // Tabla puente subcategoría ↔ líneas (checkboxes) + esquema de comisiones
+    billetera_migrate_categorias_globales();
 
     // Tabla de VENTAS (registro de ventas de asesores - TODO en SOL)
     $ventas_table = $wpdb->prefix . 'billetera_ventas';
@@ -432,6 +499,7 @@ function billetera_create_catalog_tables() {
             usuario_id bigint(20) NOT NULL,
             asesor_id bigint(20),
             subcategoria_id mediumint(9) NOT NULL,
+            linea_codigo varchar(3) NULL,
             cantidad int(11) DEFAULT 1,
             monto_comision_sol decimal(10, 2) NOT NULL,
             id_type varchar(50),
@@ -617,10 +685,12 @@ function billetera_ajax_get_categorias() {
     }
 
     $categorias = $wpdb->get_results($wpdb->prepare("
-        SELECT id, nombre, slug
-        FROM $categorias_table
-        WHERE linea_codigo = %s AND activo = 1
-        ORDER BY orden_display ASC
+        SELECT DISTINCT c.id, c.nombre, c.slug
+        FROM $categorias_table c
+        INNER JOIN {$wpdb->prefix}billetera_subcategorias s ON s.categoria_id = c.id AND s.activo = 1
+        INNER JOIN {$wpdb->prefix}billetera_subcategoria_lineas b ON b.subcategoria_id = s.id AND b.linea_codigo = %s
+        WHERE c.activo = 1
+        ORDER BY c.orden_display ASC, c.nombre ASC
     ", $linea_codigo));
 
     wp_send_json_success($categorias);
@@ -634,6 +704,7 @@ function billetera_ajax_get_subcategorias() {
     global $wpdb;
     $subcategorias_table = $wpdb->prefix . 'billetera_subcategorias';
     $categorias_table = $wpdb->prefix . 'billetera_categorias';
+    $bridge_table = $wpdb->prefix . 'billetera_subcategoria_lineas';
 
     $categoria_id = intval($_POST['categoria_id'] ?? 0);
     $user_id = get_current_user_id();
@@ -642,30 +713,40 @@ function billetera_ajax_get_subcategorias() {
         wp_send_json_error(['message' => 'ID de categoría inválido']);
     }
 
-    // Obtener la línea de la categoría
-    $categoria = $wpdb->get_row($wpdb->prepare(
-        "SELECT linea_codigo FROM $categorias_table WHERE id = %d",
+    $cat_existe = intval($wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $categorias_table WHERE id = %d AND activo = 1",
         $categoria_id
-    ));
+    )));
 
-    if (!$categoria) {
+    if (!$cat_existe) {
         wp_send_json_error(['message' => 'Categoría no encontrada']);
     }
 
-    // Validar que el usuario tiene permiso para esta línea
+    // Líneas de la categoría (vía puente, a través de sus subcategorías)
+    $cat_lineas = $wpdb->get_col($wpdb->prepare("
+        SELECT DISTINCT b.linea_codigo
+        FROM $bridge_table b
+        INNER JOIN $subcategorias_table s ON s.id = b.subcategoria_id
+        WHERE s.categoria_id = %d
+    ", $categoria_id));
+
+    // Validar que el usuario tiene permiso para alguna línea de la categoría
     $lineas_permitidas = billetera_get_lineas_permitidas($user_id);
     $codigos_permitidos = array_column($lineas_permitidas, 'codigo');
 
-    if (!in_array($categoria->linea_codigo, $codigos_permitidos, true)) {
+    if (empty($cat_lineas) || !array_intersect($cat_lineas, $codigos_permitidos)) {
         wp_send_json_error(['message' => 'No tienes permiso para acceder a esta categoría']);
     }
 
+    // Subcategorías limitadas a las líneas permitidas del usuario
+    $placeholders = implode(',', array_fill(0, count($codigos_permitidos), '%s'));
     $subcategorias = $wpdb->get_results($wpdb->prepare("
-        SELECT id, nombre, por_unidad
-        FROM $subcategorias_table
-        WHERE categoria_id = %d AND activo = 1
-        ORDER BY orden_display ASC
-    ", $categoria_id));
+        SELECT DISTINCT s.id, s.nombre, s.por_unidad
+        FROM $subcategorias_table s
+        INNER JOIN $bridge_table b ON b.subcategoria_id = s.id AND b.linea_codigo IN ($placeholders)
+        WHERE s.categoria_id = %d AND s.activo = 1
+        ORDER BY s.orden_display ASC, s.nombre ASC
+    ", ...array_merge($codigos_permitidos, [$categoria_id])));
 
     // Convertir por_unidad a int
     foreach ($subcategorias as $sub) {
@@ -708,22 +789,27 @@ function billetera_ajax_register_sale_v2() {
         wp_send_json_error(['message' => 'Datos incompletos']);
     }
 
-    // Validar que el usuario tiene permiso para esta subcategoría (mediante su línea)
-    $sub_linea = $wpdb->get_row($wpdb->prepare(
-        "SELECT c.linea_codigo FROM $subcategorias_table s
-         INNER JOIN $categorias_table c ON s.categoria_id = c.id
-         WHERE s.id = %d",
+    // La subcategoría debe existir y estar activa
+    $sub_existe = intval($wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $subcategorias_table WHERE id = %d AND activo = 1",
         $subcategoria_id
-    ));
-
-    if (!$sub_linea) {
+    )));
+    if (!$sub_existe) {
         wp_send_json_error(['message' => 'Producto no encontrado']);
     }
 
+    // Línea de la venta: POST explícito si viene; si no, la que coincida con
+    // las líneas permitidas del usuario (la subcategoría puede estar en varias).
     $lineas_permitidas = billetera_get_lineas_permitidas($user_id);
     $codigos_permitidos = array_column($lineas_permitidas, 'codigo');
 
-    if (!in_array($sub_linea->linea_codigo, $codigos_permitidos, true)) {
+    $linea_venta = billetera_resolver_linea_venta(
+        $subcategoria_id,
+        $codigos_permitidos,
+        sanitize_text_field($_POST['linea_codigo'] ?? '')
+    );
+
+    if (!$linea_venta) {
         wp_send_json_error(['message' => 'No tienes permiso para registrar ventas de este producto']);
     }
 
@@ -760,7 +846,7 @@ function billetera_ajax_register_sale_v2() {
     }
 
     // Obtener comisión: primero específica del distribuidor, luego la genérica (NULL)
-    $comision = billetera_find_comision($subcategoria_id, $distribuidor_id, $user_role);
+    $comision = billetera_find_comision($subcategoria_id, $distribuidor_id, $user_role, $linea_venta);
 
     if (!$comision) {
         wp_send_json_error(['message' => 'Comisión no encontrada']);
@@ -770,7 +856,7 @@ function billetera_ajax_register_sale_v2() {
     $monto_total_sol = billetera_convert_to_sol($comision) * $cantidad;
 
     // Aplicar reglas de bonificación (categoría, umbral, multiplicador y excepción)
-    $regla_bonus = billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $distribuidor_id, $cantidad, true, $fecha_datetime);
+    $regla_bonus = billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $distribuidor_id, $cantidad, true, $fecha_datetime, $linea_venta);
     list($monto_total_sol, $bonus_multiplier, $bonus_aplicado) = billetera_venta_monto_con_bonus($monto_total_sol, $regla_bonus);
 
     // Guardar venta en nueva tabla (tc_aplicado congela el tipo de cambio del día:
@@ -780,6 +866,7 @@ function billetera_ajax_register_sale_v2() {
     $result = $wpdb->insert($ventas_table, [
         'usuario_id' => $user_id,
         'subcategoria_id' => $subcategoria_id,
+        'linea_codigo' => $linea_venta,
         'cantidad' => $cantidad,
         'monto_comision_sol' => $monto_total_sol,
         'id_type' => $id_type,
@@ -788,11 +875,11 @@ function billetera_ajax_register_sale_v2() {
         'bonus_aplicado' => $bonus_aplicado,
         'tc_aplicado' => $tc_ins,
         'creado_en' => $fecha_datetime,
-    ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f', '%d', '%f', '%s']);
+    ], ['%d', '%d', '%s', '%d', '%f', '%s', '%s', '%f', '%d', '%f', '%s']);
 
     if ($result) {
         // Registrar la comisión del jefe de venta de la sucursal (con la misma regla de bonificación)
-        billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $user_id, $fecha_datetime, $regla_bonus['jefe_multiplier'], $regla_bonus['jefe_override_sol'], $regla_bonus['jefe_add_sol']);
+        billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $user_id, $fecha_datetime, $regla_bonus['jefe_multiplier'], $regla_bonus['jefe_override_sol'], $regla_bonus['jefe_add_sol'], $linea_venta);
 
         // El ranking del mes cambió: invalida la caché
         billetera_rank_cache_bust();
@@ -922,23 +1009,29 @@ function billetera_ajax_register_sale_multi() {
             continue;
         }
 
-        $sub_row = $wpdb->get_row($wpdb->prepare("
-            SELECT s.nombre, c.linea_codigo
-            FROM $subcategorias_table s
-            INNER JOIN $categorias_table c ON s.categoria_id = c.id
-            WHERE s.id = %d
-        ", $sub_id));
+        $sub_row = $wpdb->get_row($wpdb->prepare(
+            "SELECT nombre FROM $subcategorias_table WHERE id = %d AND activo = 1",
+            $sub_id
+        ));
 
         if (!$sub_row) {
             $errores[] = 'Producto no encontrado (ID ' . $sub_id . ')';
             continue;
         }
-        if (!in_array($sub_row->linea_codigo, $codigos_permitidos, true)) {
+
+        // Línea del ítem: POST explícito por ítem si viene; si no, la que
+        // coincida con las líneas permitidas del usuario.
+        $linea_venta = billetera_resolver_linea_venta(
+            $sub_id,
+            $codigos_permitidos,
+            sanitize_text_field($it['linea_codigo'] ?? '')
+        );
+        if (!$linea_venta) {
             $errores[] = '“' . $sub_row->nombre . '”: no tienes permiso para esa línea';
             continue;
         }
 
-        $comision = billetera_find_comision($sub_id, $distribuidor_id, $user_role);
+        $comision = billetera_find_comision($sub_id, $distribuidor_id, $user_role, $linea_venta);
         if (!$comision) {
             $errores[] = '“' . $sub_row->nombre . '”: sin comisión configurada';
             continue;
@@ -947,6 +1040,7 @@ function billetera_ajax_register_sale_multi() {
         $validados[] = [
             'sub_id'   => $sub_id,
             'cant'     => $cant,
+            'linea'    => $linea_venta,
             'comision' => $comision,
         ];
     }
@@ -968,13 +1062,14 @@ function billetera_ajax_register_sale_multi() {
     foreach ($validados as $it) {
         $monto_total_sol = billetera_convert_to_sol($it['comision']) * $it['cant'];
 
-        $regla_bonus = billetera_aplicar_regla_bonus($it['sub_id'], $user_id, $distribuidor_id, $it['cant'], true, $fecha_datetime);
+        $regla_bonus = billetera_aplicar_regla_bonus($it['sub_id'], $user_id, $distribuidor_id, $it['cant'], true, $fecha_datetime, $it['linea']);
         list($monto_total_sol, $bonus_multiplier, $bonus_aplicado) = billetera_venta_monto_con_bonus($monto_total_sol, $regla_bonus);
 
         $tc_ins = billetera_get_tipo_cambio();
         $result = $wpdb->insert($ventas_table, [
             'usuario_id' => $user_id,
             'subcategoria_id' => $it['sub_id'],
+            'linea_codigo' => $it['linea'],
             'cantidad' => $it['cant'],
             'monto_comision_sol' => $monto_total_sol,
             'id_type' => $id_type,
@@ -983,7 +1078,7 @@ function billetera_ajax_register_sale_multi() {
             'bonus_aplicado' => $bonus_aplicado,
             'tc_aplicado' => $tc_ins,
             'creado_en' => $fecha_datetime,
-        ], ['%d', '%d', '%d', '%f', '%s', '%s', '%f', '%d', '%f', '%s']);
+        ], ['%d', '%d', '%s', '%d', '%f', '%s', '%s', '%f', '%d', '%f', '%s']);
 
         if (!$result) {
             $wpdb->query('ROLLBACK');
@@ -994,7 +1089,7 @@ function billetera_ajax_register_sale_multi() {
         }
 
         // Espejo del jefe por ítem (con la misma regla de bonificación).
-        billetera_register_jefe_comision($tienda_id, $it['sub_id'], $it['cant'], $distribuidor_id, $id_type, $id_value, $user_id, $fecha_datetime, $regla_bonus['jefe_multiplier'], $regla_bonus['jefe_override_sol'], $regla_bonus['jefe_add_sol']);
+        billetera_register_jefe_comision($tienda_id, $it['sub_id'], $it['cant'], $distribuidor_id, $id_type, $id_value, $user_id, $fecha_datetime, $regla_bonus['jefe_multiplier'], $regla_bonus['jefe_override_sol'], $regla_bonus['jefe_add_sol'], $it['linea']);
 
         if ($bonus_aplicado) {
             $bonus_any = 1;
@@ -1627,7 +1722,73 @@ function billetera_get_meta_sucursal_rows($tienda_id, $tipo = '') {
     ));
 }
 
-function billetera_find_comision($subcategoria_id, $distribuidor_id, $rol) {
+/**
+ * Líneas (códigos) en las que está disponible una subcategoría — los
+ * "checkboxes" de la tabla puente, ordenados por orden_display de la línea.
+ */
+function billetera_sub_lineas($subcategoria_id) {
+    global $wpdb;
+    $bridge = $wpdb->prefix . 'billetera_subcategoria_lineas';
+    $lin = $wpdb->prefix . 'billetera_lineas';
+
+    return $wpdb->get_col($wpdb->prepare("
+        SELECT b.linea_codigo
+        FROM $bridge b
+        JOIN $lin l ON l.codigo = b.linea_codigo AND l.activo = 1
+        WHERE b.subcategoria_id = %d
+        ORDER BY l.orden_display ASC, l.codigo ASC
+    ", intval($subcategoria_id)));
+}
+
+/**
+ * Resuelve la línea de una venta para una subcategoría:
+ * 1) si el POST trae línea válida (disponible en la subcat y permitida), se usa;
+ * 2) si no, intersección de líneas de la subcat con las permitidas del usuario;
+ * 3) si hay varias, gana la primera por orden_display (criterio estable).
+ * Devuelve '' si no hay línea válida.
+ */
+function billetera_resolver_linea_venta($subcategoria_id, $codigos_permitidos, $linea_post = '') {
+    $lineas_sub = billetera_sub_lineas($subcategoria_id);
+    if (empty($lineas_sub)) {
+        return '';
+    }
+    $linea_post = strtolower(trim((string) $linea_post));
+    if ($linea_post && in_array($linea_post, $lineas_sub, true)) {
+        if (empty($codigos_permitidos) || in_array($linea_post, $codigos_permitidos, true)) {
+            return $linea_post;
+        }
+        return '';
+    }
+    $inter = empty($codigos_permitidos)
+        ? $lineas_sub
+        : array_values(array_intersect($lineas_sub, $codigos_permitidos));
+    if (empty($inter)) {
+        return '';
+    }
+    return (string) $inter[0];
+}
+
+/**
+ * Inserta el vínculo subcategoría ↔ líneas (checkboxes). $lineas: array de
+ * códigos. Reemplaza los vínculos anteriores de esa subcategoría.
+ */
+function billetera_set_sub_lineas($subcategoria_id, $lineas) {
+    global $wpdb;
+    $bridge = $wpdb->prefix . 'billetera_subcategoria_lineas';
+    $wpdb->delete($bridge, ['subcategoria_id' => intval($subcategoria_id)], ['%d']);
+    foreach ((array) $lineas as $codigo) {
+        $codigo = sanitize_text_field($codigo);
+        if ($codigo === '') {
+            continue;
+        }
+        $wpdb->query($wpdb->prepare(
+            "INSERT IGNORE INTO $bridge (subcategoria_id, linea_codigo) VALUES (%d, %s)",
+            intval($subcategoria_id), $codigo
+        ));
+    }
+}
+
+function billetera_find_comision($subcategoria_id, $distribuidor_id, $rol, $linea_codigo = '') {
     global $wpdb;
     $comisiones_table = $wpdb->prefix . 'billetera_comisiones';
 
@@ -1636,11 +1797,12 @@ function billetera_find_comision($subcategoria_id, $distribuidor_id, $rol) {
             SELECT c.monto, c.moneda
             FROM $comisiones_table c
             WHERE c.subcategoria_id = %d
+            AND c.linea_codigo = %s
             AND c.distribuidor_id = %d
             AND c.rol = %s
             AND c.activo = 1
             LIMIT 1
-        ", $subcategoria_id, $distribuidor_id, $rol));
+        ", $subcategoria_id, $linea_codigo, $distribuidor_id, $rol));
 
         if ($comision) {
             return $comision;
@@ -1651,11 +1813,12 @@ function billetera_find_comision($subcategoria_id, $distribuidor_id, $rol) {
         SELECT c.monto, c.moneda
         FROM $comisiones_table c
         WHERE c.subcategoria_id = %d
+        AND c.linea_codigo = %s
         AND c.distribuidor_id IS NULL
         AND c.rol = %s
         AND c.activo = 1
         LIMIT 1
-    ", $subcategoria_id, $rol));
+    ", $subcategoria_id, $linea_codigo, $rol));
 }
 
 function billetera_convert_to_sol($comision) {
@@ -1872,28 +2035,26 @@ function billetera_bonus_seed_reglas() {
         'excepcion_desde_umbral' => 1,
     ];
 
-    $pre = $wpdb->get_row("SELECT id, nombre, slug, linea_codigo FROM $cat WHERE LOWER(slug) = 'prepagados' OR LOWER(nombre) = 'prepagados' ORDER BY id ASC LIMIT 1");
+    $pre = $wpdb->get_row("SELECT id, nombre, slug FROM $cat WHERE LOWER(slug) = 'prepagados' OR LOWER(nombre) = 'prepagados' ORDER BY id ASC LIMIT 1");
     if ($pre) {
         $reglas[] = array_merge($base, [
             'id'            => 'r_prepagados',
             'categoria_id'  => intval($pre->id),
             'slug'          => $pre->slug,
             'nombre'        => $pre->nombre,
-            'linea_codigo'  => $pre->linea_codigo,
             'umbral'        => max(1, (int) get_option('billetera_bonus_prepagados_umbral', 6)),
             'multiplicador' => (float) get_option('billetera_bonus_prepagados_multiplicador', 2),
             'aplica_jefe'   => (int) get_option('billetera_bonus_prepagados_jefe', 1),
         ]);
     }
 
-    $kit = $wpdb->get_row("SELECT id, nombre, slug, linea_codigo FROM $cat WHERE LOWER(slug) = 'kit360' OR LOWER(nombre) = 'kit360' ORDER BY id ASC LIMIT 1");
+    $kit = $wpdb->get_row("SELECT id, nombre, slug FROM $cat WHERE LOWER(slug) = 'kit360' OR LOWER(nombre) = 'kit360' ORDER BY id ASC LIMIT 1");
     if ($kit) {
         $reglas[] = array_merge($base, [
             'id'                     => 'r_kit360',
             'categoria_id'           => intval($kit->id),
             'slug'                   => $kit->slug,
             'nombre'                 => $kit->nombre,
-            'linea_codigo'           => $kit->linea_codigo,
             'umbral'                 => max(1, (int) get_option('billetera_bonus_kit360_umbral', 6)),
             'multiplicador'          => (float) get_option('billetera_bonus_kit360_multiplicador', 2),
             'aplica_jefe'            => (int) get_option('billetera_bonus_kit360_jefe', 1),
@@ -1952,30 +2113,42 @@ function billetera_regla_vigente_en($regla, $fecha_ymd) {
 
 /**
  * Contexto de una venta para el matcher v2: categoría, slug, línea y marca.
- * Devuelve null si la subcategoría no existe.
+ * La línea es la de la venta (resuelta al registrar); si no viene, se toma
+ * la primera línea de la subcategoría (tabla puente). Devuelve null si la
+ * subcategoría no existe.
  */
-function billetera_bonus_ctx($subcategoria_id) {
+function billetera_bonus_ctx($subcategoria_id, $linea_codigo = '') {
     global $wpdb;
     $sub = $wpdb->prefix . 'billetera_subcategorias';
     $cat = $wpdb->prefix . 'billetera_categorias';
     $lin = $wpdb->prefix . 'billetera_lineas';
     $row = $wpdb->get_row($wpdb->prepare("
         SELECT c.id AS categoria_id, c.slug AS slug, c.nombre AS categoria_nombre,
-               c.linea_codigo AS linea_codigo, l.marca_id AS marca_id, s.id AS subcategoria_id
+               s.id AS subcategoria_id
         FROM $sub s
         JOIN $cat c ON c.id = s.categoria_id
-        LEFT JOIN $lin l ON l.codigo = c.linea_codigo
         WHERE s.id = %d
     ", intval($subcategoria_id)));
     if (!$row) {
         return null;
     }
+    $linea = strtolower(trim((string) $linea_codigo));
+    if ($linea === '') {
+        $lineas = billetera_sub_lineas($subcategoria_id);
+        $linea = strtolower((string) ($lineas[0] ?? ''));
+    }
+    $marca_id = 0;
+    if ($linea !== '') {
+        $marca_id = intval($wpdb->get_var($wpdb->prepare(
+            "SELECT marca_id FROM $lin WHERE codigo = %s", $linea
+        )));
+    }
     return [
         'categoria_id'    => intval($row->categoria_id),
         'slug'            => strtolower((string) $row->slug),
         'categoria_nombre' => (string) $row->categoria_nombre,
-        'linea_codigo'    => strtolower((string) ($row->linea_codigo ?? '')),
-        'marca_id'        => intval($row->marca_id ?? 0),
+        'linea_codigo'    => $linea,
+        'marca_id'        => $marca_id,
         'subcategoria_id' => intval($row->subcategoria_id),
     ];
 }
@@ -2055,8 +2228,8 @@ function billetera_bonus_regla_match_score($regla, $ctx, $dealer_id) {
  * A igual especificidad gana la más reciente (última del array).
  * Devuelve la regla normalizada o null.
  */
-function billetera_bonus_find_best_regla($subcategoria_id, $dealer_id = 0, $fecha_ymd = null) {
-    $ctx = billetera_bonus_ctx($subcategoria_id);
+function billetera_bonus_find_best_regla($subcategoria_id, $dealer_id = 0, $fecha_ymd = null, $linea_codigo = '') {
+    $ctx = billetera_bonus_ctx($subcategoria_id, $linea_codigo);
     if (!$ctx) {
         return null;
     }
@@ -2097,6 +2270,7 @@ function billetera_bonus_find_best_regla($subcategoria_id, $dealer_id = 0, $fech
 function billetera_bonus_cond_v2($regla) {
     global $wpdb;
     $regla = billetera_bonus_normalize_regla($regla);
+    $bridge = $wpdb->prefix . 'billetera_subcategoria_lineas';
     $lin = $wpdb->prefix . 'billetera_lineas';
     $parts = [];
     $params = [];
@@ -2120,13 +2294,16 @@ function billetera_bonus_cond_v2($regla) {
 
     $scope_linea = strtolower(trim((string) ($regla['scope_linea_codigo'] ?? '')));
     if ($scope_linea !== '') {
-        $parts[] = 'c.linea_codigo = %s';
+        // Línea por la tabla puente (la subcategoría debe estar marcada en ella)
+        $parts[] = "s.id IN (SELECT b.subcategoria_id FROM $bridge b WHERE b.linea_codigo = %s)";
         $params[] = $scope_linea;
     }
 
     $scope_marca = intval($regla['scope_marca_id'] ?? 0);
     if ($scope_marca > 0) {
-        $parts[] = "c.linea_codigo IN (SELECT codigo FROM $lin WHERE marca_id = %d)";
+        $parts[] = "s.id IN (SELECT b.subcategoria_id FROM $bridge b
+                    JOIN $lin l ON l.codigo = b.linea_codigo
+                    WHERE l.marca_id = %d)";
         $params[] = $scope_marca;
     }
 
@@ -2311,7 +2488,7 @@ function billetera_bonus_grupo_inicio($grupo, $mes_inicio) {
  *   multiplier, override_sol (asesor) y jefe_multiplier, jefe_override_sol.
  *   override_sol reemplaza el monto base; si es null se usa el del catálogo.
  */
-function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $cantidad, $aplicar_retro = true, $fecha_datetime = null) {
+function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $cantidad, $aplicar_retro = true, $fecha_datetime = null, $linea_codigo = '') {
     global $wpdb;
     $ventas = $wpdb->prefix . 'billetera_ventas';
     $sub    = $wpdb->prefix . 'billetera_subcategorias';
@@ -2343,7 +2520,7 @@ function billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $dealer_id, $
     $fecha_ymd = $fecha_datetime ? substr((string) $fecha_datetime, 0, 10) : billetera_stats_local_now()->format('Y-m-d');
     // Motor v2 + escalera: gana la más específica; las de idéntico alcance
     // forman tramos por umbral y aplica el tramo más alto alcanzado.
-    $ganadora = billetera_bonus_find_best_regla($subcategoria_id, $dealer_id, $fecha_ymd);
+    $ganadora = billetera_bonus_find_best_regla($subcategoria_id, $dealer_id, $fecha_ymd, $linea_codigo);
     if (!$ganadora) {
         return $out;
     }
@@ -2578,7 +2755,7 @@ function billetera_bonus_retroactivo($regla, $user_id, $mes_inicio, $out, $tc, $
     }
 }
 
-function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $registrante_id = 0, $fecha_datetime = null, $bonus_multiplier = 1.0, $override_sol = null, $add_sol = null) {
+function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $registrante_id = 0, $fecha_datetime = null, $bonus_multiplier = 1.0, $override_sol = null, $add_sol = null, $linea_codigo = '') {
     if (!$fecha_datetime) {
         $fecha_datetime = date('Y-m-d H:i:s');
     }
@@ -2622,13 +2799,13 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
             $bm_aplicado = 1;
         } elseif ($add_sol !== null) {
             // Sumar: (base × multiplicador) + monto fijo
-            $comision    = billetera_find_comision($subcategoria_id, $distribuidor_id, 'jefe_venta');
+            $comision    = billetera_find_comision($subcategoria_id, $distribuidor_id, 'jefe_venta', $linea_codigo);
             $base        = $comision ? (billetera_convert_to_sol($comision) * $cantidad) : 0.0;
             $monto_jefe  = ($base * floatval($bonus_multiplier)) + floatval($add_sol);
             $bm_jefe     = 1.0;
             $bm_aplicado = 1;
         } else {
-            $comision = billetera_find_comision($subcategoria_id, $distribuidor_id, 'jefe_venta');
+            $comision = billetera_find_comision($subcategoria_id, $distribuidor_id, 'jefe_venta', $linea_codigo);
             if (!$comision) {
                 continue;
             }
@@ -2643,6 +2820,7 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
             'usuario_id' => $jefe_id,
             'asesor_id' => intval($registrante_id),
             'subcategoria_id' => $subcategoria_id,
+            'linea_codigo' => $linea_codigo,
             'cantidad' => $cantidad,
             'monto_comision_sol' => $monto_jefe,
             'id_type' => $id_type,
@@ -2651,7 +2829,7 @@ function billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantida
             'bonus_aplicado' => $bm_aplicado,
             'tc_aplicado' => billetera_get_tipo_cambio(),
             'creado_en' => $fecha_datetime,
-        ], ['%d', '%d', '%d', '%d', '%f', '%s', '%s', '%f', '%d', '%f', '%s']);
+        ], ['%d', '%d', '%d', '%s', '%d', '%f', '%s', '%s', '%f', '%d', '%f', '%s']);
     }
 }
 
@@ -2685,22 +2863,25 @@ function billetera_ajax_get_comision() {
         wp_send_json_error(['message' => 'Datos incompletos']);
     }
 
-    // Validar que el usuario tiene permiso para esta subcategoría (mediante su línea)
-    $sub_linea = $wpdb->get_row($wpdb->prepare(
-        "SELECT c.linea_codigo FROM $subcategorias_table s
-         INNER JOIN $categorias_table c ON s.categoria_id = c.id
-         WHERE s.id = %d",
+    // La subcategoría debe existir y estar activa
+    $sub_existe = intval($wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $subcategorias_table WHERE id = %d AND activo = 1",
         $subcategoria_id
-    ));
-
-    if (!$sub_linea) {
+    )));
+    if (!$sub_existe) {
         wp_send_json_error(['message' => 'Producto no encontrado']);
     }
 
     $lineas_permitidas = billetera_get_lineas_permitidas($user_id);
     $codigos_permitidos = array_column($lineas_permitidas, 'codigo');
 
-    if (!in_array($sub_linea->linea_codigo, $codigos_permitidos, true)) {
+    // Línea de la venta (igual que al registrar)
+    $linea_venta = billetera_resolver_linea_venta(
+        $subcategoria_id,
+        $codigos_permitidos,
+        sanitize_text_field($_POST['linea_codigo'] ?? '')
+    );
+    if (!$linea_venta) {
         wp_send_json_error(['message' => 'No tienes permiso para acceder a este producto']);
     }
 
@@ -2716,7 +2897,7 @@ function billetera_ajax_get_comision() {
     }
 
     // Obtener comisión: primero específica del distribuidor, luego la genérica (NULL)
-    $comision = billetera_find_comision($subcategoria_id, $distribuidor_id, $user_role);
+    $comision = billetera_find_comision($subcategoria_id, $distribuidor_id, $user_role, $linea_venta);
 
     if (!$comision) {
         wp_send_json_error(['message' => 'Comisión no encontrada']);
@@ -2726,7 +2907,7 @@ function billetera_ajax_get_comision() {
     $monto_total_sol = billetera_convert_to_sol($comision) * $cantidad;
 
     // Aplicar reglas de bonificación (sin retroactivo: solo previsualización)
-    $regla_bonus = billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $distribuidor_id, $cantidad, false);
+    $regla_bonus = billetera_aplicar_regla_bonus($subcategoria_id, $user_id, $distribuidor_id, $cantidad, false, null, $linea_venta);
     if ($regla_bonus['override_sol'] !== null) {
         $monto_total_sol  = $regla_bonus['override_sol'];
         $bonus_multiplier = 1.0;
@@ -3013,7 +3194,7 @@ function billetera_bonus_recalcular_usuario_mes($user_id, $fecha_ref_ymd) {
     foreach ($filas as $f) {
         $fid = intval($f->id);
         $fecha_ymd = substr((string) $f->creado_en, 0, 10);
-        $ganadora = billetera_bonus_find_best_regla(intval($f->subcategoria_id), $dealer_id, $fecha_ymd);
+        $ganadora = billetera_bonus_find_best_regla(intval($f->subcategoria_id), $dealer_id, $fecha_ymd, (string) ($f->linea_codigo ?? ''));
         if (!$ganadora) {
             continue;
         }
@@ -3165,9 +3346,9 @@ function billetera_ajax_delete_sale() {
         $dealer_id = get_post_meta($tienda_id, '_dealer_id', true);
         foreach ($restantes as $r) {
             $fymd = substr((string) $r->creado_en, 0, 10);
-            $gan = billetera_bonus_find_best_regla(intval($r->subcategoria_id), $dealer_id, $fymd);
+            $gan = billetera_bonus_find_best_regla(intval($r->subcategoria_id), $dealer_id, $fymd, (string) ($r->linea_codigo ?? ''));
             if (!$gan) {
-                billetera_register_jefe_comision($tienda_id, intval($r->subcategoria_id), max(1, intval($r->cantidad ?? 1)), $dealer_id, (string) ($r->id_type ?? ''), (string) ($r->id_value ?? ''), $owner_id, (string) $r->creado_en, 1.0, null, null);
+                billetera_register_jefe_comision($tienda_id, intval($r->subcategoria_id), max(1, intval($r->cantidad ?? 1)), $dealer_id, (string) ($r->id_type ?? ''), (string) ($r->id_value ?? ''), $owner_id, (string) $r->creado_en, 1.0, null, null, (string) ($r->linea_codigo ?? ''));
                 continue;
             }
             $grupo = billetera_bonus_escalera_grupo($gan, $fymd);
@@ -3468,10 +3649,11 @@ function billetera_stats_desglose_equipo($ids, $periodo, $tipo, $base) {
         $p[] = $hasta;
     }
 
-    // La linea (marca) acompaNa a categorIa y subcategorIa: pueden existir dos
-    // registros con el mismo nombre (ej. "Kit de seguridad") en lIneas distintas.
+    // La línea (marca) acompaña a cada venta: la guardada en la venta, o la
+    // primera línea de la subcategoría para históricos sin dato.
+    $linea_expr = "COALESCE(v.linea_codigo, (SELECT b.linea_codigo FROM {$wpdb->prefix}billetera_subcategoria_lineas b WHERE b.subcategoria_id = s.id ORDER BY b.linea_codigo ASC LIMIT 1))";
     $select = "l.nombre AS linea";
-    $join   = "JOIN $lin l ON l.codigo = c.linea_codigo";
+    $join   = "LEFT JOIN $lin l ON l.codigo = $linea_expr";
     if ($tipo === 'subcategoria') {
         $select .= ', s.nombre AS label';
         $group  = 's.id';
@@ -4223,9 +4405,13 @@ function billetera_stats_desglose($user_id, $periodo, $tipo, $base = null) {
         $params[] = $hasta;
     }
 
+    // La línea de cada venta: la guardada en la venta; para históricos sin
+    // dato, la primera línea de la subcategoría (tabla puente).
+    $linea_expr = "COALESCE(v.linea_codigo, (SELECT b.linea_codigo FROM {$wpdb->prefix}billetera_subcategoria_lineas b WHERE b.subcategoria_id = s.id ORDER BY b.linea_codigo ASC LIMIT 1))";
+
     if ($tipo === 'linea') {
         $select = "l.nombre AS label";
-        $join   = "JOIN $lin l ON l.codigo = c.linea_codigo";
+        $join   = "JOIN $lin l ON l.codigo = $linea_expr";
         $group  = "l.codigo";
     } elseif ($tipo === 'categoria') {
         $select = "c.nombre AS label";

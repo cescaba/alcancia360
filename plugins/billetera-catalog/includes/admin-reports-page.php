@@ -96,7 +96,7 @@ function billetera_reports_query($desde, $hasta, $tipo = '') {
         FROM $v v
         LEFT JOIN $sub s ON s.id = v.subcategoria_id
         LEFT JOIN $cat c ON c.id = s.categoria_id
-        LEFT JOIN $lin l ON l.codigo = c.linea_codigo
+        LEFT JOIN $lin l ON l.codigo = COALESCE(v.linea_codigo, (SELECT b.linea_codigo FROM {$wpdb->prefix}billetera_subcategoria_lineas b WHERE b.subcategoria_id = s.id ORDER BY b.linea_codigo ASC LIMIT 1))
         WHERE v.creado_en >= %s AND v.creado_en <= %s
           AND (v.monto_comision_sol * v.bonus_multiplier) > 0
         GROUP BY v.usuario_id, v.subcategoria_id

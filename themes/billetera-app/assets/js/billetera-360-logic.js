@@ -274,7 +274,7 @@ function loadComision() {
     fetch(billetera.ajax_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=billetera_get_comision&nonce=' + encodeURIComponent(billetera.nonce_get_comision) + '&subcategoria_id=' + subId + '&cantidad=' + cantidad
+        body: 'action=billetera_get_comision&nonce=' + encodeURIComponent(billetera.nonce_get_comision) + '&subcategoria_id=' + subId + '&cantidad=' + cantidad + '&linea_codigo=' + encodeURIComponent(state.marca || '')
     })
         .then(r => r.json())
         .then(res => {
@@ -498,7 +498,7 @@ function handleSubmit() {
     fetch(billetera.ajax_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=billetera_register_sale_multi&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha + '&items=' + encodeURIComponent(JSON.stringify(items))
+        body: 'action=billetera_register_sale_multi&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha + '&linea_codigo=' + encodeURIComponent(state.marca || '') + '&items=' + encodeURIComponent(JSON.stringify(items))
     })
         .then(r => r.json())
         .then(data => {
