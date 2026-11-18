@@ -1,10 +1,12 @@
 <?php
 /**
- * Popup "Ranking #1 en tu tienda" (solo asesores).
- * Sale cada vez que el asesor llega al puesto 1 de su tienda (por monto de
- * comisiones del mes, mismo criterio del ranking de la app). No repite hasta
- * que baje del puesto y vuelva a subir. Se chequea al cargar páginas y tras
- * cada venta. Animación: podio sube con el chanchito + corona cae con rebote.
+ * Popup "Puesto en tu tienda" (solo asesores).
+ * Sale cada vez que el asesor entra al top 3 de su tienda (por monto de
+ * comisiones del mes, mismo criterio del ranking de la app). La marca de
+ * visto es por puesto: no repite ese puesto hasta que baje y vuelva a
+ * alcanzarlo (u otro puesto del top 3). Se chequea al cargar páginas y tras
+ * cada venta. Animación: podio sube con el chanchito + corona cae con
+ * rebote (la corona solo para el #1).
  */
 ?>
 <div class="popup-rank" id="popup-rank" hidden>
@@ -54,7 +56,7 @@ window.BilleteraPopupRank = (function () {
     var listEl = document.getElementById('popup-rank-list');
     var msgEl = document.getElementById('popup-rank-msg');
 
-    function markSeen(mesKey) {
+    function markSeen(mesKey, pos) {
         if (!mesKey) return;
         var nonce = (document.getElementById('popup-rank-nonce') || {}).value || '';
         fetch(window.billetera.ajax_url, {
@@ -62,7 +64,8 @@ window.BilleteraPopupRank = (function () {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: 'action=billetera_popup_rank_visto&nonce=' +
                 encodeURIComponent(nonce) +
-                '&mes_key=' + encodeURIComponent(mesKey)
+                '&mes_key=' + encodeURIComponent(mesKey) +
+                '&pos=' + encodeURIComponent(pos || 1)
         }).catch(function () {});
     }
 
@@ -106,8 +109,19 @@ window.BilleteraPopupRank = (function () {
         opts = opts || {};
         chainNext = !!opts.chain;
         fillRows(d.top || []);
+        var pos = parseInt(d.pos, 10) || 1;
         var tienda = d.tienda || 'tu tienda';
-        msgEl.textContent = 'Eres el #1 de ' + tienda + '. ¡Defiende tu puesto!';
+        msgEl.textContent = pos === 1
+            ? 'Eres el #1 de ' + tienda + '. ¡Defiende tu puesto!'
+            : 'Eres el #' + pos + ' de ' + tienda + '. ¡Sigue subiendo!';
+
+        // Número grande + podio con el puesto. La corona solo para el #1.
+        var numEl = el.querySelector('.popup-rank__num');
+        var podioEl = el.querySelector('.popup-rank__podio > span');
+        var crownEl = el.querySelector('.popup-rank__crown');
+        if (numEl) numEl.textContent = '#' + pos;
+        if (podioEl) podioEl.textContent = pos;
+        if (crownEl) crownEl.style.display = pos === 1 ? '' : 'none';
 
         // Reinicia las animaciones (podio + corona).
         var stage = el.querySelector('.popup-rank__stage');
@@ -118,7 +132,7 @@ window.BilleteraPopupRank = (function () {
 
         el.hidden = false;
         document.body.style.overflow = 'hidden';
-        markSeen(d.mes_key);
+        markSeen(d.mes_key, pos);
     }
 
     function check() {

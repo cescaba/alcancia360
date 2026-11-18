@@ -1274,16 +1274,18 @@ function billetera_ajax_popup_meta_visto() {
 }
 
 // ===========================================================================
-// POPUP RANKING #1 DE LA TIENDA (solo asesores)
+// POPUP RANKING TOP 3 DE LA TIENDA (solo asesores)
 // ===========================================================================
 
 /**
- * Popup "#1 en tu tienda": el asesor es el primero del ranking de su tienda
- * (mismo criterio de la app: monto de comisiones del mes DESC, empates
+ * Popup "Puesto en tu tienda": el asesor entra al top 3 del ranking de su
+ * tienda (mismo criterio de la app: monto de comisiones del mes DESC, empates
  * comparten posición). Requiere al menos 1 venta en el mes (cubre el
  * reinicio del mes con todos en 0). Se chequea al cargar páginas y tras cada
- * venta. Si ya vio siendo #1 no repite; si baja de #1 se borra la marca y
- * vuelve a salir cuando recupere el puesto. Meta: _popup_rank_visto = Y-m.
+ * venta. La marca de visto es por puesto: si ya vio ese puesto no repite;
+ * si baja se borra la marca y vuelve a salir cuando recupere (o alcance otro)
+ * puesto del top 3. Meta: _popup_rank_visto = "Y-m|pos" (compatibilidad: la
+ * marca antigua "Y-m" cuenta como visto del puesto 1).
  */
 function billetera_popup_rank_check($user_id) {
     $user_id = intval($user_id);
@@ -1312,29 +1314,30 @@ function billetera_popup_rank_check($user_id) {
 
     $mis_ventas = intval($stats[$user_id]['ventas'] ?? 0);
     if ($mis_ventas < 1) {
-        // Ya está en 0: si la marca de visto de este mes quedó activa, se
-        // libera para que vuelva a salir cuando recupere el #1.
-        $mes_key = (new DateTime('now', wp_timezone()))->format('Y-m');
-        if (get_user_meta($user_id, '_popup_rank_visto', true) === $mes_key) {
-            delete_user_meta($user_id, '_popup_rank_visto');
-        }
+        // Ya está en 0 (reinicio del mes): se libera cualquier marca de visto
+        // para que el popup vuelva a salir cuando reingrese al top 3.
+        delete_user_meta($user_id, '_popup_rank_visto');
         return null;
     }
 
     list($orden, $pos_map) = billetera_ranking_ordenar_posiciones($con_ventas, $stats);
 
-    // ¿Es #1? (puede compartir la posición en empate, igual que la app).
-    if (intval($pos_map[$user_id] ?? 99) !== 1) {
-        $mes_key = (new DateTime('now', wp_timezone()))->format('Y-m');
-        if (get_user_meta($user_id, '_popup_rank_visto', true) === $mes_key) {
+    $mes_key = (new DateTime('now', wp_timezone()))->format('Y-m');
+
+    // ¿Está en el top 3? (puede compartir la posición en empate, igual que la app).
+    $pos_actual = intval($pos_map[$user_id] ?? 99);
+    if ($pos_actual < 1 || $pos_actual > 3) {
+        // Fuera del top 3: se libera la marca para que vuelva a salir al reingresar.
+        if (get_user_meta($user_id, '_popup_rank_visto', true)) {
             delete_user_meta($user_id, '_popup_rank_visto');
         }
         return null;
     }
 
-    $mes_key = (new DateTime('now', wp_timezone()))->format('Y-m');
-    $ya_vio  = (get_user_meta($user_id, '_popup_rank_visto', true) === $mes_key);
-    if ($ya_vio) {
+    // Marca de visto por puesto ("Y-m|pos"). La marca antigua (solo "Y-m")
+    // cuenta como visto del puesto 1 para no repetir el popup ya mostrado.
+    $visto = (string) get_user_meta($user_id, '_popup_rank_visto', true);
+    if ($visto === $mes_key . '|' . $pos_actual || ($pos_actual === 1 && $visto === $mes_key)) {
         return null;
     }
 
@@ -1355,6 +1358,7 @@ function billetera_popup_rank_check($user_id) {
 
     return [
         'top'    => $top,
+        'pos'    => $pos_actual,
         'tienda' => $tienda ? html_entity_decode($tienda->post_title, ENT_QUOTES, 'UTF-8') : '',
         'mes_key' => $mes_key,
     ];
@@ -1372,7 +1376,7 @@ function billetera_ajax_popup_rank_check() {
     wp_send_json_success($data);
 }
 
-// AJAX: marca el popup de ranking como visto para el mes (Y-m).
+// AJAX: marca el popup de ranking como visto para el mes y puesto (Y-m|pos).
 add_action('wp_ajax_billetera_popup_rank_visto', 'billetera_ajax_popup_rank_visto');
 function billetera_ajax_popup_rank_visto() {
     if (!is_user_logged_in()) {
@@ -1387,7 +1391,12 @@ function billetera_ajax_popup_rank_visto() {
         wp_send_json_error(['message' => 'Mes inválido']);
     }
 
-    update_user_meta(get_current_user_id(), '_popup_rank_visto', $mes_key);
+    $pos = intval($_POST['pos'] ?? 1);
+    if ($pos < 1 || $pos > 3) {
+        $pos = 1;
+    }
+
+    update_user_meta(get_current_user_id(), '_popup_rank_visto', $mes_key . '|' . $pos);
     wp_send_json_success([]);
 }
 

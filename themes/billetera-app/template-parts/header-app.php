@@ -381,13 +381,16 @@ window.__popupMetaTest = { pct: 111, ahorrado: 1330, meta: 1200, mes: 'septiembr
 <?php endif; ?>
 <?php if ($es_asesor_popup && isset($_GET['rank_test'])): ?>
 <script>
-// PRUEBA del popup de ranking: ?rank_test=1 (datos de ejemplo).
+// PRUEBA del popup de ranking: ?rank_test=1|2|3 (datos de ejemplo).
 window.__popupRankEnabled = true;
+var __rankTestPos = parseInt('<?php echo isset($_GET['rank_test']) ? intval($_GET['rank_test']) : 1; ?>', 10) || 1;
+if (__rankTestPos < 1 || __rankTestPos > 3) __rankTestPos = 1;
 window.__popupRankTest = {
+    pos: __rankTestPos,
     top: [
-        { pos: 1, nombre: 'Tú (ejemplo)', ventas: 1, es_yo: true },
-        { pos: 2, nombre: 'Eva Rafaella Cuenca', ventas: 0, es_yo: false },
-        { pos: 3, nombre: 'José Luis Pardo', ventas: 0, es_yo: false },
+        { pos: 1, nombre: __rankTestPos === 1 ? 'Tú (ejemplo)' : 'Eva Rafaella Cuenca', ventas: 1, es_yo: __rankTestPos === 1 },
+        { pos: 2, nombre: __rankTestPos === 2 ? 'Tú (ejemplo)' : 'José Luis Pardo', ventas: 0, es_yo: __rankTestPos === 2 },
+        { pos: 3, nombre: __rankTestPos === 3 ? 'Tú (ejemplo)' : 'Maria Fernanda Lopez', ventas: 0, es_yo: __rankTestPos === 3 },
     ],
     tienda: 'WIGO MOTORS · Surquillo',
     mes_key: 'test'
