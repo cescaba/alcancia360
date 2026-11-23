@@ -12,6 +12,7 @@ if (!is_user_logged_in()) {
 $current_user = wp_get_current_user();
 $allowed_roles = array('asesor', 'administrator', 'jefe_venta');
 if (!array_intersect($allowed_roles, $current_user->roles)) {
+    if (function_exists('billetera_gerente_o_redirect')) { billetera_gerente_o_redirect(); }
     wp_die('Acceso restringido. Solo administradores y asesores pueden acceder al ranking.');
 }
 

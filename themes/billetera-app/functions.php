@@ -247,8 +247,10 @@ add_action('wp_login', 'billetera_redirect_after_login', 10, 2);
 function billetera_redirect_after_login($_, $user) {
     $user_roles = (array) $user->roles;
 
-    // Jefe de venta → Movimientos; asesor/administrador → Registrar venta
-    if (in_array('jefe_venta', $user_roles, true)) {
+    // Gerente → Mi concesionaria; jefe de venta → Movimientos; asesor/administrador → Registrar venta
+    if (in_array('gerente', $user_roles, true)) {
+        $template = 'page-billetera-360-gerencia.php';
+    } elseif (in_array('jefe_venta', $user_roles, true)) {
         $template = 'page-billetera-360-movimientos.php';
     } elseif (array_intersect(array('asesor', 'administrator'), $user_roles)) {
         $template = 'page-billetera-360-responsive.php';
@@ -275,6 +277,48 @@ function billetera_redirect_after_login($_, $user) {
 }
 
 add_filter( 'login_display_language_dropdown', '__return_false' );
+
+/**
+ * Si el usuario es gerente, redirige a "Mi concesionaria" y termina la
+ * ejecución (para usarse en los guardas de pantallas no permitidas).
+ * Devuelve true si el usuario es gerente.
+ */
+function billetera_gerente_o_redirect() {
+    $u = wp_get_current_user();
+    if (!in_array('gerente', (array) $u->roles, true)) {
+        return false;
+    }
+    $url = function_exists('billetera_get_template_url') ? billetera_get_template_url('page-billetera-360-gerencia.php') : '';
+    if ($url && $url !== '#') {
+        wp_safe_redirect($url);
+        exit;
+    }
+    return true;
+}
+
+// Asegura que exista la página "Mi concesionaria" (vista del gerente) una sola vez
+add_action('admin_init', 'billetera_maybe_create_gerencia_page');
+function billetera_maybe_create_gerencia_page() {
+    if (get_option('billetera_gerencia_page_ready')) {
+        return;
+    }
+
+    if (billetera_get_template_url('page-billetera-360-gerencia.php') === '#') {
+        $page_id = wp_insert_post(array(
+            'post_type'   => 'page',
+            'post_status' => 'publish',
+            'post_title'  => 'Mi concesionaria',
+            'post_name'   => 'mi-concesionaria',
+            'post_author' => get_current_user_id() ? get_current_user_id() : 1,
+        ));
+
+        if ($page_id && !is_wp_error($page_id)) {
+            update_post_meta($page_id, '_wp_page_template', 'page-billetera-360-gerencia.php');
+        }
+    }
+
+    update_option('billetera_gerencia_page_ready', 1);
+}
 
 // Asegura que exista la página "Mi desempeño" con su template (una sola vez)
 add_action('admin_init', 'billetera_maybe_create_stats_page');
