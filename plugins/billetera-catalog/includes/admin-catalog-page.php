@@ -188,9 +188,13 @@ function billetera_bc_subcategorias_options($selected = 0) {
     global $wpdb;
     $rows = $wpdb->get_results("
         SELECT s.id, s.nombre, c.id AS categoria_id, c.nombre AS categoria,
+               (SELECT GROUP_CONCAT(b.linea_codigo ORDER BY l.orden_display SEPARATOR ',')
+                  FROM {$wpdb->prefix}billetera_subcategoria_lineas b
+                  JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = b.linea_codigo AND l.activo = 1
+                  WHERE b.subcategoria_id = s.id) AS lineas_cod,
                (SELECT GROUP_CONCAT(l.nombre ORDER BY l.orden_display SEPARATOR ', ')
                   FROM {$wpdb->prefix}billetera_subcategoria_lineas b
-                  JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = b.linea_codigo
+                  JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = b.linea_codigo AND l.activo = 1
                   WHERE b.subcategoria_id = s.id) AS lineas
         FROM {$wpdb->prefix}billetera_subcategorias s
         JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
@@ -199,7 +203,7 @@ function billetera_bc_subcategorias_options($selected = 0) {
     $html = '';
     foreach ($rows as $r) {
         $label = $r->categoria . ' · ' . $r->nombre . ' [' . ($r->lineas ?: 'sin líneas') . ']';
-        $html .= '<option value="' . intval($r->id) . '" data-cat="' . intval($r->categoria_id) . '"' . selected($selected, $r->id, false) . '>' . esc_html($label) . '</option>';
+        $html .= '<option value="' . intval($r->id) . '" data-cat="' . intval($r->categoria_id) . '" data-lines="' . esc_attr((string) $r->lineas_cod) . '"' . selected($selected, $r->id, false) . '>' . esc_html($label) . '</option>';
     }
     return $html;
 }
@@ -577,8 +581,9 @@ function billetera_render_comisiones_page() {
             $monto      = floatval(billetera_bc_post('monto', 0));
             $moneda     = strtoupper(sanitize_text_field(billetera_bc_post('moneda', 'PEN')));
             $activo     = isset($_POST['activo']) ? 1 : 0;
-            $linea      = strtolower(sanitize_text_field(billetera_bc_post('linea_codigo', '')));
-            $copiar     = isset($_POST['copiar_lineas']) ? 1 : 0;
+            $lineas_sel = isset($_POST['lineas']) && is_array($_POST['lineas'])
+                ? array_values(array_filter(array_map('strtolower', array_map('sanitize_text_field', wp_unslash($_POST['lineas'])))))
+                : [];
 
             $lineas_sub = ($sub > 0) ? billetera_sub_lineas($sub) : [];
 
@@ -586,52 +591,85 @@ function billetera_render_comisiones_page() {
                 $err = 'Subcategoría y rol son obligatorios.';
             } elseif (empty($lineas_sub)) {
                 $err = 'La subcategoría no tiene líneas asignadas. Edítala y márcalas primero.';
-            } elseif (!$linea || !in_array($linea, $lineas_sub, true)) {
-                $err = 'Elige una línea en la que se venda esta subcategoría.';
+            } elseif (empty($lineas_sel)) {
+                $err = 'Marca al menos una línea.';
+            } elseif (count(array_diff($lineas_sel, $lineas_sub)) > 0) {
+                $err = 'Hay líneas marcadas en las que no se vende esta subcategoría.';
             } else {
-                // Líneas destino: solo la elegida, o todas las de la subcategoría
-                // (copiar a todas y editar una por una después).
-                $lineas_dest = $copiar ? $lineas_sub : [$linea];
-
-                foreach ($lineas_dest as $lin) {
-                    $id_lin = 0;
-                    if ($id > 0) {
-                        // Edición: solo la línea elegida lleva el id
-                        $id_lin = ($lin === $linea) ? $id : 0;
-                    }
-                    if ($id_lin <= 0) {
-                        if ($dist === null) {
-                            $id_lin = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE subcategoria_id = %d AND linea_codigo = %s AND distribuidor_id IS NULL AND rol = %s", $sub, $lin, $rol)));
-                        } else {
-                            $id_lin = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE subcategoria_id = %d AND linea_codigo = %s AND distribuidor_id = %d AND rol = %s", $sub, $lin, $dist, $rol)));
-                        }
-                    }
-
-                    $data = [
-                        'subcategoria_id' => $sub,
-                        'linea_codigo'    => $lin,
-                        'distribuidor_id' => $dist,
-                        'rol'             => $rol,
-                        'monto'           => $monto,
-                        'moneda'          => $moneda,
-                        'activo'          => $activo,
-                    ];
-                    $fmt = ['%d', '%s', '%d', '%s', '%f', '%s', '%d'];
-
-                    if ($id_lin > 0) {
-                        $wpdb->update($table, $data, ['id' => $id_lin], $fmt, ['%d']);
-                        $msg = 'Comisión guardada.';
-                    } else {
-                        $ok = $wpdb->insert($table, $data, $fmt);
-                        $msg = $ok ? 'Comisión guardada.' : $msg;
-                        if (!$ok) {
-                            $err = 'No se pudo guardar la comisión de la línea ' . $lin . '.';
-                        }
+                // En edición: la fila existente manda en subcategoría, concesionaria
+                // y rol (cambiarlos = eliminar y crear otra).
+                if ($id > 0) {
+                    $row = $wpdb->get_row($wpdb->prepare(
+                        "SELECT subcategoria_id, linea_codigo, distribuidor_id, rol FROM $table WHERE id = %d",
+                        $id
+                    ));
+                    if (!$row) {
+                        $err = 'La comisión a editar no existe.';
+                    } elseif (intval($row->subcategoria_id) !== $sub
+                        || (int) ($row->distribuidor_id ?? 0) !== (int) ($dist ?? 0)
+                        || (string) $row->rol !== $rol) {
+                        $err = 'No puedes cambiar subcategoría, concesionaria o rol de una comisión existente. Elíminala y crea una nueva.';
                     }
                 }
 
-                if ($copiar && empty($err)) {
-                    $msg = 'Comisión guardada y copiada a todas las líneas de la subcategoría.';
+                if ($err === '') {
+                    // Validación atómica: TODAS las líneas marcadas deben estar libres
+                    // (la propia fila en edición no se cuenta a sí misma).
+                    $ocupadas = [];
+                    foreach ($lineas_sel as $lin) {
+                        if ($id > 0 && $lin === strtolower((string) $row->linea_codigo)) {
+                            continue; // su propia fila puede "moverse" a otra, a sí misma no aplica
+                        }
+                        if ($dist === null) {
+                            $existe = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE subcategoria_id = %d AND linea_codigo = %s AND distribuidor_id IS NULL AND rol = %s", $sub, $lin, $rol)));
+                        } else {
+                            $existe = intval($wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE subcategoria_id = %d AND linea_codigo = %s AND distribuidor_id = %d AND rol = %s", $sub, $lin, $dist, $rol)));
+                        }
+                        if ($existe && $existe !== $id) {
+                            $ocupadas[] = $lin;
+                        }
+                    }
+
+                    if (!empty($ocupadas)) {
+                        $err = 'Ya existe una comisión para la(s) línea(s): ' . implode(', ', $ocupadas) . ' (misma subcategoría, concesionaria y rol).';
+                    } else {
+                        // La fila existente se queda en su línea original si sigue
+                        // marcada; si la desmarcaron, la fila "se mueve" a la
+                        // primera línea marcada. Las demás líneas se crean nuevas.
+                        $lineas_ord = $lineas_sel;
+                        if ($id > 0) {
+                            $orig = strtolower((string) $row->linea_codigo);
+                            if (in_array($orig, $lineas_sel, true)) {
+                                $lineas_ord = array_merge([$orig], array_diff($lineas_sel, [$orig]));
+                            }
+                        }
+
+                        $guardadas = 0;
+                        $primera = ($id > 0);
+                        foreach ($lineas_ord as $lin) {
+                            $data = [
+                                'subcategoria_id' => $sub,
+                                'linea_codigo'    => $lin,
+                                'distribuidor_id' => $dist,
+                                'rol'             => $rol,
+                                'monto'           => $monto,
+                                'moneda'          => $moneda,
+                                'activo'          => $activo,
+                            ];
+                            $fmt = ['%d', '%s', '%d', '%s', '%f', '%s', '%d'];
+
+                            if ($primera) {
+                                $wpdb->update($table, $data, ['id' => $id], $fmt, ['%d']);
+                                $primera = false;
+                            } else {
+                                $wpdb->insert($table, $data, $fmt);
+                            }
+                            $guardadas++;
+                        }
+                        $msg = $guardadas > 1
+                            ? 'Comisiones guardadas (' . $guardadas . ' líneas).'
+                            : 'Comisión guardada.';
+                    }
                 }
             }
         } elseif ($action === 'delete') {
@@ -699,7 +737,16 @@ function billetera_render_comisiones_page() {
     $data_params = array_merge($params, [$per_page, $offset]);
     $rows = $wpdb->get_results($wpdb->prepare($data_sql, ...$data_params));
 
-    billetera_bc_open('Comisiones', 'Define el monto por subcategoría y rol. Déjala como "Genérica (TODOS)" para aplicar a todas las concesionarias.');
+    // Categoría de la subcategoría en edición (para preseleccionar el cascada)
+    $edit_cat_id = 0;
+    if ($edit && $edit->subcategoria_id) {
+        $edit_cat_id = intval($wpdb->get_var($wpdb->prepare(
+            "SELECT categoria_id FROM {$wpdb->prefix}billetera_subcategorias WHERE id = %d",
+            intval($edit->subcategoria_id)
+        )));
+    }
+
+    billetera_bc_open('Comisiones', 'Define el monto por subcategoría, línea y rol. Déjala como "Genérica (TODOS)" para aplicar a todas las concesionarias.');
     billetera_bc_notices($msg, $err);
     ?>
     <div class="bc-card">
@@ -709,6 +756,13 @@ function billetera_render_comisiones_page() {
             <input type="hidden" name="bc_action" value="save">
             <input type="hidden" name="id" value="<?php echo $edit ? intval($edit->id) : 0; ?>">
 
+            <div class="bc-field">
+                <label class="bc-label">Categoría</label>
+                <select id="bc-c-categoria" class="bc-select">
+                    <option value="">— Todas —</option>
+                    <?php echo billetera_bc_categorias_options($edit_cat_id); ?>
+                </select>
+            </div>
             <div class="bc-field bc-field--full">
                 <label class="bc-label">Subcategoría *</label>
                 <select name="subcategoria_id" id="bc-c-subcategoria" class="bc-select" required>
@@ -716,29 +770,14 @@ function billetera_render_comisiones_page() {
                     <?php echo billetera_bc_subcategorias_options($edit->subcategoria_id ?? 0); ?>
                 </select>
             </div>
-            <div class="bc-field">
-                <label class="bc-label">Línea *</label>
-                <?php $edit_lineas_com = ($edit && $edit->subcategoria_id) ? billetera_sub_lineas(intval($edit->subcategoria_id)) : []; ?>
-                <select name="linea_codigo" id="bc-c-linea" class="bc-select" required>
-                    <?php if (!$edit): ?>
-                        <option value="">— Selecciona subcategoría —</option>
-                    <?php else: ?>
-                        <?php foreach ($edit_lineas_com as $lin_cod): ?>
-                            <?php
-                            $lin_row = null;
-                            foreach (billetera_bc_lineas() as $l) { if ($l->codigo === $lin_cod) { $lin_row = $l; break; } }
-                            ?>
-                            <option value="<?php echo esc_attr($lin_cod); ?>" <?php echo selected(($edit->linea_codigo ?? '') === $lin_cod, true, false); ?>><?php echo esc_html($lin_row ? $lin_row->nombre : $lin_cod); ?></option>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </select>
-            </div>
-            <div class="bc-field bc-field--check">
-                <label><input type="checkbox" name="copiar_lineas" value="1" <?php checked(!$edit, true); ?>> Copiar a todas las líneas de la subcategoría</label>
+            <div class="bc-field bc-field--full">
+                <label class="bc-label">Líneas *</label>
+                <div id="bc-c-lineas" class="bc-checks"></div>
+                <p class="bc-desc" id="bc-c-lineas-nota" style="margin:6px 0 0;">Elige una subcategoría para ver sus líneas.</p>
             </div>
             <div class="bc-field">
                 <label class="bc-label">Concesionaria</label>
-                <select name="distribuidor_id" class="bc-select">
+                <select name="distribuidor_id" id="bc-c-dist" class="bc-select">
                     <option value="" <?php echo ($edit && $edit->distribuidor_id === null) || !$edit ? 'selected' : ''; ?>>— Genérica (TODOS) —</option>
                     <?php foreach ($dealers as $d): ?>
                         <option value="<?php echo intval($d->ID); ?>" <?php echo selected($edit->distribuidor_id ?? '', $d->ID, false); ?>><?php echo esc_html($d->post_title); ?></option>
@@ -747,7 +786,7 @@ function billetera_render_comisiones_page() {
             </div>
             <div class="bc-field">
                 <label class="bc-label">Rol *</label>
-                <select name="rol" class="bc-select" required>
+                <select name="rol" id="bc-c-rol" class="bc-select" required>
                     <option value="asesor" <?php echo selected($edit->rol ?? 'asesor', 'asesor', false); ?>>Asesor</option>
                     <option value="jefe_venta" <?php echo selected($edit->rol ?? '', 'jefe_venta', false); ?>>Jefe de Venta</option>
                 </select>
@@ -774,50 +813,128 @@ function billetera_render_comisiones_page() {
     </div>
     <script>
     (function () {
-        var map = <?php
-            // subcategoría_id -> [ {codigo, nombre} ] desde la tabla puente
-            $sub_lineas_map = [];
-            $map_rows = $wpdb->get_results("
-                SELECT b.subcategoria_id, b.linea_codigo, l.nombre
-                FROM {$wpdb->prefix}billetera_subcategoria_lineas b
-                JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = b.linea_codigo AND l.activo = 1
-                ORDER BY l.orden_display ASC
-            ");
-            foreach ((array) $map_rows as $mr) {
-                $sub_lineas_map[intval($mr->subcategoria_id)][] = ['c' => $mr->linea_codigo, 'n' => $mr->nombre];
-            }
-            echo json_encode($sub_lineas_map);
-        ?>;
-        var subSel = document.getElementById('bc-c-subcategoria');
-        var linSel = document.getElementById('bc-c-linea');
-        if (!subSel || !linSel) return;
-
-        function refill() {
-            var current = linSel.value;
-            var lines = map[subSel.value] || [];
-            linSel.innerHTML = '';
-            if (!lines.length) {
-                var o0 = document.createElement('option');
-                o0.value = '';
-                o0.textContent = '— La subcategoría no tiene líneas —';
-                linSel.appendChild(o0);
-            } else {
-                lines.forEach(function (it) {
-                    var o = document.createElement('option');
-                    o.value = it.c;
-                    o.textContent = it.n;
-                    linSel.appendChild(o);
-                });
-                for (var i = 0; i < linSel.options.length; i++) {
-                    if (linSel.options[i].value === current) {
-                        linSel.selectedIndex = i;
-                        break;
-                    }
+        var PHP = {
+            lineas: <?php
+                // codigo -> nombre (todas las líneas activas, por orden)
+                $js_lineas = [];
+                foreach (billetera_bc_lineas() as $l) {
+                    $js_lineas[$l->codigo] = $l->nombre;
                 }
+                echo json_encode($js_lineas);
+            ?>,
+            lineasSub: <?php
+                // subcategoría_id -> [códigos] (tabla puente, por orden)
+                $js_sub_lineas = [];
+                $map_rows = $wpdb->get_results("
+                    SELECT b.subcategoria_id, b.linea_codigo
+                    FROM {$wpdb->prefix}billetera_subcategoria_lineas b
+                    JOIN {$wpdb->prefix}billetera_lineas l ON l.codigo = b.linea_codigo AND l.activo = 1
+                    ORDER BY l.orden_display ASC
+                ");
+                foreach ((array) $map_rows as $mr) {
+                    $js_sub_lineas[intval($mr->subcategoria_id)][] = $mr->linea_codigo;
+                }
+                echo json_encode($js_sub_lineas);
+            ?>,
+            ocupadas: <?php
+                // subcategoría_id -> linea -> [ {d: dist|0, r: rol} ]
+                $js_occ = [];
+                $occ_rows = $wpdb->get_results("
+                    SELECT subcategoria_id, linea_codigo, IFNULL(distribuidor_id, 0) AS d, rol
+                    FROM {$wpdb->prefix}billetera_comisiones
+                ");
+                foreach ((array) $occ_rows as $or_) {
+                    $sid = intval($or_->subcategoria_id);
+                    if (!isset($js_occ[$sid])) { $js_occ[$sid] = []; }
+                    if (!isset($js_occ[$sid][$or_->linea_codigo])) { $js_occ[$sid][$or_->linea_codigo] = []; }
+                    $js_occ[$sid][$or_->linea_codigo][] = ['d' => intval($or_->d), 'r' => $or_->rol];
+                }
+                echo json_encode($js_occ);
+            ?>,
+            editId: <?php echo intval($edit ? $edit->id : 0); ?>,
+            editLinea: '<?php echo esc_js($edit ? (string) $edit->linea_codigo : ''); ?>'
+        };
+
+        var catSel  = document.getElementById('bc-c-categoria');
+        var subSel  = document.getElementById('bc-c-subcategoria');
+        var linBox  = document.getElementById('bc-c-lineas');
+        var linNota = document.getElementById('bc-c-lineas-nota');
+        var distSel = document.getElementById('bc-c-dist');
+        var rolSel  = document.getElementById('bc-c-rol');
+        if (!subSel || !linBox) return;
+
+        function estaOcupada(subId, linea, dist, rol) {
+            var arr = (PHP.ocupadas[subId] || {})[linea] || [];
+            var d = dist === '' ? 0 : parseInt(dist, 10);
+            for (var i = 0; i < arr.length; i++) {
+                if (arr[i].d === d && arr[i].r === rol) return true;
+            }
+            return false;
+        }
+
+        function renderLineas() {
+            var subId = subSel.value;
+            var lines = PHP.lineasSub[subId] || [];
+            var dist = distSel ? distSel.value : '';
+            var rol = rolSel ? rolSel.value : 'asesor';
+            linBox.innerHTML = '';
+
+            if (!subId) {
+                linNota.textContent = 'Elige una subcategoría para ver sus líneas.';
+                return;
+            }
+            if (!lines.length) {
+                linNota.textContent = 'Esta subcategoría no tiene líneas asignadas. Edítala en Subcategorías y márcalas.';
+                return;
+            }
+
+            var libres = 0;
+            lines.forEach(function (cod) {
+                var ocupada = estaOcupada(subId, cod, dist, rol);
+                var esLaDeEdicion = (PHP.editId > 0 && cod === PHP.editLinea);
+                var lbl = document.createElement('label');
+                lbl.className = 'bc-check';
+                var input = document.createElement('input');
+                input.type = 'checkbox';
+                input.name = 'lineas[]';
+                input.value = cod;
+                if (esLaDeEdicion) { input.checked = true; }
+                if (ocupada && !esLaDeEdicion) {
+                    input.disabled = true;
+                } else {
+                    libres++;
+                }
+                lbl.appendChild(input);
+                lbl.appendChild(document.createTextNode(' ' + (PHP.lineas[cod] || cod) + (ocupada && !esLaDeEdicion ? ' (ya existe)' : '')));
+                linBox.appendChild(lbl);
+            });
+
+            if (libres === 0) {
+                linNota.textContent = 'Todas las líneas ya tienen comisión para esta subcategoría, concesionaria y rol.';
+            } else if (PHP.editId > 0) {
+                linNota.textContent = 'Tu línea actual está marcada. Puedes moverla a otra línea libre o marcar más para agregarlas.';
+            } else {
+                linNota.textContent = 'Marca una o varias líneas: se crea una comisión por cada una.';
             }
         }
-        subSel.addEventListener('change', refill);
-        refill();
+
+        function filtrarSubcats() {
+            var cat = catSel ? catSel.value : '';
+            var opts = subSel.options;
+            for (var i = 1; i < opts.length; i++) { // 0 = placeholder
+                var o = opts[i];
+                o.hidden = (cat !== '' && o.getAttribute('data-cat') !== cat);
+                if (o.hidden && o.selected) { subSel.selectedIndex = 0; }
+            }
+            renderLineas();
+        }
+
+        if (catSel) catSel.addEventListener('change', filtrarSubcats);
+        subSel.addEventListener('change', renderLineas);
+        if (distSel) distSel.addEventListener('change', renderLineas);
+        if (rolSel) rolSel.addEventListener('change', renderLineas);
+
+        filtrarSubcats();
     })();
     </script>
 
