@@ -3695,6 +3695,242 @@ function billetera_stats_desglose_equipo($ids, $periodo, $tipo, $base) {
 // MI EQUIPO (jefe de venta): agregados del propio equipo de la tienda
 // ============================================================================
 
+// ===========================================================================
+// VISTA DE GERENTE ("Mi concesionaria")
+// El gerente ve las sucursales de las concesionarias donde está asignado
+// (_gerentes_asociados del dealer). Solo lectura: ventas por sucursal,
+// avance de meta en unidades y comparativa. SIN montos de comisiones.
+// ===========================================================================
+
+/**
+ * Concesionarias donde el usuario figura como gerente.
+ */
+function billetera_gerente_dealers($user_id) {
+    $out = [];
+    $dealers = get_posts([
+        'post_type'   => 'dealer',
+        'numberposts' => -1,
+        'post_status' => 'any',
+        'fields'      => 'ids',
+    ]);
+    foreach ($dealers as $did) {
+        $gerentes = get_post_meta(intval($did), '_gerentes_asociados', true);
+        if (is_array($gerentes) && in_array(intval($user_id), array_map('intval', $gerentes), true)) {
+            $out[] = intval($did);
+        }
+    }
+    return $out;
+}
+
+/**
+ * Sucursales (tiendas) de las concesionarias del gerente: id => título.
+ */
+function billetera_gerente_tiendas($user_id) {
+    $dealer_ids = billetera_gerente_dealers($user_id);
+    if (!$dealer_ids) {
+        return [];
+    }
+    $tiendas = get_posts([
+        'post_type'   => 'tienda',
+        'numberposts' => -1,
+        'post_status' => 'publish',
+        'meta_query'  => [[
+            'key'     => '_dealer_id',
+            'value'   => $dealer_ids,
+            'compare' => 'IN',
+            'type'    => 'NUMERIC',
+        ]],
+        'orderby' => 'title',
+        'order'   => 'ASC',
+    ]);
+    $map = [];
+    foreach ($tiendas as $t) {
+        $map[intval($t->ID)] = $t->post_title;
+    }
+    return $map;
+}
+
+add_action('wp_ajax_billetera_get_gerencia', 'billetera_ajax_get_gerencia');
+
+function billetera_ajax_get_gerencia() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_get_gerencia')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
+    $user_id = get_current_user_id();
+    $current_user = wp_get_current_user();
+
+    if (!array_intersect(['gerente', 'administrator'], (array) $current_user->roles)) {
+        wp_send_json_error(['message' => 'Solo los gerentes pueden ver esta vista']);
+    }
+
+    $tienda_map = billetera_gerente_tiendas($user_id);
+    if (!$tienda_map) {
+        wp_send_json_error(['message' => 'No eres gerente de ninguna concesionaria. Te deben asignar en la concesionaria.']);
+    }
+    $tienda_ids = array_keys($tienda_map);
+
+    // Filtro del selector de sucursal (0 = todas).
+    $tienda_sel = isset($_POST['tienda']) ? intval($_POST['tienda']) : 0;
+    if ($tienda_sel) {
+        if (!in_array($tienda_sel, $tienda_ids, true)) {
+            wp_send_json_error(['message' => 'No administras esa sucursal']);
+        }
+        $tienda_ids = [$tienda_sel];
+    }
+
+    // Periodo: mes + selector de mes anterior (misma convención que Mi equipo).
+    $now = billetera_stats_local_now();
+    $base = clone $now;
+    $mes_param = isset($_POST['mes']) ? sanitize_text_field(wp_unslash($_POST['mes'])) : '';
+    if (preg_match('/^(\d{4})-(\d{2})$/', $mes_param, $m)) {
+        try {
+            $cand = new DateTime(sprintf('%04d-%02d-01 00:00:00', $m[1], $m[2]), wp_timezone());
+            if ($cand <= $now) {
+                $base = $cand;
+            }
+        } catch (Exception $e) {
+        }
+    }
+    $meses_es = [1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'];
+    $periodo_label = $meses_es[intval($base->format('n'))] . ' ' . $base->format('Y');
+    $es_actual = ($base->format('Y-m') === $now->format('Y-m'));
+
+    list($desde, $hasta) = billetera_stats_rango('mes', $base);
+
+    // Usuarios (asesores + jefes) de las sucursales: sus ventas propias
+    // (asesor_id IS NULL; los espejos del jefe no se cuentan aquí).
+    global $wpdb;
+    $v = $wpdb->prefix . 'billetera_ventas';
+
+    $users = get_users([
+        'meta_query' => [[
+            'key'     => '_tienda_asociada',
+            'value'   => $tienda_ids,
+            'compare' => 'IN',
+            'type'    => 'NUMERIC',
+        ]],
+        'role__in' => ['asesor', 'jefe_venta'],
+        'number'   => -1,
+        'fields'   => 'all',
+    ]);
+    $user_tienda = [];
+    $ids = [];
+    foreach ($users as $u) {
+        $tid = intval(get_user_meta(intval($u->ID), '_tienda_asociada', true));
+        if ($tid && in_array($tid, $tienda_ids, true)) {
+            $user_tienda[intval($u->ID)] = $tid;
+            $ids[] = intval($u->ID);
+        }
+    }
+
+    // Ventas del periodo por usuario (solo propias) + última venta histórica.
+    $ventas_por_usuario = [];
+    $ultima_por_usuario = [];
+    if ($ids) {
+        $in = implode(',', array_map('intval', $ids));
+        $rows = $wpdb->get_results($wpdb->prepare("
+            SELECT v.usuario_id, COUNT(*) AS ventas
+            FROM $v v
+            WHERE v.usuario_id IN ($in)
+              AND v.asesor_id IS NULL
+              AND v.creado_en >= %s AND v.creado_en < %s
+            GROUP BY v.usuario_id
+        ", $desde, $hasta));
+        foreach ((array) $rows as $r) {
+            $ventas_por_usuario[intval($r->usuario_id)] = intval($r->ventas);
+        }
+
+        $rows_ut = $wpdb->get_results("
+            SELECT v.usuario_id, MAX(v.creado_en) AS ultima
+            FROM $v v
+            WHERE v.usuario_id IN ($in) AND v.asesor_id IS NULL
+            GROUP BY v.usuario_id
+        ");
+        foreach ((array) $rows_ut as $r) {
+            $ultima_por_usuario[intval($r->usuario_id)] = $r->ultima ? (string) $r->ultima : null;
+        }
+    }
+
+    // Meta de cada sucursal en unidades (todas las líneas, categorías y tipos).
+    $meta_table = $wpdb->prefix . 'billetera_metas_sucursal';
+    $in_t = implode(',', array_map('intval', $tienda_ids));
+    $meta_map = [];
+    $rows_meta = $wpdb->get_results("SELECT tienda_id, SUM(unidades) AS total FROM $meta_table WHERE tienda_id IN ($in_t) GROUP BY tienda_id");
+    foreach ((array) $rows_meta as $r) {
+        $meta_map[intval($r->tienda_id)] = intval($r->total);
+    }
+
+    // Consolidado por sucursal.
+    $sucursales = [];
+    $tot_ventas = 0;
+    $tot_meta = 0;
+    $ultima_global = null;
+    foreach ($tienda_ids as $tid) {
+        $ventas_t = 0;
+        $ultima_t = null;
+        foreach ($user_tienda as $uid => $tid_u) {
+            if ($tid_u !== $tid) {
+                continue;
+            }
+            $ventas_t += intval($ventas_por_usuario[$uid] ?? 0);
+            $u_ultima = $ultima_por_usuario[$uid] ?? null;
+            if ($u_ultima && ($ultima_t === null || $u_ultima > $ultima_t)) {
+                $ultima_t = $u_ultima;
+            }
+        }
+        $meta_t = intval($meta_map[$tid] ?? 0);
+        $sucursales[] = [
+            'id'      => $tid,
+            'nombre'  => (string) ($tienda_map[$tid] ?? ('#' . $tid)),
+            'ventas'  => $ventas_t,
+            'meta'    => $meta_t,
+            'avance'  => $meta_t > 0 ? min(round(($ventas_t / $meta_t) * 100, 1), 100.0) : null,
+            'faltan'  => $meta_t > 0 ? max(0, $meta_t - $ventas_t) : null,
+            'ultima'  => $ultima_t,
+        ];
+        $tot_ventas += $ventas_t;
+        $tot_meta += $meta_t;
+        if ($ultima_t && ($ultima_global === null || $ultima_t > $ultima_global)) {
+            $ultima_global = $ultima_t;
+        }
+    }
+
+    // Comparativa ordenada por ventas desc.
+    usort($sucursales, function ($a, $b) {
+        if ($a['ventas'] !== $b['ventas']) {
+            return $b['ventas'] <=> $a['ventas'];
+        }
+        return strcmp($a['nombre'], $b['nombre']);
+    });
+
+    // Proyección (solo mes actual): ventas / días laborables transcurridos.
+    list($lab_trans, $lab_total) = billetera_stats_dias_laborables_mes(
+        intval($base->format('Y')), intval($base->format('n')), $es_actual ? intval($now->format('j')) : 31
+    );
+    $lab_trans = max($lab_trans, 1);
+    $proy = $es_actual ? (int) round($tot_ventas / $lab_trans * $lab_total) : $tot_ventas;
+
+    wp_send_json_success([
+        'periodo'      => $base->format('Y-m'),
+        'periodo_label'=> $periodo_label,
+        'es_actual'    => $es_actual,
+        'sucursales'   => $sucursales,
+        'total'        => [
+            'ventas' => $tot_ventas,
+            'meta'   => $tot_meta,
+            'avance' => $tot_meta > 0 ? min(round(($tot_ventas / $tot_meta) * 100, 1), 100.0) : null,
+            'faltan' => $tot_meta > 0 ? max(0, $tot_meta - $tot_ventas) : null,
+            'proyeccion' => $proy,
+            'ultima' => $ultima_global,
+        ],
+    ]);
+}
+
 add_action('wp_ajax_billetera_get_mi_equipo', 'billetera_ajax_get_mi_equipo');
 
 function billetera_ajax_get_mi_equipo() {

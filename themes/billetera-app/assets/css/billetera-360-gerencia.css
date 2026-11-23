@@ -1,0 +1,108 @@
+/* Mi alcancia 360 - Vista de gerente ("Mi concesionaria")
+   KPIs y comparativa de sucursales (sin montos). */
+
+.gr-card {
+    background: #FFFFFF;
+    border: 1px solid #E3E8EF;
+    border-radius: 16px;
+    padding: 16px;
+    margin-top: 14px;
+}
+
+.gr-card__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.gr-card__title {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    color: #0A2A45;
+}
+
+.gr-card__periodo {
+    font-size: 12px;
+    color: #7B8794;
+}
+
+.gr-table-wrap {
+    overflow-x: auto;
+}
+
+.gr-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: #22303C;
+}
+
+.gr-table th,
+.gr-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid #EDF1F5;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.gr-table thead th {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #7B8794;
+    background: #F7F9FB;
+}
+
+.gr-table th.gr-num,
+.gr-table td.gr-num {
+    text-align: right;
+}
+
+.gr-table tbody tr:hover td {
+    background: #F5F9FE;
+}
+
+.gr-table tfoot td {
+    border-top: 2px solid #E3E8EF;
+    border-bottom: none;
+    font-weight: 700;
+    color: #0A2A45;
+    background: #F7F9FB;
+}
+
+.gr-total td {
+    font-family: 'Poppins', sans-serif;
+}
+
+.gr-empty,
+.gr-empty-cell {
+    text-align: center;
+    color: #7B8794;
+    padding: 18px 10px;
+    font-size: 13px;
+}
+
+.gr-empty {
+    background: #FFFFFF;
+    border: 1px dashed #D5DDE5;
+    border-radius: 12px;
+}
+
+.gr-note {
+    margin: 10px 0 0;
+    font-size: 11px;
+    color: #9AA5B1;
+}
+
+@media (max-width: 640px) {
+    .gr-table th,
+    .gr-table td {
+        padding: 8px 8px;
+        font-size: 12px;
+    }
+}
