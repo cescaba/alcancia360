@@ -488,7 +488,7 @@
         fetch(billetera.ajax_url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'action=billetera_register_sale_multi&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha + '&linea_codigo=' + encodeURIComponent((marcaSelect && marcaSelect.value) || '') + '&items=' + encodeURIComponent(JSON.stringify(items))
+            body: 'action=billetera_register_sale_multi&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha + '&linea_codigo=' + encodeURIComponent((marcaSelect && marcaSelect.value) || '') + '&adjuntos=' + encodeURIComponent(JSON.stringify(window.BilleteraAdjuntos ? window.BilleteraAdjuntos.tokens() : [])) + '&items=' + encodeURIComponent(JSON.stringify(items))
         })
             .then(function (r) { return r.json(); })
             .then(function (data) {
@@ -619,6 +619,7 @@
         cart = [];
         lastPreview = null;
         previewReq++;
+        if (window.BilleteraAdjuntos) window.BilleteraAdjuntos.reset();
         renderCart();
         if (cantidadWrap) cantidadWrap.style.display = 'none';
         if (cantidadInput) cantidadInput.value = 1;

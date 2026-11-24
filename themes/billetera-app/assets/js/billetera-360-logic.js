@@ -498,7 +498,7 @@ function handleSubmit() {
     fetch(billetera.ajax_url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=billetera_register_sale_multi&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha + '&linea_codigo=' + encodeURIComponent(state.marca || '') + '&items=' + encodeURIComponent(JSON.stringify(items))
+        body: 'action=billetera_register_sale_multi&nonce=' + encodeURIComponent(billetera.nonce_register_sale) + '&id_type=' + idType + '&id_value=' + encodeURIComponent(idVal) + '&fecha=' + fecha + '&linea_codigo=' + encodeURIComponent(state.marca || '') + '&adjuntos=' + encodeURIComponent(JSON.stringify(window.BilleteraAdjuntos ? window.BilleteraAdjuntos.tokens() : [])) + '&items=' + encodeURIComponent(JSON.stringify(items))
     })
         .then(r => r.json())
         .then(data => {
@@ -631,6 +631,7 @@ function resetForm() {
     cantidadInput.value = 1;
     previewAmt.textContent = 'S/ 0.00';
     if (regComision) regComision.classList.remove('is-ready');
+    if (window.BilleteraAdjuntos) window.BilleteraAdjuntos.reset();
     state.marca = '';
     state.category = '';
     state.subcategory = '';

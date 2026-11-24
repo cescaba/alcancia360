@@ -41,7 +41,7 @@ register_deactivation_hook(__FILE__, 'billetera_summary_unschedule');
 add_action('plugins_loaded', 'billetera_maybe_upgrade_schema');
 
 function billetera_maybe_upgrade_schema() {
-    if (get_option('billetera_db_version') === '1.8') {
+    if (get_option('billetera_db_version') === '1.9') {
         return;
     }
 
@@ -85,7 +85,185 @@ function billetera_maybe_upgrade_schema() {
     // --- 1.7: metas de sucursal en unidades (línea x categoría x tipo) ---
     billetera_create_metas_sucursal_table();
 
-    update_option('billetera_db_version', '1.8');
+    // --- 1.9: adjuntos de venta (documentos opcionales por venta) ---
+    billetera_create_adjuntos_table();
+
+    update_option('billetera_db_version', '1.9');
+}
+
+/**
+ * Crea la tabla de ADJUNTOS de venta (documentos opcionales: recibo, DNI, etc.)
+ * si no existe. venta_id apunta a la primera venta del grupo (mismo
+ * id_type/id_value/fecha). Los archivos viven en uploads/billetera-adjuntos/.
+ */
+function billetera_create_adjuntos_table() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'billetera_adjuntos';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$table'") == $table) {
+        return;
+    }
+
+    $charset_collate = $wpdb->get_charset_collate();
+    $sql = "CREATE TABLE $table (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        venta_id mediumint(9) NOT NULL,
+        nombre varchar(255) NOT NULL,
+        archivo varchar(255) NOT NULL,
+        mime varchar(100) NOT NULL,
+        creado_en datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY venta_id (venta_id)
+    ) $charset_collate;";
+
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+}
+
+/**
+ * Subida de un adjunto de venta (paso previo al registro). Guarda el archivo
+ * en uploads/billetera-adjuntos/tmp/ con nombre aleatorio y devuelve un token
+ * que la venta incluye al registrarse. Tipos: JPG/PNG/PDF, máx 5 MB.
+ */
+add_action('wp_ajax_billetera_adjunto_subir', 'billetera_ajax_adjunto_subir');
+
+function billetera_adjuntos_dir() {
+    $up = wp_upload_dir();
+    $dir = trailingslashit($up['basedir']) . 'billetera-adjuntos';
+    if (!is_dir($dir)) {
+        wp_mkdir_p($dir);
+    }
+    return $dir;
+}
+
+function billetera_adjunto_url($archivo) {
+    $up = wp_upload_dir();
+    return trailingslashit($up['baseurl']) . 'billetera-adjuntos/' . ltrim($archivo, '/');
+}
+
+function billetera_ajax_adjunto_subir() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'No autenticado']);
+    }
+
+    $current_user = wp_get_current_user();
+    if (!array_intersect(['asesor', 'administrator', 'jefe_venta'], (array) $current_user->roles)) {
+        wp_send_json_error(['message' => 'No tienes permiso']);
+    }
+
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'billetera_register_sale')) {
+        wp_send_json_error(['message' => 'Verificación de seguridad falló']);
+    }
+
+    if (empty($_FILES['archivo']) || !is_uploaded_file($_FILES['archivo']['tmp_name'] ?? '')) {
+        wp_send_json_error(['message' => 'No se recibió ningún archivo']);
+    }
+
+    $file = $_FILES['archivo'];
+    if (intval($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        wp_send_json_error(['message' => 'Error al subir el archivo']);
+    }
+
+    $max = 5 * 1024 * 1024; // 5 MB
+    if (intval($file['size']) > $max) {
+        wp_send_json_error(['message' => 'El archivo supera los 5 MB']);
+    }
+
+    // Tipo: JPG/PNG/PDF (por extensión y por contenido real)
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'pdf'], true)) {
+        wp_send_json_error(['message' => 'Solo se permiten JPG, PNG o PDF']);
+    }
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = (string) $finfo->file($file['tmp_name']);
+    $mime_ok = [
+        'image/jpeg' => 'jpg', 'image/png' => 'png', 'application/pdf' => 'pdf',
+    ];
+    if (!isset($mime_ok[$mime])) {
+        wp_send_json_error(['message' => 'El archivo no es un JPG, PNG o PDF válido']);
+    }
+
+    $nombre_original = sanitize_file_name(pathinfo($file['name'], PATHINFO_FILENAME));
+    $nombre_original = mb_substr($nombre_original, 0, 120);
+
+    $dir = billetera_adjuntos_dir() . '/tmp';
+    if (!is_dir($dir)) {
+        wp_mkdir_p($dir);
+    }
+
+    // Limpieza de temporales viejos (>24 h) al subir.
+    foreach ((array) glob($dir . '/*') as $viejo) {
+        if (is_file($viejo) && (time() - filemtime($viejo)) > DAY_IN_SECONDS) {
+            @unlink($viejo);
+        }
+    }
+
+    $slug = strtolower(wp_generate_password(20, false, false)) . '.' . $mime_ok[$mime];
+    $destino = $dir . '/' . $slug;
+    if (!@move_uploaded_file($file['tmp_name'], $destino)) {
+        wp_send_json_error(['message' => 'No se pudo guardar el archivo']);
+    }
+
+    $token = wp_generate_password(32, false, false);
+    set_transient('billetera_adj_' . $token, [
+        'archivo' => 'tmp/' . $slug,
+        'nombre'  => $nombre_original . '.' . $mime_ok[$mime],
+        'mime'    => $mime,
+        'user_id' => get_current_user_id(),
+    ], DAY_IN_SECONDS);
+
+    wp_send_json_success([
+        'token'  => $token,
+        'nombre' => $nombre_original . '.' . $mime_ok[$mime],
+    ]);
+}
+
+/**
+ * Vincula los adjuntos (tokens) a una venta ya registrada. Mueve los archivos
+ * de tmp/ al destino final y los registra en la tabla. Máx 3, best-effort.
+ */
+function billetera_adjuntos_vincular($venta_id, $user_id, $tokens_json) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'billetera_adjuntos';
+
+    $tokens = is_string($tokens_json) ? json_decode(wp_unslash($tokens_json), true) : $tokens_json;
+    if (!is_array($tokens)) {
+        return;
+    }
+    $tokens = array_slice(array_filter(array_map('strval', $tokens)), 0, 3);
+
+    $base = billetera_adjuntos_dir();
+    foreach ($tokens as $token) {
+        $data = get_transient('billetera_adj_' . $token);
+        if (!$data || intval($data['user_id'] ?? 0) !== intval($user_id)) {
+            continue;
+        }
+
+        $tmp_rel = (string) ($data['archivo'] ?? '');
+        $tmp_abs = $base . '/' . ltrim($tmp_rel, '/');
+        if (!is_file($tmp_abs)) {
+            continue;
+        }
+
+        // Mover de tmp/ al destino final (mismo nombre de archivo aleatorio)
+        $final_rel = str_replace('tmp/', '', $tmp_rel);
+        $final_abs = $base . '/' . ltrim($final_rel, '/');
+        $subdir = dirname($final_abs);
+        if (!is_dir($subdir)) {
+            wp_mkdir_p($subdir);
+        }
+        if (!@rename($tmp_abs, $final_abs)) {
+            continue;
+        }
+
+        $wpdb->insert($table, [
+            'venta_id' => intval($venta_id),
+            'nombre'   => (string) $data['nombre'],
+            'archivo'  => $final_rel,
+            'mime'     => (string) ($data['mime'] ?? ''),
+        ], ['%d', '%s', '%s', '%s']);
+
+        delete_transient('billetera_adj_' . $token);
+    }
 }
 
 /**
@@ -573,6 +751,9 @@ function billetera_create_catalog_tables() {
 
     // Tabla de cola del resumen semanal por correo
     billetera_summary_create_queue_table();
+
+    // Tabla de adjuntos de venta (documentos opcionales)
+    billetera_create_adjuntos_table();
 }
 
 function billetera_insert_default_config() {
@@ -878,6 +1059,9 @@ function billetera_ajax_register_sale_v2() {
     ], ['%d', '%d', '%s', '%d', '%f', '%s', '%s', '%f', '%d', '%f', '%s']);
 
     if ($result) {
+        // Adjuntos opcionales (documentos) de esta venta
+        billetera_adjuntos_vincular(intval($wpdb->insert_id), $user_id, $_POST['adjuntos'] ?? '');
+
         // Registrar la comisión del jefe de venta de la sucursal (con la misma regla de bonificación)
         billetera_register_jefe_comision($tienda_id, $subcategoria_id, $cantidad, $distribuidor_id, $id_type, $id_value, $user_id, $fecha_datetime, $regla_bonus['jefe_multiplier'], $regla_bonus['jefe_override_sol'], $regla_bonus['jefe_add_sol'], $linea_venta);
 
@@ -1118,6 +1302,9 @@ function billetera_ajax_register_sale_multi() {
     }
 
     $wpdb->query('COMMIT');
+
+    // Adjuntos opcionales (documentos) de esta venta
+    billetera_adjuntos_vincular($first_id, $user_id, $_POST['adjuntos'] ?? '');
 
     // El ranking del mes cambió: invalida la caché
     billetera_rank_cache_bust();

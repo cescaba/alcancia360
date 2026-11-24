@@ -52,6 +52,7 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-responsive.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-header.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-registro.css'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-adjuntos.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/popup-racha.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/popup-primera.css'); ?>">
 </head>
@@ -115,6 +116,9 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
                             <option value="">Selecciona una marca</option>
                         </select>
                     </div>
+
+                    <!-- Documento adjunto (opcional) -->
+                    <div data-adjuntos data-adjuntos-variant="movil"></div>
 
                     <!-- Categoría -->
                     <p class="reg-label">Categoría</p>
@@ -205,6 +209,9 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
                         <select id="desk-marca-select">
                             <option value="">Selecciona una marca</option>
                         </select>
+
+                        <!-- Documento adjunto (opcional) -->
+                        <div data-adjuntos data-adjuntos-variant="desk"></div>
 
                         <div class="reg-desk__row">
                             <div>
@@ -337,6 +344,7 @@ window.billetera = {
     nonce_change_password: '<?php echo wp_create_nonce('billetera_change_password'); ?>'
 };
 </script>
+<script src="<?php echo billetera_asset_url('/assets/js/billetera-adjuntos.js'); ?>"></script>
 <script src="<?php echo billetera_asset_url('/assets/js/billetera-360-logic.js'); ?>"></script>
 <script src="<?php echo billetera_asset_url('/assets/js/billetera-360-logic-desk.js'); ?>"></script>
 
