@@ -130,3 +130,96 @@
     .bc-grid { grid-template-columns: 1fr; }
     .bc-two-col { grid-template-columns: 1fr; }
 }
+
+/* ---------------------------------------------------------------------------
+   Checkboxes de líneas (subcategorías y comisiones): chips seleccionables
+--------------------------------------------------------------------------- */
+.bc-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.bc-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 1px solid var(--bc-border, #e5e9f0);
+    border-radius: 999px;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--bc-text, #0f1b2e);
+    line-height: 1.2;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+
+.bc-check:hover {
+    border-color: var(--bc-navy-light, #1a3d6f);
+    background: var(--bc-bg, #f5f7fb);
+}
+
+.bc-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--bc-navy, #0C2D52);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+.bc-check:has(input[type="checkbox"]:checked) {
+    border-color: var(--bc-navy, #0C2D52);
+    background: rgba(12, 45, 82, .07);
+    box-shadow: inset 0 0 0 1px var(--bc-navy, #0C2D52);
+    font-weight: 600;
+}
+
+.bc-check:has(input[type="checkbox"]:disabled) {
+    opacity: .5;
+    background: var(--bc-bg, #f5f7fb);
+    cursor: not-allowed;
+}
+
+.bc-check:has(input[type="checkbox"]:disabled):hover {
+    border-color: var(--bc-border, #e5e9f0);
+    background: var(--bc-bg, #f5f7fb);
+}
+
+.bc-check input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+}
+
+/* Checkbox simple dentro del grid (Activo, por unidad, etc.) */
+.bc-field--check {
+    display: flex;
+    align-items: center;
+    min-height: 38px;
+}
+
+.bc-field--check label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--bc-text, #0f1b2e);
+    cursor: pointer;
+}
+
+.bc-field--check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--bc-navy, #0C2D52);
+    cursor: pointer;
+}
+
+@media (max-width: 640px) {
+    .bc-checks { gap: 6px; }
+    .bc-check { padding: 7px 11px; font-size: 12px; }
+}
