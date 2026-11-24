@@ -452,7 +452,7 @@ function billetera_render_subcategorias_page() {
         )";
         $params_f[] = $filtro_linea;
     }
-    $where_sql = $where_f ? (' WHERE ' . implode(' AND ', $where_f)) : '';
+    $where_sql = $where_f ? (' WHERE ' . implode(' AND ', $where_f) . ' ') : '';
 
     $rows = $params_f
         ? $wpdb->get_results($wpdb->prepare($rows_sql_base . $where_sql . $rows_orden, ...$params_f))
