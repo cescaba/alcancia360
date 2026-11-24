@@ -10,7 +10,7 @@ if (!is_user_logged_in()) {
 }
 
 $current_user = wp_get_current_user();
-$allowed_roles = array('asesor', 'administrator', 'jefe_venta', 'gerente');
+$allowed_roles = array('asesor', 'administrator', 'jefe_venta');
 if (!array_intersect($allowed_roles, $current_user->roles)) {
     wp_die('Acceso restringido. Solo administradores, asesores y jefes de venta pueden acceder.');
 }

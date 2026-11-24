@@ -17,6 +17,14 @@
     var topAll = false;
     var tienda = 0; // 0 = todas las sucursales del jefe
 
+    // Etiqueta del alcance actual: nombre de la sucursal elegida o '' (todas).
+    function scopeLabel() {
+        if (tienda > 0 && data && data.tienda_label && String(data.tienda_label).indexOf('Todas') !== 0) {
+            return String(data.tienda_label);
+        }
+        return '';
+    }
+
     var MESES_LARGOS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
     var MESES_FULL = MESES_LARGOS;
 
@@ -116,7 +124,7 @@
         }
 
         var body = new URLSearchParams();
-        body.append('action', 'billetera_get_mi_equipo');
+        body.append('action', window.billetera.action_mi_equipo || 'billetera_get_mi_equipo');
         body.append('nonce', window.billetera.nonce_mi_equipo);
         body.append('periodo', periodo);
         if (periodo === 'mes' && baseMes) body.append('mes', baseMes);
@@ -337,10 +345,24 @@
         var k = (data && data.kpis) || {};
         var jefe = (data && data.jefe) || {};
 
-        // Con la meta oculta (flag off): solo el chanchito sin progreso y el
-        // pocito del jefe (diseño anterior).
+        // Con la meta oculta (flag off): el chanchito + pocito + mini-stats del
+        // bloque (ventas del periodo, proyección y última venta del equipo).
         if (!META_ON) {
             setText('st-pocito', money(jefe.com_mes));
+
+            var miniUlt = null;
+            ((data && data.top) || []).forEach(function (t) {
+                var u = t.ultima_total || t.ultima;
+                if (u && (!miniUlt || u > miniUlt)) miniUlt = u;
+            });
+            var miniUltTxt = '—';
+            if (miniUlt) {
+                var dU = haceDias(miniUlt);
+                miniUltTxt = (dU === 0) ? 'Hoy' : (dU === null ? fechaCorta(miniUlt) : 'Hace ' + dU + ' día' + (dU === 1 ? '' : 's'));
+            }
+            setText('st-goal-mini-ventas', (Number(k.ventas) || 0) + ' ventas');
+            setText('st-goal-mini-proy', (Number(k.proy_ventas) || 0) + ' ventas');
+            setText('st-goal-mini-ultima', miniUltTxt);
             return;
         }
 
@@ -385,12 +407,27 @@
             : (periodo === 'ano' ? (data.base_ano || curAno()) : mesMes(data.base_mes));
         if (els.aportaMes) els.aportaMes.textContent = mesLabel;
 
+        // Título con el alcance (gerente: sucursal elegida o genérico).
+        var aTitle = document.querySelector('.eq-aporta__title');
+        if (aTitle) {
+            var aScope = scopeLabel();
+            aTitle.textContent = aScope ? ('Comisiones · ' + aScope) : 'Comisiones del equipo';
+        }
+
         // Top de vendedores que mas aportan a la comision de jefe.
         // data.aportan ya viene ordenado por comision DESC (backend).
+        // En la vista de gerente se muestra solo un top (aportan_max).
         var rows = (data.aportan) || [];
+        var maxA = parseInt(window.billetera && window.billetera.aportan_max, 10) || 0;
+        var recortado = (maxA > 0 && rows.length > maxA);
+        if (recortado) {
+            rows = rows.slice(0, maxA);
+        }
         if (els.aportaNote) {
             els.aportaNote.textContent = rows.length
-                ? 'Total generado por tu equipo: ' + money((data.kpis || {}).comisiones)
+                ? (recortado
+                    ? 'Top ' + maxA + ' de ' + (data.aportan || []).length + ' vendedores · Total del equipo: ' + money((data.kpis || {}).comisiones)
+                    : 'Total generado por tu equipo: ' + money((data.kpis || {}).comisiones))
                 : 'Cuando tu equipo registre ventas, verás aquí lo que aporta cada uno.';
         }
 
@@ -587,7 +624,7 @@
         var totalVentas = 0;
         rows.forEach(function (r) { totalVentas += Number(r.ventas) || 0; });
 
-        var titulo = '¿Qué vende tu equipo?';
+        var titulo = scopeLabel() ? ('¿Qué vende ' + scopeLabel() + '?') : '¿Qué vende tu equipo?';
         if (periodo === 'historico') titulo += ' · Histórico';
         else if (periodo === 'ano') titulo += ' · ' + (data.base_ano || curAno());
         if (els.mixTitle) els.mixTitle.textContent = titulo;
@@ -671,7 +708,19 @@
         var rows = (data.top) || [];
         var mesLabel = (periodo === 'historico') ? 'Histórico'
             : (periodo === 'ano' ? (data.base_ano || curAno()) : mesMes(data.base_mes));
-        setText('eq-top-mes', mesLabel);
+
+        // Título con el alcance: genérico en "Todas", con la sucursal si hay una.
+        var titleEl = document.getElementById('eq-top-title');
+        var scope = scopeLabel();
+        if (titleEl) {
+            titleEl.textContent = (scope ? ('Top vendedores · ' + scope) : 'Top vendedores del equipo') + ' · ';
+            var mesSpan = document.createElement('span');
+            mesSpan.id = 'eq-top-mes';
+            mesSpan.textContent = mesLabel;
+            titleEl.appendChild(mesSpan);
+        } else {
+            setText('eq-top-mes', mesLabel);
+        }
 
         var visibleMax = 8;
         var show = topAll ? rows : rows.slice(0, visibleMax);
@@ -734,10 +783,14 @@
             comEl.title = 'Comisiones del asesor en el periodo';
 
             // Cuanto te aporta este asesor (tu comision espejo del periodo).
-            var aporta = document.createElement('span');
-            aporta.className = 'eq-top__aporta';
-            aporta.textContent = money(row.aporta || 0);
-            aporta.title = 'Comisión que te aporta este asesor (tu comisión de jefe por sus ventas)';
+            // En la vista de gerente la columna no existe (flag ocultar_aporta).
+            if (!(window.billetera && window.billetera.ocultar_aporta)) {
+                var aporta = document.createElement('span');
+                aporta.className = 'eq-top__aporta';
+                aporta.textContent = money(row.aporta || 0);
+                aporta.title = 'Comisión que te aporta este asesor (tu comisión de jefe por sus ventas)';
+                li.appendChild(aporta);
+            }
 
             li.appendChild(puesto);
             li.appendChild(nom);
@@ -745,7 +798,6 @@
             li.appendChild(fult);
             li.appendChild(vts);
             li.appendChild(comEl);
-            li.appendChild(aporta);
             els.topList.appendChild(li);
         });
 

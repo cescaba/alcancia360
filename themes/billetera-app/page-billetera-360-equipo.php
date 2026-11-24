@@ -65,7 +65,7 @@ foreach (array_map('intval', (array) $mis_tiendas_meta) as $tid_jefe) {
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-header.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-alcancia.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-stats.css'); ?>">
-    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-equipo.css'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-equipo.css?v=3'); ?>">
 </head>
 <body <?php body_class(); ?>>
 
@@ -211,6 +211,11 @@ foreach (array_map('intval', (array) $mis_tiendas_meta) as $tid_jefe) {
                                 <div class="st-goal__pace" id="st-goal-pace"></div>
                                 <?php else: ?>
                                 </div>
+                                <div class="st-goal__minis" id="st-goal-minis">
+                                    <div class="st-goal__mini"><span class="st-goal__mini-k">Ventas del periodo</span><b id="st-goal-mini-ventas">—</b></div>
+                                    <div class="st-goal__mini"><span class="st-goal__mini-k">Proyección al cierre</span><b id="st-goal-mini-proy">—</b></div>
+                                    <div class="st-goal__mini"><span class="st-goal__mini-k">Última venta</span><b id="st-goal-mini-ultima">—</b></div>
+                                </div>
                                 <?php endif; ?>
                             </div>
                         </aside>
@@ -326,7 +331,7 @@ window.billetera = {
     meta_equipo_v2: <?php echo $meta_equipo_v2 ? 'true' : 'false'; ?>
 };
 </script>
-<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-equipo.js'); ?>"></script>
+<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-equipo.js?v=2'); ?>"></script>
 
 </body>
 </html>

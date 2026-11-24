@@ -10,7 +10,7 @@ if (!is_user_logged_in()) {
 }
 
 $current_user = wp_get_current_user();
-$allowed_roles = array('asesor', 'administrator', 'jefe_venta');
+$allowed_roles = array('asesor', 'administrator', 'jefe_venta', 'gerente');
 if (!array_intersect($allowed_roles, $current_user->roles)) {
     if (function_exists('billetera_gerente_o_redirect')) { billetera_gerente_o_redirect(); }
     wp_die('Acceso restringido. Solo administradores y asesores pueden acceder al ranking.');
@@ -27,7 +27,8 @@ if (!defined('BILLETERA_SHOW_RANKING') || !BILLETERA_SHOW_RANKING) {
 }
 
 $roles_ranking = (array) $current_user->roles;
-$es_jefe = in_array('jefe_venta', $roles_ranking, true);
+// El gerente usa el MISMO layout de jefe: ranking por sucursal + sus asesores.
+$es_jefe = in_array('jefe_venta', $roles_ranking, true) || in_array('gerente', $roles_ranking, true);
 
 // Layout de asesor: asesor + administrador. Layout de jefe: jefe_venta.
 // (El jefe ve 2 subsecciones: ranking por sucursal y ranking de sus asesores.)

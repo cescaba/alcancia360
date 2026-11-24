@@ -100,10 +100,12 @@ ob_start();
         </a>
         <?php endif; ?>
 
+        <?php if (!$es_gerente): ?>
         <a class="app-header__menu-item" href="<?php echo esc_url($url_movimientos); ?>">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5M3.05 13A9 9 0 1 0 6 5.3L3 8M12 7v5l4 2"/></svg>
             <span>Historial de comisiones</span>
         </a>
+        <?php endif; ?>
 
         <?php if (BILLETERA_SHOW_DESEMPENO && !$es_jefe && !$es_gerente): ?>
         <a class="app-header__menu-item" href="<?php echo esc_url($url_stats); ?>">
@@ -112,7 +114,7 @@ ob_start();
         </a>
         <?php endif; ?>
 
-        <?php if (BILLETERA_SHOW_RANKING && !$es_gerente): ?>
+        <?php if (BILLETERA_SHOW_RANKING): ?>
         <a class="app-header__menu-item" href="<?php echo esc_url($url_ranking); ?>">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/></svg>
             <span>Ranking</span>
@@ -224,10 +226,12 @@ $user_menu_html = ob_get_clean();
             <span>Registrar venta</span>
         </a>
         <?php endif; ?>
+        <?php if (!$es_gerente): ?>
         <a class="app-sidebar__link<?php echo $nav_alcancia_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_movimientos); ?>">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9c0-8 14-8 14 0"></path><rect x="2" y="9" width="20" height="11" rx="1"></rect><path d="M16 14h2"></path></svg>
             <span>Mi alcancía</span>
         </a>
+        <?php endif; ?>
         <?php if (BILLETERA_SHOW_DESEMPENO && !$es_jefe && !$es_gerente): ?>
         <a class="app-sidebar__link<?php echo $nav_stats_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_stats); ?>">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>
@@ -246,8 +250,8 @@ $user_menu_html = ob_get_clean();
             <span>Mi concesionaria</span>
         </a>
         <?php endif; ?>
-        <?php if (BILLETERA_SHOW_RANKING && !$es_gerente): ?>
-        <?php if ($es_jefe && $url_ranking && $url_ranking !== '#'): ?>
+        <?php if (BILLETERA_SHOW_RANKING): ?>
+        <?php if (($es_jefe || $es_gerente) && $url_ranking && $url_ranking !== '#'): ?>
         <div class="app-sidebar__group" data-sidebar-group="ranking" data-open-on-load="<?php echo $nav_ranking_active ? '1' : '0'; ?>">
             <a class="app-sidebar__link<?php echo $nav_ranking_active ? ' is-active is-active-soft' : ''; ?>" href="<?php echo esc_url($url_ranking); ?>">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"></path></svg>
@@ -274,10 +278,12 @@ $user_menu_html = ob_get_clean();
         <?php endif; ?>
 
         <div class="app-sidebar__section app-sidebar__section--spaced">Mi cuenta</div>
+        <?php if (!$es_gerente): ?>
         <a class="app-sidebar__link" href="<?php echo esc_url($es_gerente ? $url_movimientos : $url_historial); ?>">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5M3.05 13A9 9 0 1 0 6 5.3L3 8M12 7v5l4 2"></path></svg>
             <span>Historial</span>
         </a>
+        <?php endif; ?>
         <a class="app-sidebar__link" href="<?php echo esc_url($url_perfil); ?>">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8"/></svg>
             <span>Mi perfil</span>

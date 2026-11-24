@@ -1,6 +1,11 @@
 /* Mi alcancia 360 - Adjuntos de venta (documentos opcionales)
    Estilo del tema: Poppins/Inter, navy #0A2A45, dorado #E3A94A. */
 
+/* Espaciado del bloque dentro del formulario de registro */
+[data-adjuntos] {
+    margin: 16px 0 18px;
+}
+
 .adj-opt {
     font-weight: 500;
     color: #9AA5B1;

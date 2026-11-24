@@ -510,6 +510,41 @@
 .eq-top__row--alt { background: #F5F8FB; }
 .eq-top__row--gold { background: #FBF6EA; }
 
+/* Mini-stats dentro de la alcancía (cuando las metas están desactivadas) */
+.st-goal__minis {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed #E3E8EF;
+    display: grid;
+    gap: 6px;
+}
+
+.st-goal__mini {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 12.5px;
+}
+
+.st-goal__mini-k {
+    color: #7B8794;
+}
+
+.st-goal__mini b {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    color: #0A2A45;
+    white-space: nowrap;
+}
+
+/* Vista de gerente ("Mi concesionaria"): el top no incluye la columna
+   "Te aporta" → la grilla pasa a 6 columnas. */
+body.page-template-page-billetera-360-gerencia .eq-top__colhead,
+body.page-template-page-billetera-360-gerencia .eq-top__row {
+    grid-template-columns: 34px 1fr 80px 92px 70px 110px;
+}
+
 .eq-top__puesto {
     width: 28px;
     height: 28px;
@@ -832,9 +867,12 @@
 }
 
 @media (min-width: 1025px) {
-    body.page-template-page-billetera-360-equipo { background: #F5F7FB; }
+    /* También aplica a "Mi concesionaria" (vista de gerente, mismo layout) */
+    body.page-template-page-billetera-360-equipo,
+    body.page-template-page-billetera-360-gerencia { background: #F5F7FB; }
     /* Mismo marco de escritorio que "Mi desempeño" */
-    body.page-template-page-billetera-360-equipo .main-content {
+    body.page-template-page-billetera-360-equipo .main-content,
+    body.page-template-page-billetera-360-gerencia .main-content {
         padding: 24px 26px 34px !important;
     }
     .st-wrap { max-width: none; margin: 0; padding: 0; }

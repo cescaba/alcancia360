@@ -1,8 +1,9 @@
 <?php
 /**
  * Template Name: Mi alcancia 360 Gerencia
- * Description: Mi alcancia 360 - Pantalla "Mi concesionaria" (vista del gerente):
- *              sucursales de su concesionaria, KPIs y comparativa. Sin montos.
+ * Description: Mi alcancia 360 - Pantalla "Mi concesionaria" (vista del gerente).
+ *              Copia del layout de "Mi equipo" con el scope de las sucursales
+ *              de la(s) concesionaria(s) donde el usuario es gerente.
  */
 
 if (!is_user_logged_in()) {
@@ -24,10 +25,13 @@ if (!array_intersect($allowed_roles, $current_user->roles)) {
     exit;
 }
 
-// Sucursales de la(s) concesionaria(s) del gerente.
+$alcancia_img = billetera_asset_url('/assets/img/alcancia.svg');
+
+// Sucursales de la(s) concesionaria(s) del gerente (perfil vía _gerentes_asociados).
+// Sin fallback: si no es gerente de ninguna concesionaria, ve el aviso de vacío.
 $tiendas_gerente = function_exists('billetera_gerente_tiendas') ? billetera_gerente_tiendas($current_user->ID) : array();
 
-$alcancia_img = billetera_asset_url('/assets/img/alcancia.svg');
+$meta_equipo_v2 = false;
 ?>
 
 <!DOCTYPE html>
@@ -44,8 +48,7 @@ $alcancia_img = billetera_asset_url('/assets/img/alcancia.svg');
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-header.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-alcancia.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-stats.css'); ?>">
-    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-equipo.css'); ?>">
-    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-gerencia.css'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-equipo.css?v=3'); ?>">
 </head>
 <body <?php body_class(); ?>>
 
@@ -54,13 +57,13 @@ $alcancia_img = billetera_asset_url('/assets/img/alcancia.svg');
 <div class="site-wrapper">
     <div class="main-content">
 
-        <div class="screen active" id="screen-gerencia">
+        <div class="screen active" id="screen-equipo">
             <div class="st-wrap">
 
                 <div class="st-head">
                     <div>
                         <h1 class="st-title">Mi concesionaria</h1>
-                        <p class="st-sub">Ventas y avance de metas de las sucursales que administras.</p>
+                        <p class="st-sub">¿Cómo van tus sucursales este mes?</p>
                     </div>
                     <div class="st-head__actions">
                         <?php if (!empty($tiendas_gerente)): ?>
@@ -79,98 +82,241 @@ $alcancia_img = billetera_asset_url('/assets/img/alcancia.svg');
                             </div>
                         </div>
                         <?php endif; ?>
+                        <div class="st-period" id="st-period">
+                            <button type="button" class="st-period__btn is-active" data-periodo="mes">Mes</button>
+                            <button type="button" class="st-period__btn" data-periodo="ano">Año</button>
+                            <button type="button" class="st-period__btn" data-periodo="historico">Histórico</button>
+                        </div>
                         <div class="st-stepper" id="st-stepper">
-                            <button type="button" class="st-step__btn" id="st-prev" aria-label="Mes anterior">‹</button>
+                            <button type="button" class="st-step__btn" id="st-prev" aria-label="Anterior">‹</button>
                             <span class="st-step__label" id="st-step-label">—</span>
-                            <button type="button" class="st-step__btn" id="st-next" aria-label="Mes siguiente" disabled>›</button>
+                            <button type="button" class="st-step__btn" id="st-next" aria-label="Siguiente">›</button>
                         </div>
                     </div>
                 </div>
 
                 <div class="st-loading" id="st-loading">Cargando tu concesionaria…</div>
 
-                <?php if (empty($tiendas_gerente)): ?>
-                    <div class="st-body">
-                        <div class="gr-empty">
-                            No eres gerente de ninguna concesionaria. Te deben asignar en la
-                            concesionaria correspondiente para ver esta vista.
+                <div class="st-body" id="st-body" hidden>
+                    <div class="st-pending-bar" id="st-pending" hidden aria-hidden="true"></div>
+
+                    <!-- BANNER CAMPAÑA (reglas de bonificación, editable en admin) -->
+                    <div class="st-banner" id="st-banner" hidden>
+                        <div class="st-banner__main">
+                            <div class="st-banner__top">
+                                <span class="st-banner__tag" id="st-banner-tag">CAMPAÑA · EVENTO</span>
+                                <span class="st-banner__dates" id="st-banner-dates"></span>
+                            </div>
+                            <div class="st-banner__title" id="st-banner-title"></div>
+                            <div class="st-banner__sub" id="st-banner-sub"></div>
+                        </div>
+                        <div class="st-banner__side">
+                            <div class="st-banner__dots" id="st-banner-dots"></div>
                         </div>
                     </div>
-                <?php else: ?>
 
-                <div class="st-body" id="st-body" hidden>
+                    <!-- ALERTAS DEL EQUIPO -->
+                    <section class="eq-alerts">
+                        <div class="eq-alerts__head">
+                            <span class="eq-alerts__title">Alertas y recomendaciones</span>
+                            <span class="eq-alerts__pend" id="eq-alerts-pend" hidden></span>
+                        </div>
+                        <div class="eq-alerts__row">
+                            <div class="eq-alert" id="eq-alert-sin">
+                                <div class="eq-alert__top">
+                                    <span class="eq-alert__bar eq-alert__bar--danger" aria-hidden="true"></span>
+                                    <div class="eq-alert__t" id="eq-alert-sin-t">—</div>
+                                </div>
+                                <div class="eq-alert__d" id="eq-alert-sin-d">—</div>
+                                <button type="button" class="eq-alert__cta" id="eq-alert-sin-cta">Ver asesores →</button>
+                            </div>
+                        </div>
+                    </section>
 
-                    <!-- KPIs de la concesionaria (unidades, sin montos) -->
+                    <!-- KPIs de la concesionaria -->
                     <div class="st-kpis5">
                         <div class="st-kpi5">
-                            <div class="st-kpi5__val st-kpi5__val--blue" id="gr-kpi-ventas">—</div>
-                            <div class="st-kpi5__label">Ventas</div>
+                            <div class="st-kpi5__val st-kpi5__val--blue" id="k5-ventas">—</div>
+                            <div class="st-kpi5__label">Ventas del equipo</div>
                         </div>
+
+                        <?php if ($meta_equipo_v2): ?>
                         <div class="st-kpi5 st-kpi5--alt">
-                            <div class="st-kpi5__val st-kpi5__val--gold" id="gr-kpi-avance">—</div>
+                            <div class="st-kpi5__val st-kpi5__val--gold" id="k5-avance">—</div>
                             <div class="st-kpi5__label">Avance de meta</div>
                         </div>
                         <div class="st-kpi5">
-                            <div class="st-kpi5__val" id="gr-kpi-faltan">—</div>
+                            <div class="st-kpi5__val" id="k5-faltan">—</div>
                             <div class="st-kpi5__label">Faltan para la meta</div>
                         </div>
+                        <?php endif; ?>
+
                         <div class="st-kpi5 st-kpi5--alt">
-                            <div class="st-kpi5__val" id="gr-kpi-proy">—</div>
-                            <div class="st-kpi5__label">Proyección del mes</div>
+                            <div class="st-kpi5__val" id="k5-cierre">—</div>
+                            <div class="st-kpi5__label">Para el cierre</div>
+                        </div>
+                        <div class="st-kpi5">
+                            <div class="st-kpi5__val" id="k5-proy">—</div>
+                            <div class="st-kpi5__label">Proyección al cierre</div>
                         </div>
                     </div>
 
-                    <!-- Comparativa de sucursales -->
-                    <section class="gr-card">
-                        <div class="gr-card__head">
-                            <span class="gr-card__title">Comparativa de sucursales</span>
-                            <span class="gr-card__periodo" id="gr-periodo-label">—</span>
+                    <!-- ALCANCÍA + COMISIONES DEL EQUIPO -->
+                    <div class="st-row">
+                        <aside class="st-goal">
+                            <div class="st-goal__pig">
+                                <div class="alc-pig-bob">
+                                    <div class="alc-pig">
+                                        <button type="button" class="alc-pig__btn" id="st-pig-btn" aria-label="Toca la alcancía">
+                                            <span class="alc-pig__coin"></span>
+                                            <img class="alc-pig__base" src="<?php echo esc_url($alcancia_img); ?>" alt="Alcancía">
+                                            <img class="alc-pig__fill" id="st-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="st-goal__body">
+                                <div class="st-goal__row">
+                                    <div>
+                                        <div class="st-goal__label">Comisionado del equipo</div>
+                                        <div class="st-goal__pocito" id="st-pocito">—</div>
+                                    </div>
+                                    <?php if ($meta_equipo_v2): ?>
+                                    <div>
+                                        <div class="st-goal__label">Meta del equipo</div>
+                                        <div class="st-goal__meta-val" id="st-goal-meta">—</div>
+                                    </div>
+                                </div>
+                                <div class="st-goal__bar">
+                                    <div class="st-goal__fill" id="st-goal-fill"></div>
+                                    <div class="st-goal__mark" id="st-goal-mark"></div>
+                                </div>
+                                <div class="st-goal__pace" id="st-goal-pace"></div>
+                                <?php else: ?>
+                                </div>
+                                <div class="st-goal__minis" id="st-goal-minis">
+                                    <div class="st-goal__mini"><span class="st-goal__mini-k">Ventas del periodo</span><b id="st-goal-mini-ventas">—</b></div>
+                                    <div class="st-goal__mini"><span class="st-goal__mini-k">Proyección al cierre</span><b id="st-goal-mini-proy">—</b></div>
+                                    <div class="st-goal__mini"><span class="st-goal__mini-k">Última venta</span><b id="st-goal-mini-ultima">—</b></div>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </aside>
+
+                        <?php if ($meta_equipo_v2): ?>
+                        <!-- Para llegar a tu meta · v2 (flag $meta_equipo_v2) -->
+                        <section class="eq-com2">
+                            <div class="eq-com2__meta">
+                                <span class="eq-com2__meta-label">Para llegar a tu meta</span>
+                                <span class="eq-com2__title-mes" id="eq-com2-mes">—</span>
+                            </div>
+                            <div class="eq-com2__head">
+                                <span class="eq-com2__cat-h">Cat.</span>
+                                <span class="eq-com2__concepto">Producto</span>
+                                <span class="eq-com2__col eq-com2__comcell">Comisión por venta</span>
+                                <span class="eq-com2__col">Ventas necesarias</span>
+                            </div>
+                            <div id="eq-com2-list"></div>
+                            <div class="eq-com2__foot">
+                                <span class="eq-com2__nota">Comisión por venta según tus registros, sin bonos. Referencial.</span>
+                            </div>
+                        </section>
+                        <?php else: ?>
+                        <section class="eq-aporta">
+                            <div class="eq-aporta__head">
+                                <span class="eq-aporta__title">Comisiones del equipo</span>
+                                <span class="eq-aporta__mes" id="eq-aporta-mes">—</span>
+                            </div>
+                            <div class="eq-aporta__colhead" aria-hidden="true">
+                                <span class="eq-aporta__c1">#</span>
+                                <span>Vendedor</span>
+                                <span>Comisionado</span>
+                            </div>
+                            <div class="eq-aporta__list" id="eq-aporta-list"></div>
+                            <div class="eq-aporta__foot">
+                                <span id="eq-aporta-total-note">—</span>
+                                <span class="eq-aporta__note">Se genera con las ventas validadas de las sucursales.</span>
+                            </div>
+                        </section>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- CHART + ¿QUÉ VENDE EL EQUIPO? -->
+                    <div class="st-row st-row--eq">
+                        <section class="st-chartcard">
+                            <div class="st-chartcard__head">
+                                <div class="st-chartper" id="st-chartper">
+                                    <button type="button" class="st-chartper__btn" id="st-chartper-btn" aria-haspopup="listbox" aria-expanded="false">
+                                        <span aria-hidden="true">📅</span>
+                                        <span id="st-chartper-label">Últimos 12 meses</span>
+                                        <span aria-hidden="true">▾</span>
+                                    </button>
+                                    <div class="st-chartper__menu" id="st-chartper-menu" role="listbox" aria-label="Periodo del gráfico" hidden></div>
+                                </div>
+                                <?php if ($meta_equipo_v2): ?>
+                                <div class="st-chartlegend"><span class="st-chartlegend__sw"></span>Meta <b id="st-chart-meta">—</b></div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="st-chartwrap">
+                                <div class="st-chartmetal" id="st-chart-metal" hidden></div>
+                                <div class="st-chart" id="st-trend"></div>
+                            </div>
+                            <div class="st-chartfoot" id="st-trend-detail"></div>
+                        </section>
+
+                        <aside class="st-prod">
+                            <div class="st-prod__head">
+                                <span class="st-prod__title" id="eq-mix-title">¿Qué vende el equipo?</span>
+                                <span class="st-prod__total" id="eq-mix-total">—</span>
+                            </div>
+                            <div class="st-vista" id="eq-break-tabs">
+                                <button type="button" class="st-vista__btn is-active" data-break="categoria">Categoría</button>
+                                <button type="button" class="st-vista__btn" data-break="subcategoria">Subcategoría</button>
+                            </div>
+                            <div class="st-breakdown" id="eq-mix-list"></div>
+                        </aside>
+                    </div>
+
+                    <!-- TOP VENDEDORES DEL EQUIPO -->
+                    <section class="eq-top">
+                        <div class="eq-top__head">
+                            <span class="eq-top__title" id="eq-top-title">Top vendedores del equipo · <span id="eq-top-mes">—</span></span>
+                            <button type="button" class="eq-top__toggle" id="eq-top-toggle" hidden>Ver todos</button>
                         </div>
-                        <div class="gr-table-wrap">
-                            <table class="gr-table">
-                                <thead>
-                                    <tr>
-                                        <th>Sucursal</th>
-                                        <th class="gr-num">Ventas</th>
-                                        <th class="gr-num">Meta</th>
-                                        <th class="gr-num">Avance</th>
-                                        <th class="gr-num">Faltan</th>
-                                        <th class="gr-num">Últ. venta</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="gr-tbody">
-                                    <tr><td colspan="6" class="gr-empty-cell">—</td></tr>
-                                </tbody>
-                                <tfoot id="gr-tfoot">
-                                    <tr class="gr-total">
-                                        <td>Total</td>
-                                        <td class="gr-num" id="gr-total-ventas">—</td>
-                                        <td class="gr-num" id="gr-total-meta">—</td>
-                                        <td class="gr-num" id="gr-total-avance">—</td>
-                                        <td class="gr-num" id="gr-total-faltan">—</td>
-                                        <td class="gr-num"></td>
-                                    </tr>
-                                </tfoot>
-                            </table>
+                        <div class="eq-top__colhead" aria-hidden="true">
+                            <span class="eq-top__c1">#</span>
+                            <span class="eq-top__c2">Asesor</span>
+                            <span class="eq-top__c3">Racha</span>
+                            <span class="eq-top__c5">Últ. venta</span>
+                            <span class="eq-top__c4">Ventas</span>
+                            <span class="eq-top__c6">Comisionado</span>
                         </div>
-                        <p class="gr-note">*La meta se mide en unidades (ventas). No se muestran montos ni comisiones.</p>
+                        <div id="eq-top-list"></div>
+                        <div class="eq-top__note">Ranking por número de ventas. "Comisionado" es la suma de las comisiones del asesor en el periodo por sucursal.</div>
                     </section>
 
+                    <div class="st-error" id="st-error" hidden></div>
                 </div>
-                <?php endif; ?>
 
             </div>
-        </div>
 
+            <!-- BOTTOM TABBAR -->
+            <?php get_template_part('template-parts/bottom-tabbar'); ?>
+        </div>
     </div>
 </div>
 
 <script>
-window.billeteraGerencia = {
-    ajax_url: '<?php echo esc_url(admin_url('admin-ajax.php')); ?>',
-    nonce: '<?php echo wp_create_nonce('billetera_get_gerencia'); ?>',
-    tiene_tiendas: <?php echo empty($tiendas_gerente) ? 'false' : 'true'; ?>
+window.billetera = {
+    ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
+    nonce_mi_equipo: '<?php echo wp_create_nonce('billetera_get_gerencia'); ?>',
+    action_mi_equipo: 'billetera_get_gerencia',
+    meta_equipo_v2: <?php echo $meta_equipo_v2 ? 'true' : 'false'; ?>,
+    ocultar_aporta: true,
+    aportan_max: 5
 };
 </script>
-<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-gerencia.js'); ?>"></script>
-<?php get_footer(); ?>
+<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-equipo.js?v=4'); ?>"></script>
+
+</body>
+</html>

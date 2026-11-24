@@ -52,7 +52,7 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-responsive.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-header.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-registro.css'); ?>">
-    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-adjuntos.css?v=2'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-adjuntos.css?v=3'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/popup-racha.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/popup-primera.css'); ?>">
 </head>
