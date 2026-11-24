@@ -40,14 +40,14 @@
 
         root.innerHTML =
             '<p class="reg-label">Documento <span class="adj-opt">(opcional)</span></p>' +
-            '<div class="adj-drop" data-drop tabindex="0" role="button" aria-label="Adjuntar documento">' +
+            '<label class="adj-drop" data-drop>' +
                 '<span class="adj-drop__icon">' + ICON_CLIP + '</span>' +
                 '<span class="adj-drop__txt">' +
                     '<strong>Adjuntar documento</strong>' +
                     '<span>' + TIPOS_TXT + '</span>' +
                 '</span>' +
-                '<input type="file" data-input accept=".jpg,.jpeg,.png,.pdf" multiple hidden>' +
-            '</div>' +
+                '<input type="file" data-input accept=".jpg,.jpeg,.png,.pdf" multiple class="adj-input-real">' +
+            '</label>' +
             '<div class="adj-chips" data-chips></div>' +
             '<p class="adj-err" data-err hidden></p>';
 
@@ -56,15 +56,10 @@
         var chips = root.querySelector('[data-chips]');
         var err = root.querySelector('[data-err]');
 
+        // El label nativo abre el selector; el click programático es refuerzo.
         drop.addEventListener('click', function (e) {
-            e.preventDefault();
-            input.click();
-        });
-        drop.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                input.click();
-            }
+            if (e.target === input) return; // evitar doble apertura
+            try { input.click(); } catch (err2) {}
         });
 
         input.addEventListener('change', function () {

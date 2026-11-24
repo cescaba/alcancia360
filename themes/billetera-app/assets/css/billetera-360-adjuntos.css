@@ -44,6 +44,17 @@
     pointer-events: none;
 }
 
+/* Input real: visualmente oculto pero activable por el label */
+.adj-input-real {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
 .adj-drop__icon {
     display: inline-flex;
     align-items: center;

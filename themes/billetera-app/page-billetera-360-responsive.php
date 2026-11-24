@@ -52,7 +52,7 @@ $hoy_label = 'Hoy · ' . date('j') . ' ' . $meses_cortos[intval(date('n')) - 1] 
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-responsive.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-header.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-registro.css'); ?>">
-    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-adjuntos.css'); ?>">
+    <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/billetera-360-adjuntos.css?v=2'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/popup-racha.css'); ?>">
     <link rel="stylesheet" href="<?php echo billetera_asset_url('/assets/css/popup-primera.css'); ?>">
 </head>
@@ -344,9 +344,9 @@ window.billetera = {
     nonce_change_password: '<?php echo wp_create_nonce('billetera_change_password'); ?>'
 };
 </script>
-<script src="<?php echo billetera_asset_url('/assets/js/billetera-adjuntos.js'); ?>"></script>
-<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-logic.js'); ?>"></script>
-<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-logic-desk.js'); ?>"></script>
+<script src="<?php echo billetera_asset_url('/assets/js/billetera-adjuntos.js?v=2'); ?>"></script>
+<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-logic.js?v=2'); ?>"></script>
+<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-logic-desk.js?v=2'); ?>"></script>
 
 <?php
 // PRUEBA del popup de racha: ?racha_test=1 (cualquier usuario de la app).
