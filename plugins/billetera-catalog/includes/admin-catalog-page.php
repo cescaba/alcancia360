@@ -418,9 +418,10 @@ function billetera_render_subcategorias_page() {
         $edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id = %d", intval($_GET['id'])));
     }
 
-    // Filtro por línea (código válido desde GET).
+    // Filtro por línea y categoría (desde GET).
     $lineas       = billetera_bc_lineas();
     $filtro_linea = billetera_bc_filtro_linea();
+    $filtro_cat   = isset($_GET['categoria_id']) ? intval($_GET['categoria_id']) : 0;
 
     $rows_sql_base = "
         SELECT s.*, c.nombre AS categoria,
@@ -437,13 +438,25 @@ function billetera_render_subcategorias_page() {
         JOIN {$wpdb->prefix}billetera_categorias c ON c.id = s.categoria_id
     ";
     $rows_orden = "ORDER BY c.orden_display, c.nombre, s.orden_display, s.nombre";
-    $rows = ($filtro_linea !== '')
-        ? $wpdb->get_results($wpdb->prepare(
-            $rows_sql_base . " WHERE EXISTS (
-                SELECT 1 FROM {$wpdb->prefix}billetera_subcategoria_lineas b
-                WHERE b.subcategoria_id = s.id AND b.linea_codigo = %s
-            ) $rows_orden", $filtro_linea))
-        : $wpdb->get_results($rows_sql_base . $rows_orden);
+
+    $where_f = [];
+    $params_f = [];
+    if ($filtro_cat > 0) {
+        $where_f[] = 's.categoria_id = %d';
+        $params_f[] = $filtro_cat;
+    }
+    if ($filtro_linea !== '') {
+        $where_f[] = "EXISTS (
+            SELECT 1 FROM {$wpdb->prefix}billetera_subcategoria_lineas b
+            WHERE b.subcategoria_id = s.id AND b.linea_codigo = %s
+        )";
+        $params_f[] = $filtro_linea;
+    }
+    $where_sql = $where_f ? (' WHERE ' . implode(' AND ', $where_f)) : '';
+
+    $rows = $params_f
+        ? $wpdb->get_results($wpdb->prepare($rows_sql_base . $where_sql . $rows_orden, ...$params_f))
+        : $wpdb->get_results($rows_sql_base . $where_sql . $rows_orden);
 
     // Líneas de la subcategoría en edición (para marcar los checkboxes)
     $edit_lineas = $edit ? billetera_sub_lineas(intval($edit->id)) : [];
@@ -512,6 +525,13 @@ function billetera_render_subcategorias_page() {
                         <?php foreach ($lineas as $l): ?>
                             <option value="<?php echo esc_attr($l->codigo); ?>" <?php echo selected($filtro_linea, $l->codigo, false); ?>><?php echo esc_html($l->nombre); ?></option>
                         <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="bc-filter__group">
+                    <label class="bc-label">Categoría</label>
+                    <select name="categoria_id" class="bc-select">
+                        <option value="0">— Todas —</option>
+                        <?php echo billetera_bc_categorias_options($filtro_cat); ?>
                     </select>
                 </div>
                 <button type="submit" class="button">Filtrar</button>
