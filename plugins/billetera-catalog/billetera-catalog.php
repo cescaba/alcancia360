@@ -1328,6 +1328,19 @@ function billetera_ajax_register_sale_multi() {
 }
 
 // ===========================================================================
+// POPUPS: switch global
+// ===========================================================================
+
+/**
+ * Switch de popups (racha, meta del mes, puesto en tienda, primera moneda).
+ * true = DESACTIVADOS temporalmente: ninguna función de check devuelve datos,
+ * así el frontend nunca los muestra. Para reactivarlos, cambiar a false.
+ */
+function billetera_popups_desactivados() {
+    return true; // Desactivados a pedido (nov 2026)
+}
+
+// ===========================================================================
 // POPUP DE RACHA (semana perfecta, solo asesores)
 // ===========================================================================
 
@@ -1339,6 +1352,9 @@ function billetera_ajax_register_sale_multi() {
  * Devuelve los datos del popup o null si no aplica.
  */
 function billetera_popup_racha_check($user_id) {
+    if (billetera_popups_desactivados()) {
+        return null;
+    }
     $u = get_userdata($user_id);
     if (!$u || !in_array('asesor', (array) $u->roles, true)) {
         return null;
@@ -1442,6 +1458,9 @@ function billetera_ajax_popup_racha_visto() {
  * _popup_meta_visto = mes celebrado (Y-m). Devuelve los datos o null.
  */
 function billetera_popup_meta_check($user_id) {
+    if (billetera_popups_desactivados()) {
+        return null;
+    }
     $u = get_userdata($user_id);
     if (!$u || !in_array('asesor', (array) $u->roles, true)) {
         return null;
@@ -1570,6 +1589,9 @@ function billetera_ajax_popup_meta_visto() {
  * marca antigua "Y-m" cuenta como visto del puesto 1).
  */
 function billetera_popup_rank_check($user_id) {
+    if (billetera_popups_desactivados()) {
+        return null;
+    }
     $user_id = intval($user_id);
     $u = get_userdata($user_id);
     if (!$u || !in_array('asesor', (array) $u->roles, true)) {
@@ -1694,6 +1716,9 @@ function billetera_ajax_popup_rank_visto() {
  * de la venta (Y-m-d H:i:s local, ya insertada en la BD).
  */
 function billetera_popup_primera_check($user_id, $monto, $fecha_datetime) {
+    if (billetera_popups_desactivados()) {
+        return null;
+    }
     $u = get_userdata($user_id);
     if (!$u || !in_array('asesor', (array) $u->roles, true)) {
         return null;
