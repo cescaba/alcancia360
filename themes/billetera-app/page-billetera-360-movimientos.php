@@ -1,7 +1,7 @@
 <?php
 /**
  * Template Name: Mi alcancia 360 Movimientos
- * Description: Mi alcancia 360 - Pantalla "Mi alcancÃ­a"
+ * Description: Mi alcancia 360 - Pantalla "Mi alcancía"
  */
 
 if (!is_user_logged_in()) {
@@ -19,7 +19,7 @@ $roles        = (array) $current_user->roles;
 $es_jefe      = in_array('jefe_venta', $roles, true);
 $show_ranking = !$es_jefe;
 
-// Detectar URL de pÃ¡ginas por template
+// Detectar URL de páginas por template
 function get_page_by_template($template_name) {
     global $wpdb;
     $page = $wpdb->get_row($wpdb->prepare(
@@ -48,7 +48,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mi alcancÃ­a</title>
+    <title>Mi alcancía</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -65,12 +65,12 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
     <!-- MAIN CONTENT -->
     <div class="main-content">
 
-        <!-- SCREEN: MI ALCANCÃA -->
+        <!-- SCREEN: MI ALCANCÍA -->
         <div class="screen active" id="screen-wallet">
             <div class="alc-wrap">
 
                 <div class="alc-head">
-                    <h1 class="alc-title">Mi alcancÃ­a</h1>
+                    <h1 class="alc-title">Mi alcancía</h1>
                     <span class="alc-month"><?php echo esc_html($mes_label); ?></span>
                 </div>
 
@@ -78,14 +78,14 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                 <div class="alc-pig-zone">
                     <div class="alc-pig-bob" id="alc-pig-bob">
                         <div class="alc-pig">
-                            <button type="button" class="alc-pig__btn" id="alc-pig-btn" aria-label="Toca la alcancÃ­a">
+                            <button type="button" class="alc-pig__btn" id="alc-pig-btn" aria-label="Toca la alcancía">
                                 <span class="alc-pig__coin"></span>
-                                <img class="alc-pig__base" src="<?php echo esc_url($alcancia_img); ?>" alt="AlcancÃ­a">
+                                <img class="alc-pig__base" src="<?php echo esc_url($alcancia_img); ?>" alt="Alcancía">
                                 <img class="alc-pig__fill" id="alc-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
                             </button>
                         </div>
                     </div>
-                    <div class="alc-pig-hint" id="alc-pig-hint">Toca la alcancÃ­a</div>
+                    <div class="alc-pig-hint" id="alc-pig-hint">Toca la alcancía</div>
                 </div>
 
                 <div class="alc-content">
@@ -116,7 +116,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                     <div class="alc-grid<?php echo $show_ranking ? '' : ' alc-grid--no-ranking'; ?>">
                         <div class="alc-grid__item">
                             <div class="alc-grid__value" id="acumulado-ano">S/ 0.00</div>
-                            <div class="alc-grid__label">Acumulado aÃ±o</div>
+                            <div class="alc-grid__label">Acumulado año</div>
                         </div>
                         <div class="alc-grid__item alc-grid__item--alt">
                             <div class="alc-grid__value" id="ventas-mes">0</div>
@@ -144,11 +144,11 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
 
             </div>
 
-            <!-- DESKTOP: Mi alcancÃ­a -->
+            <!-- DESKTOP: Mi alcancía -->
             <div class="alc-desk">
                 <div class="alc-desk__head">
                     <div>
-                        <div class="alc-desk__title">Mi alcancÃ­a</div>
+                        <div class="alc-desk__title">Mi alcancía</div>
                         <div class="alc-desk__sub">Comisiones acumuladas del periodo en curso.</div>
                     </div>
                     <div class="alc-desk__head-actions">
@@ -161,9 +161,9 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                     <div class="alc-desk__card">
                         <div class="alc-desk__pig-zone">
                             <div class="alc-desk__pig">
-                                <button type="button" class="alc-desk__pig-btn" id="alc-desk-pig-btn" aria-label="Toca la alcancÃ­a">
+                                <button type="button" class="alc-desk__pig-btn" id="alc-desk-pig-btn" aria-label="Toca la alcancía">
                                     <span class="alc-desk__pig-coin"></span>
-                                    <img class="alc-desk__pig-base" src="<?php echo esc_url($alcancia_img); ?>" alt="AlcancÃ­a">
+                                    <img class="alc-desk__pig-base" src="<?php echo esc_url($alcancia_img); ?>" alt="Alcancía">
                                     <img class="alc-desk__pig-fill" id="desk-pig-fill" src="<?php echo esc_url($alcancia_img); ?>" alt="">
                                 </button>
                             </div>
@@ -184,7 +184,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                         <div class="alc-desk__stats<?php echo $show_ranking ? '' : ' alc-desk__stats--no-ranking'; ?>">
                             <div class="alc-desk__stat">
                                 <div class="alc-desk__stat-val" id="desk-acumulado-ano">S/ 0.00</div>
-                                <div class="alc-desk__stat-label">Acumulado aÃ±o</div>
+                                <div class="alc-desk__stat-label">Acumulado año</div>
                             </div>
                             <div class="alc-desk__stat">
                                 <div class="alc-desk__stat-val" id="desk-ventas-mes">0</div>
@@ -213,7 +213,7 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                                     <div class="alc-desk__td">Producto</div>
                                     <div class="alc-desk__td"><?php echo $es_jefe ? 'Asesor' : 'Identificador'; ?></div>
                                     <div class="alc-desk__td">Fecha</div>
-                                    <div class="alc-desk__td alc-desk__td--right">ComisiÃ³n</div>
+                                    <div class="alc-desk__td alc-desk__td--right">Comisión</div>
                                     <div class="alc-desk__td alc-desk__td--acc"></div>
                                 </div>
                                 <div id="desk-movs-list"></div>

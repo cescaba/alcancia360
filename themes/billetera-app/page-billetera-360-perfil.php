@@ -97,7 +97,7 @@ if (function_exists('billetera_get_template_url')) {
                 </label>
                 <div class="perfil-info">
                     <div class="perfil-name"><?php echo esc_html($current_user->display_name); ?></div>
-                    <div class="perfil-role"><?php echo esc_html($rol_label . ($tienda_label ? ' Â· ' . $tienda_label : '')); ?></div>
+                    <div class="perfil-role"><?php echo esc_html($rol_label . ($tienda_label ? ' · ' . $tienda_label : '')); ?></div>
                 </div>
             </div>
 
@@ -108,7 +108,7 @@ if (function_exists('billetera_get_template_url')) {
                 </div>
                 <div class="perfil-stat perfil-stat--alt">
                     <div class="perfil-stat-val perfil-stat-val--gold" id="perfil-acumulado">S/0</div>
-                    <div class="perfil-stat-label">ComisiÃ³n acumulada</div>
+                    <div class="perfil-stat-label">Comisión acumulada</div>
                 </div>
                 <?php if ($show_ranking): ?>
                 <div class="perfil-stat">
@@ -134,7 +134,7 @@ if (function_exists('billetera_get_template_url')) {
                 </div>
                 <div class="perfil-dato">
                     <span>Taller</span>
-                    <b><?php echo esc_html($tienda_label ? $tienda_label : 'â€”'); ?></b>
+                    <b><?php echo esc_html($tienda_label ? $tienda_label : '—'); ?></b>
                 </div>
                 <div class="perfil-dato">
                     <span>Ingreso</span>
@@ -142,8 +142,8 @@ if (function_exists('billetera_get_template_url')) {
                 </div>
             </div>
 
-            <a class="perfil-btn" href="<?php echo esc_url($url_cambiar); ?>">Cambiar contraseÃ±a</a>
-            <a class="perfil-btn perfil-btn--danger" href="<?php echo esc_url($logout_url); ?>">Cerrar sesiÃ³n</a>
+            <a class="perfil-btn" href="<?php echo esc_url($url_cambiar); ?>">Cambiar contraseña</a>
+            <a class="perfil-btn perfil-btn--danger" href="<?php echo esc_url($logout_url); ?>">Cerrar sesión</a>
 
         </div>
 
@@ -174,8 +174,8 @@ document.addEventListener('DOMContentLoaded', function () {
             var total = (d.ranking && d.ranking.total) ? d.ranking.total : 0;
             var rankGlobal = (d.ranking_global && d.ranking_global.rank) ? d.ranking_global.rank : 0;
             var totalGlobal = (d.ranking_global && d.ranking_global.total) ? d.ranking_global.total : 0;
-            set('perfil-ranking', rank > 0 ? '#' + rank + ' / ' + total : 'â€”');
-            set('perfil-ranking-global', rankGlobal > 0 ? '#' + rankGlobal + ' / ' + totalGlobal : 'â€”');
+            set('perfil-ranking', rank > 0 ? '#' + rank + ' / ' + total : '—');
+            set('perfil-ranking-global', rankGlobal > 0 ? '#' + rankGlobal + ' / ' + totalGlobal : '—');
         });
 });
 </script>
@@ -223,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             })
             .catch(function () {
-                alert('Error de conexiÃ³n al subir la foto');
+                alert('Error de conexión al subir la foto');
             });
     });
 });
