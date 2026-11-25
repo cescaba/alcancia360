@@ -311,14 +311,15 @@ function billetera_reports_export() {
         $tipo_v = ($tipo_v === '') ? 'Venta' : $tipo_v;
 
         // Adjuntos de la venta (por grupo: usuario + fecha + tipo + valor).
+        // Solo la URL: en Excel queda como texto clicable directo al archivo.
         $key = implode('|', [intval($d->usuario_id), (string) $d->creado_en, (string) $d->id_type, (string) $d->id_value]);
         $adj_txt = '';
         if (!empty($det['adjuntos'][$key])) {
             $parts = [];
             foreach ($det['adjuntos'][$key] as $a) {
-                $parts[] = $a->nombre . ' (' . billetera_reports_adjunto_url($a->archivo) . ')';
+                $parts[] = billetera_reports_adjunto_url($a->archivo);
             }
-            $adj_txt = implode(' | ', $parts);
+            $adj_txt = implode(' ', $parts);
         }
 
         $com_fila = floatval($d->monto_comision_sol) * floatval($d->bonus_multiplier);
