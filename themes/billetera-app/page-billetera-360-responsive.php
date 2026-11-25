@@ -10,10 +10,15 @@ if (!is_user_logged_in()) {
 }
 
 $current_user = wp_get_current_user();
-$allowed_roles = array('asesor', 'administrator', 'jefe_venta');
-if (!array_intersect($allowed_roles, $current_user->roles)) {
+// Los jefes de venta no registran ventas: redirigirlos a "Mi alcancía".
+if (!billetera_puede_registrar($current_user)) {
     if (function_exists('billetera_gerente_o_redirect')) { billetera_gerente_o_redirect(); }
-    wp_die('Acceso restringido. Solo administradores, asesores y jefes de venta pueden acceder.');
+    $url_mov = function_exists('billetera_get_template_url') ? billetera_get_template_url('page-billetera-360-movimientos.php') : '';
+    if ($url_mov && $url_mov !== '#') {
+        wp_safe_redirect($url_mov);
+        exit;
+    }
+    wp_die('Acceso restringido. Solo asesores y administradores pueden registrar ventas.');
 }
 
 // Detectar URL de página con template Mi alcancia 360 Movimientos

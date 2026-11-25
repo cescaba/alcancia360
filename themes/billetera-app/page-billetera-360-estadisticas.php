@@ -179,7 +179,9 @@ $alcancia_img = billetera_asset_url('/assets/img/alcancia.svg');
                             <div id="st-need-list"></div>
                             <div class="st-need__empty" id="st-need-empty" hidden></div>
                             <div class="st-need__foot">
+                                <?php if (function_exists('billetera_puede_registrar') && billetera_puede_registrar()): ?>
                                 <a class="st-need__cta" href="<?php echo esc_url($registro_url); ?>">Registrar venta</a>
+                                <?php endif; ?>
                             </div>
                         </section>
                     </div>

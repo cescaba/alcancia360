@@ -21,10 +21,12 @@ $tab_ranking_active  = ($current_slug === 'page-billetera-360-ranking.php');
 ?>
 
 <nav class="bottom-tabbar">
+    <?php if (function_exists('billetera_puede_registrar') && billetera_puede_registrar()): ?>
     <a class="bottom-tabbar__tab<?php echo $tab_registro_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_registro); ?>">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
         <span>Registrar</span>
     </a>
+    <?php endif; ?>
     <a class="bottom-tabbar__tab<?php echo $tab_alcancia_active ? ' is-active' : ''; ?>" href="<?php echo esc_url($url_movimientos); ?>">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9c0-8 14-8 14 0"></path><rect x="2" y="9" width="20" height="11" rx="1"></rect><path d="M16 14h2"></path></svg>
         <span>Mi alcancía</span>

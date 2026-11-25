@@ -153,7 +153,9 @@ $mes_label = $meses[intval(date('n')) - 1] . ' ' . date('Y');
                     </div>
                     <div class="alc-desk__head-actions">
                         <div class="alc-desk__month"><?php echo esc_html($mes_label); ?></div>
+                        <?php if (function_exists('billetera_puede_registrar') && billetera_puede_registrar()): ?>
                         <a class="alc-desk__reg" href="<?php echo esc_url($registro_url); ?>">Registrar venta</a>
+                        <?php endif; ?>
                     </div>
                 </div>
 

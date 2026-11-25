@@ -296,6 +296,16 @@ function billetera_gerente_o_redirect() {
     return true;
 }
 
+/**
+ * ¿El usuario actual puede registrar ventas? Solo asesor o administrator.
+ * Los jefes de venta no registran: ganan su comisión espejo por las ventas
+ * de su equipo (registradas por los asesores).
+ */
+function billetera_puede_registrar($user = null) {
+    $u = $user ? $user : wp_get_current_user();
+    return (bool) array_intersect(['asesor', 'administrator'], (array) $u->roles);
+}
+
 // Asegura que exista la página "Mi concesionaria" (vista del gerente) una sola vez
 add_action('admin_init', 'billetera_maybe_create_gerencia_page');
 function billetera_maybe_create_gerencia_page() {

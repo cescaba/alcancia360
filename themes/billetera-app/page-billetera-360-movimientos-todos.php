@@ -82,7 +82,9 @@ $registro_url  = get_page_by_template('page-billetera-360-responsive.php');
                         <div class="hist-desk__title">Historial</div>
                         <div class="hist-desk__sub">Todos tus movimientos, ordenados por mes.</div>
                     </div>
+                    <?php if (function_exists('billetera_puede_registrar') && billetera_puede_registrar()): ?>
                     <a class="hist-desk__reg" href="<?php echo esc_url($registro_url); ?>">Registrar venta</a>
+                    <?php endif; ?>
                 </div>
                 <div id="hist-desk-list"></div>
                 <p class="hist-desk__empty" id="hist-desk-empty" style="display:none;">No hay movimientos registrados aún.</p>

@@ -146,7 +146,7 @@ function billetera_ajax_adjunto_subir() {
     }
 
     $current_user = wp_get_current_user();
-    if (!array_intersect(['asesor', 'administrator', 'jefe_venta'], (array) $current_user->roles)) {
+    if (!array_intersect(['asesor', 'administrator'], (array) $current_user->roles)) {
         wp_send_json_error(['message' => 'No tienes permiso']);
     }
 
@@ -951,7 +951,7 @@ function billetera_ajax_register_sale_v2() {
 
     $user_id = get_current_user_id();
     $current_user = wp_get_current_user();
-    $allowed_roles = ['asesor', 'administrator', 'jefe_venta'];
+    $allowed_roles = ['asesor', 'administrator'];
 
     if (!array_intersect($allowed_roles, $current_user->roles)) {
         wp_send_json_error(['message' => 'No tienes permiso']);
@@ -1125,7 +1125,7 @@ function billetera_ajax_register_sale_multi() {
 
     $user_id = get_current_user_id();
     $current_user = wp_get_current_user();
-    $allowed_roles = ['asesor', 'administrator', 'jefe_venta'];
+    $allowed_roles = ['asesor', 'administrator'];
 
     if (!array_intersect($allowed_roles, $current_user->roles)) {
         wp_send_json_error(['message' => 'No tienes permiso']);
@@ -3059,7 +3059,7 @@ function billetera_ajax_get_comision() {
 
     $user_id = get_current_user_id();
     $current_user = wp_get_current_user();
-    $allowed_roles = ['asesor', 'administrator', 'jefe_venta'];
+    $allowed_roles = ['asesor', 'administrator'];
 
     if (!array_intersect($allowed_roles, $current_user->roles)) {
         wp_send_json_error(['message' => 'No tienes permiso']);
