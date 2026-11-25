@@ -782,7 +782,15 @@
             comEl.textContent = money(row.com || 0);
             comEl.title = 'Comisiones del asesor en el periodo';
 
+            li.appendChild(puesto);
+            li.appendChild(nom);
+            li.appendChild(racha);
+            li.appendChild(fult);
+            li.appendChild(vts);
+            li.appendChild(comEl);
+
             // Cuanto te aporta este asesor (tu comision espejo del periodo).
+            // Va AL FINAL (columna "Te aporta" del encabezado).
             // En la vista de gerente la columna no existe (flag ocultar_aporta).
             if (!(window.billetera && window.billetera.ocultar_aporta)) {
                 var aporta = document.createElement('span');
@@ -791,13 +799,6 @@
                 aporta.title = 'Comisión que te aporta este asesor (tu comisión de jefe por sus ventas)';
                 li.appendChild(aporta);
             }
-
-            li.appendChild(puesto);
-            li.appendChild(nom);
-            li.appendChild(racha);
-            li.appendChild(fult);
-            li.appendChild(vts);
-            li.appendChild(comEl);
             els.topList.appendChild(li);
         });
 

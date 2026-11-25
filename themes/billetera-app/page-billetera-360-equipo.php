@@ -331,7 +331,7 @@ window.billetera = {
     meta_equipo_v2: <?php echo $meta_equipo_v2 ? 'true' : 'false'; ?>
 };
 </script>
-<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-equipo.js?v=2'); ?>"></script>
+<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-equipo.js?v=5'); ?>"></script>
 
 </body>
 </html>

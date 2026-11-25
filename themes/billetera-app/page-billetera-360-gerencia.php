@@ -316,7 +316,7 @@ window.billetera = {
     aportan_max: 5
 };
 </script>
-<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-equipo.js?v=4'); ?>"></script>
+<script src="<?php echo billetera_asset_url('/assets/js/billetera-360-equipo.js?v=5'); ?>"></script>
 
 </body>
 </html>
